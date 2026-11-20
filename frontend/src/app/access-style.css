@@ -1,0 +1,195 @@
+.access-page {
+  min-height: 100dvh;
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  display: grid;
+  align-items: center;
+  grid-template-rows: auto 1fr;
+  gap: 18px;
+  padding: 22px clamp(18px, 6.2vw, 108px) clamp(26px, 5vw, 64px);
+  background: #19132a;
+}
+.access-page::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: '';
+  background:
+    linear-gradient(106deg, #171024e6 0%, #25183eb8 34%, #21173024 73%, #1c13254d 100%),
+    url('/gioi-thieu/assets/hero.jpg') 72% 45% / cover no-repeat;
+  animation: access-backdrop 900ms cubic-bezier(.2,.7,.25,1) both;
+}
+.access-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #fff;
+}
+.access-brand {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  color: #fff;
+  font-size: 19px;
+  font-weight: 770;
+  letter-spacing: -.035em;
+}
+.access-brand > span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid #ffffff65;
+  border-radius: 10px;
+  background: #7a58df;
+  color: #fff;
+}
+.access-header :is(.desk-icon, .icon, .plain) {
+  color: #fff;
+  border-color: #ffffff5c;
+  background: #2318349c;
+}
+.access-card {
+  width: min(100%, 440px);
+  min-width: 0;
+  padding: clamp(20px, 3.1vw, 38px);
+  border: 1px solid #fff8;
+  border-radius: 22px;
+  color: #211932;
+  background: #fefcff;
+  box-shadow: 0 22px 64px #110a2266, 0 1px 0 #fff9 inset;
+  --ink: #211932;
+  --panel: #fff;
+  --muted: #675d76;
+  --line: #ece4f3;
+  --field-line: #d9cfe6;
+  --accent: #6440c7;
+  --tint: #f3edff;
+  animation: access-card-enter 550ms cubic-bezier(.18,.72,.25,1) both;
+}
+.access-title { display: grid; gap: 7px; margin-bottom: 21px; }
+.access-title h1 { font-size: clamp(30px, 4vw, 40px); font-weight: 770; letter-spacing: -.04em; }
+.access-title > p { color: var(--muted); }
+.access-form { gap: 14px; }
+.access-form > fieldset { min-width: 0; display: grid; gap: 12px; margin: 0; padding: 0; border: 0; }
+.access-field { font-size: 14px; gap: 5px; }
+.access-password-field { display: grid; }
+.access-password-field > label { font-size: inherit; }
+.access-card input {
+  min-height: 45px;
+  padding-inline: 12px;
+  border-radius: 10px;
+  font-weight: 450;
+  transition: border-color 170ms, box-shadow 170ms;
+}
+.access-card input:focus {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px #8f65df23;
+}
+.access-card input[aria-invalid="true"] { border-color: #b54157; }
+.access-card input::placeholder { color: #81758d; opacity: 1; }
+.access-field small { font-weight: 450; }
+.access-field .access-field-error { color: #a82744; }
+.access-password { position: relative; display: block; }
+.access-password input { padding-inline-end: 48px; }
+.access-eye {
+  display: grid;
+  position: absolute;
+  inset-inline-end: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+.access-eye:hover { background: var(--tint); color: var(--accent); }
+.access-help { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; }
+.access-card a:not(.button) { color: var(--accent); font-weight: 700; }
+.access-card a:not(.button):hover { text-decoration: underline; text-underline-offset: 3px; }
+.access-card .access-submit {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  padding: 9px 13px;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(108deg, #5933b6, #7047d4);
+  box-shadow: 0 7px 16px #6a41cb35;
+  font-size: 14px;
+  transition: transform 180ms, box-shadow 180ms, background 180ms;
+}
+.access-card .access-submit:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px #6839cc4a;
+}
+.access-card .access-submit svg { flex: none; }
+.access-card .access-spinner { animation: access-spin 750ms linear infinite; }
+.access-provider { margin-top: 14px; }
+.access-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.access-divider::before, .access-divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.access-card a.access-google {
+  display: flex;
+  min-height: 44px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid #747775;
+  border-radius: 10px;
+  background: #fff;
+  color: #1f1f1f;
+  font-size: 14px;
+  font-weight: 600;
+}
+.access-card a.access-google:hover { background: #f6f8fc; text-decoration: none; }
+.access-google img { flex: none; }
+.access-footer {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-top: 17px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+.access-feedback { overflow-wrap: anywhere; margin-bottom: 10px; }
+.access-note { color: var(--muted); margin-bottom: 10px; }
+.access-code {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .32em;
+  font-size: 19px;
+}
+@keyframes access-backdrop { from { opacity: .45; transform: scale(1.025); } to { opacity: 1; transform: scale(1); } }
+@keyframes access-card-enter { from { opacity: 0; transform: translateY(13px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes access-spin { to { transform: rotate(360deg); } }
+@media (max-width: 650px) {
+  .access-page { padding: 14px 14px 26px; gap: 14px; justify-items: center; }
+  .access-header { width: min(100%, 440px); }
+  .access-page::before {
+    background:
+      linear-gradient(180deg, #21132d60, #1a122994 52%, #21162de3),
+      url('/gioi-thieu/assets/hero.jpg') 78% 45% / cover no-repeat;
+  }
+  .access-card { border-radius: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .access-page::before, .access-card, .access-card .access-spinner { animation: none; }
+  .access-card :is(input, .access-submit) { transition: none; }
+  .access-card .access-submit:not(:disabled):hover { transform: none; }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "juee-pos",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "db:seed": "npm run seed -w @juee/api",
+    "build": "npm run build --workspaces --if-present && npm run build:admin",
+    "dev:api": "npm run dev -w @juee/api",
+    "dev:web": "npm run dev -w @juee/web",
+    "dev:admin": "npm --prefix admin run dev",
+    "test": "npm test -w @juee/api",
+    "test:integration": "npm run test:integration -w @juee/api",
+    "db:indexes": "npm run indexes -w @juee/api",
+    "db:local": "node --env-file=backend/.env scripts/mongo-local.cjs",
+    "admin:setup": "bash scripts/setup-admin.sh",
+    "build:api": "npm run build -w @juee/api",
+    "build:web": "npm run build -w @juee/web",
+    "build:admin": "npm --prefix admin run build",
+    "build:site": "npm --prefix website run build",
+    "dev:site": "npm --prefix website run dev",
+    "start:api": "npm run start -w @juee/api",
+    "start:web": "npm run start -w @juee/web",
+    "start:admin": "npm --prefix admin run start"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

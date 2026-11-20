@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  CASHIER
+  WAITER
+  KITCHEN
+  INVENTORY
+  ACCOUNTANT
+}
+
+enum BranchMode {
+  RETAIL
+  RESTAURANT
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELED
+}
+
+enum AccountTokenKind {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
+model User {
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  email          String @unique
+  name           String
+  phone          String?
+  passwordHash   String
+  emailVerifiedAt DateTime?
+  emailVerificationRequired Boolean?
+  lastLoginAt    DateTime?
+  locked         Boolean @default(false)
+  createdAt      DateTime @default(now())
+  memberships    Membership[]
+  sessions       Session[]
+  platformGrant  PlatformGrant?
+  accountTokens  AccountToken[]
+}
+
+model AccountToken {
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String @db.ObjectId
+  user      User @relation(fields: [userId], references: [id])
+  kind      AccountTokenKind
+  digest    String @unique
+  expiresAt DateTime
+  @@unique([userId, kind])
+}
+
+model PlatformGrant {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String @unique @db.ObjectId
+  user        User @relation(fields: [userId], references: [id])
+  permissions String[]
+  totpSecret  String
+  lastOtpStep Int @default(0)
+}
+
+model Session {
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String @db.ObjectId
+  user          User @relation(fields: [userId], references: [id])
+  refreshHash   String @unique
+  expiresAt     DateTime
+  mfa           Boolean @default(false)
+  createdAt     DateTime?
+  @@index([userId])
+}
+
+model Tenant {
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  locked        Boolean @default(false)
+  createdAt     DateTime @default(now())
+  branchWriteToken String?
+  memberships   Membership[]
+  branches      Branch[]
+  subscriptions Subscription[]
+}
+
+model Branch {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String @db.ObjectId
+  tenant      Tenant @relation(fields: [tenantId], references: [id])
+  name        String
+  mode        BranchMode
+  createdAt   DateTime @default(now())
+  @@index([tenantId])
+}
+
+model Membership {
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String @db.ObjectId
+  tenantId  String @db.ObjectId
+  user      User @relation(fields: [userId], references: [id])
+  tenant    Tenant @relation(fields: [tenantId], references: [id])
+  role      Role
+  branchIds String[] @db.ObjectId
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+}
+
+model Plan {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  code        String @unique
+  name        String
+  description String @default("")
+  published   Boolean @default(true)
+  revisions   PlanVersion[]
+}
+
+model PlanVersion {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  planId      String @db.ObjectId
+  plan        Plan @relation(fields: [planId], references: [id])
+  version     Int
+  monthlyVnd  BigInt
+  maxBranches Int
+  maxStaff    Int
+  maxQrTables Int
+  features    String[]
+  createdAt   DateTime @default(now())
+  contracts   Subscription[]
+  @@unique([planId, version])
+}
+
+model Subscription {
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String @unique @db.ObjectId
+  tenant        Tenant @relation(fields: [tenantId], references: [id])
+  planVersionId String @db.ObjectId
+  planVersion   PlanVersion @relation(fields: [planVersionId], references: [id])
+  status        SubscriptionStatus @default(ACTIVE)
+  startsAt      DateTime @default(now())
+  expiresAt     DateTime?
+  branchWriteToken String?
+  invoices      SaaSInvoice[]
+}
+
+model SaaSInvoice {
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  subscriptionId String @db.ObjectId
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+  reference      String @unique
+  amountVnd      BigInt
+  paidAt         DateTime?
+  createdAt      DateTime @default(now())
+  @@index([paidAt])
+}
+
+model AdminAuditLog {
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  actorId   String @db.ObjectId
+  targetId  String @db.ObjectId
+  action    String
+  reason    String
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+  @@index([targetId, createdAt])
+  @@index([createdAt])
+}
+
+model SystemNotification {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  actorId     String @db.ObjectId
+  title       String
+  body        String
+  kind        String
+  tenantIds   String[] @db.ObjectId
+  publishedAt DateTime @default(now())
+}

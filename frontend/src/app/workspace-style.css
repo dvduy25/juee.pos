@@ -1,0 +1,218 @@
+/* Keep screen effects out of the receipt and ticket print styles. */
+@media screen {
+  :is(.desk-frame, .auth, .landing, .member-kiosk-page) {
+    --workspace-wash: color-mix(in srgb, var(--accent) 5%, var(--surface));
+    --workspace-edge: color-mix(in srgb, var(--accent) 27%, var(--line));
+    --workspace-ease: cubic-bezier(.22, 1, .36, 1);
+    --card-shadow: 0 1px 2px #17294b07, 0 8px 24px #17294b06;
+    --focus-shadow: 0 7px 22px color-mix(in srgb, var(--accent) 14%, transparent);
+    --button-end: color-mix(in srgb, var(--accent) 88%, #191734);
+    --backdrop: #11192f66;
+  }
+
+  :is(.desk-frame, .auth).dark {
+    --card-shadow: 0 2px 4px #0002, 0 10px 30px #0002;
+    --button-end: color-mix(in srgb, var(--accent) 92%, #fff);
+    --backdrop: #050a15ad;
+  }
+
+  /* Shell and navigation */
+  .desk-workspace {
+    background: radial-gradient(ellipse at 88% 0%, var(--workspace-wash), transparent 43rem), var(--surface);
+  }
+
+  :is(.desk-sidebar, .desk-drawer) {
+    background: linear-gradient(166deg, color-mix(in srgb, var(--accent) 5%, var(--panel)), var(--panel) 21rem);
+  }
+
+  .desk-top {
+    background: color-mix(in srgb, var(--panel) 93%, var(--workspace-wash));
+    box-shadow: 0 2px 9px #1d2e5510;
+  }
+
+  .desk-brand > span {
+    border-radius: 11px;
+    background: linear-gradient(145deg, var(--accent), var(--button-end));
+    box-shadow: 0 3px 8px color-mix(in srgb, var(--accent) 23%, transparent);
+  }
+
+  .desk-nav-group p { letter-spacing: .01em; }
+  .desk-nav-group a { position: relative; border: 1px solid transparent; border-radius: 9px; min-height: 40px; }
+  .desk-nav-group a[aria-current="page"] {
+    border-color: var(--workspace-edge);
+    background: linear-gradient(120deg, var(--tint), color-mix(in srgb, var(--accent) 4%, var(--panel)));
+  }
+
+  .desk-nav-group a[aria-current="page"]::before {
+    content: '';
+    position: absolute;
+    inset-block: 27%;
+    inset-inline-start: -1px;
+    width: 3px;
+    border-radius: 0 4px 4px 0;
+    background: var(--accent);
+  }
+
+  .desk-role { color: var(--ink); }
+  .desk-icon, .desk-profile-trigger { border-radius: 9px; }
+  .desk-avatar { box-shadow: inset 0 0 0 1px var(--workspace-edge); }
+  .desk-icon[aria-pressed="true"] { color: var(--accent); background: var(--tint); }
+  .desk-profile-menu { border-radius: 12px; box-shadow: var(--floating-shadow); }
+  .branch-picker-selects { column-gap: clamp(12px, 2.7vw, 33px); }
+  .branch-picker-selects select:hover { color: var(--accent); }
+
+  /* Titles, data panels and forms */
+  .desk-content h1 { font-size: clamp(21px, 2.05vw, 29px); font-weight: 770; letter-spacing: -.038em; }
+  .desk-content .company-title h1 { font-size: clamp(23px, 2.55vw, 34px); }
+  .desk-content .business-heading h1 { font-size: clamp(26px, 3vw, 39px); }
+  .desk-content .company-title { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .desk-content .business-heading {
+    padding: clamp(16px, 2.6vw, 29px);
+    border: 1px solid var(--workspace-edge);
+    border-radius: var(--radius);
+    background: linear-gradient(118deg, var(--tint), var(--panel) 82%);
+  }
+
+  :is(.desk-frame, .auth, .landing, .member-kiosk-page) .card { box-shadow: var(--card-shadow); }
+  :is(.desk-stat, .company-metrics strong, .metric strong, .service-totals, .bill-amounts dd) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .company-metrics > div, .desk-stat, .bill-amounts > div {
+    border-radius: 11px;
+    background: linear-gradient(135deg, var(--panel), var(--workspace-wash));
+  }
+
+  .company-metrics > div:first-child, .bill-amounts > .bill-due { background: var(--tint); }
+  .company-metrics > div:first-child strong { color: var(--accent); }
+  .desk-section-header h2 > svg { color: var(--accent); }
+  .company-table tbody tr:hover > * { background: var(--workspace-wash); }
+  .list-row.service-list-row { border-radius: 10px; }
+  .list-row.service-list-row:hover { border-color: var(--workspace-edge); }
+  :is(.desk-content, .auth, .landing, .member-kiosk-page) :is(input, select, textarea) {
+    background-clip: padding-box;
+  }
+
+  :is(.desk-frame, .auth, .landing, .member-kiosk-page) .button {
+    background-image: linear-gradient(160deg, transparent, color-mix(in srgb, var(--button-end) 58%, transparent));
+  }
+
+  .desk-frame .button:disabled { box-shadow: none; }
+  .mode-switch { background: var(--surface); border-color: var(--line); }
+  .mode-switch button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px var(--workspace-edge); }
+  :is(.status-filters, .business-settings-tabs, .guest-categories) [aria-pressed="true"] {
+    box-shadow: inset 0 -2px color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+
+  .desk-frame.dark .badge:not([class*="bill-status-"]) { color: #a8efd0; background: #1c473a; }
+  .desk-frame.dark .badge.warning { color: #ffd0cb; background: #532c38; }
+  .desk-frame.dark .notice, .auth.dark .notice { color: #afe8cb; background: #1d403a; }
+  .desk-frame.dark .error, .auth.dark .error { color: #ffd3cf; background: #512c36; }
+
+  /* Point of sale, kitchen, room map and guest view */
+  .table-card[data-state="overdue"], .hotel-calendar-stay[data-overdue="true"] {
+    border-color: color-mix(in srgb, #c95545 48%, var(--line));
+    background: color-mix(in srgb, #c95545 9%, var(--panel));
+  }
+
+  .table-card[data-state="overdue"] .table-card-status { color: #a3342a; }
+  .dark .table-card[data-state="overdue"] .table-card-status { color: #ffb1a8; }
+  .table-card { box-shadow: 0 1px 2px #1822300a; }
+  .table-card-icon { border-radius: 11px; box-shadow: 0 2px 6px #2530520b; }
+  .table-card:is([data-state="serving"], [data-state="occupied"]) .table-card-icon {
+    color: var(--accent);
+    border-color: var(--workspace-edge);
+    background: var(--tint);
+  }
+
+  .kitchen-board {
+    background-color: var(--workspace-wash);
+    background-image: radial-gradient(color-mix(in srgb, var(--field-line) 54%, transparent) 1px, transparent 1px);
+    background-size: 12px 12px;
+  }
+
+  .kitchen-ticket { box-shadow: 0 2px 5px #0d152224, 0 12px 24px #18223012; }
+  .kitchen-ticket::before { background: linear-gradient(150deg, var(--accent), var(--button-end)); }
+  .kitchen-ticket-item[data-waiting="false"] .kitchen-quantity { background: var(--surface); color: var(--muted); }
+  .pos-catalog .product-tile { border-color: var(--line); }
+  .pos-catalog .product-tile:focus-within { border-color: var(--workspace-edge); }
+  .pos-catalog .product-tile button:enabled { border: 1px solid var(--line); }
+  .pos-catalog .product-tile button:enabled:hover { border-color: var(--workspace-edge); }
+  .bill-list-row[aria-pressed="true"] { box-shadow: inset 3px 0 var(--accent); }
+
+  .auth, .member-kiosk-page {
+    background: radial-gradient(ellipse at 24% 15%, var(--workspace-wash), transparent 37rem),
+      radial-gradient(ellipse at 85% 98%, var(--tint), transparent 33rem), var(--surface);
+  }
+
+  .auth:not(.setup-page) .auth-card, .member-kiosk-card {
+    border-top-color: var(--workspace-edge);
+    box-shadow: var(--floating-shadow);
+  }
+
+  .guest-order-page {
+    background: linear-gradient(163deg, var(--workspace-wash), var(--surface) 30rem);
+  }
+
+  .guest-header {
+    background: linear-gradient(117deg, var(--tint), var(--panel) 88%);
+    border-color: var(--workspace-edge);
+  }
+
+  .guest-order-page :is(.guest-item, .guest-cart) { border-radius: var(--radius); }
+  .business-dialog, .work-mode-dialog, .guest-dish-dialog { box-shadow: var(--floating-shadow); }
+  :is(.business-dialog, .work-mode-dialog, .guest-dish-dialog, .desk-drawer)::backdrop {
+    background: var(--backdrop, #11192f66);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :is(.desk-frame, .auth, .landing, .member-kiosk-page) :is(a, button, input, select, textarea) {
+      transition: background-color 150ms ease, border-color 150ms ease, box-shadow 180ms ease, color 150ms ease,
+        translate 180ms var(--workspace-ease);
+    }
+
+    :is(.desk-frame, .auth, .landing, .member-kiosk-page) .button:active:not(:disabled) { translate: 0 1px; }
+    :is(.business-dialog, .work-mode-dialog, .guest-dish-dialog)[open] { animation: workspace-dialog-in 230ms var(--workspace-ease); }
+    .desk-profile[open] > .desk-profile-menu { animation: workspace-enter 170ms var(--workspace-ease); }
+    .desk-drawer[open] { animation: workspace-drawer-in 240ms var(--workspace-ease); }
+    dialog[open]::backdrop { animation: workspace-backdrop-in 180ms ease-out; }
+    .desk-profile-trigger > svg, .kitchen-summary > summary > svg { transition: rotate 170ms var(--workspace-ease); }
+    .desk-profile[open] .desk-profile-trigger > svg { rotate: 180deg; }
+    .kitchen-summary[open] > summary > svg { transform: none; rotate: 180deg; }
+    :is(.auth-card, .member-kiosk-card, .guest-header, .member-kiosk-result, .desk-content .success) {
+      animation: workspace-enter 245ms var(--workspace-ease);
+    }
+
+    .kitchen-ticket { animation: workspace-enter 260ms var(--workspace-ease); }
+
+    @media (hover: hover) and (pointer: fine) {
+      :is(.desk-shortcut, a.table-card, button.service-option, .table-preview-grid a, .setup-model):hover {
+        translate: 0 -2px;
+        box-shadow: var(--focus-shadow);
+      }
+
+      .table-card.service-option { transition: box-shadow 180ms var(--workspace-ease), border-color 150ms ease; }
+      .table-card.service-option:hover { border-color: var(--workspace-edge); }
+    }
+  }
+}
+
+@keyframes workspace-enter {
+  from { opacity: .78; translate: 0 6px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+@keyframes workspace-dialog-in {
+  from { opacity: .6; translate: 0 9px; scale: .986; }
+  to { opacity: 1; translate: 0 0; scale: 1; }
+}
+
+@keyframes workspace-drawer-in {
+  from { translate: -100% 0; }
+  to { translate: 0 0; }
+}
+
+@keyframes workspace-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

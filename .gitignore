@@ -1,0 +1,17 @@
+node_modules/
+.env
+.next/
+.next-dev/
+dist/
+*.tsbuildinfo
+.env.*
+!.env.example
+.DS_Store
+
+.mongo-data/
+
+/frontend/public/gioi-thieu/
+/generated_images/
+
+/website/.sites-checkout/
+

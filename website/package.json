@@ -1,0 +1,11 @@
+{
+  "name": "@juee/site",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node build.mjs",
+    "predev": "npm run build",
+    "dev": "node serve.mjs"
+  }
+}

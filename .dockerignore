@@ -1,0 +1,15 @@
+**/node_modules
+**/.next
+**/.next-dev
+**/dist
+**/.git
+**/.env
+**/.env.*
+**/*.tsbuildinfo
+**/.DS_Store
+.mongo-data
+generated_images
+frontend/public/gioi-thieu
+website/.openai
+
+website/.sites-checkout
