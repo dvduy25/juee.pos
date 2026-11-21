@@ -49,12 +49,13 @@ function StoreRegistration({ model, onBack, onCreate }: { model: Model; onBack: 
   const submitting = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [option, setOption] = useState<'TRIAL' | 'PAID'>();
+  const [option, setOption] = useState<'FREE' | 'PAID'>();
   const [facility, setFacility] = useState<'GYM' | 'POOL'>('GYM');
   const [code, setCode] = useState('');
   const setup = useQuery({ queryKey: ['tenants', 'setup'],
-    queryFn: () => api<{ trialAvailable: boolean; trialDays: number; simulatedPlanDays: number | null; onlinePayment: boolean }>('/tenants/setup') });
-  const subscription = setup.data?.trialAvailable ? (option ?? 'TRIAL') : 'PAID';
+    queryFn: () => api<{ freeAvailable: boolean; simulatedPlanDays: number | null; onlinePayment: boolean }>('/tenants/setup') });
+  const canUseFree = setup.data?.freeAvailable && model.mode === 'RETAIL';
+  const subscription = canUseFree ? (option ?? 'FREE') : 'PAID';
   const simulatedDays = setup.data?.simulatedPlanDays;
   const mode = model.mode === 'MEMBERS' ? facility : model.mode;
   const plans = useServicePlans(!!setup.data && subscription === 'PAID');
@@ -93,9 +94,9 @@ function StoreRegistration({ model, onBack, onCreate }: { model: Model; onBack: 
         <option value="GYM">{branchNames.GYM}</option><option value="POOL">{branchNames.POOL}</option>
       </select></label>}
       <BranchLocationFields required/>
-      {setup.data.trialAvailable && <fieldset className="branch-models setup-plans"><legend>Hình thức đăng ký</legend>
-        <label className="branch-model"><input type="radio" name="subscription" checked={subscription === 'TRIAL'} onChange={() => setOption('TRIAL')}/>
-          <strong>Dùng thử miễn phí {setup.data.trialDays} ngày</strong><small>Một cửa hàng, một chi nhánh</small></label>
+      {canUseFree && <fieldset className="branch-models setup-plans"><legend>Hình thức đăng ký</legend>
+        <label className="branch-model"><input type="radio" name="subscription" checked={subscription === 'FREE'} onChange={() => setOption('FREE')}/>
+          <strong>Miễn phí</strong><small>Doanh nghiệp đầu tiên, một chi nhánh bán lẻ</small></label>
         <label className="branch-model"><input type="radio" name="subscription" checked={subscription === 'PAID'} onChange={() => setOption('PAID')}/>
           <strong>{simulatedDays ? 'Đăng ký gói mô phỏng' : 'Đăng ký gói trả phí'}</strong>
           {!simulatedDays && <small>Kích hoạt sau khi xác nhận thanh toán</small>}</label>
@@ -103,7 +104,7 @@ function StoreRegistration({ model, onBack, onCreate }: { model: Model; onBack: 
       {subscription === 'PAID' && <PlanOptions plans={plans} choices={choices} selected={selected} onSelect={setCode}/>}
       {subscription === 'PAID' && simulatedDays && <p className="muted">Dùng gói đã chọn trong {simulatedDays} ngày với thanh toán mô phỏng.</p>}
       {error && <p className="error" role="alert">{error}</p>}
-      <button className="button" disabled={saving || (subscription === 'PAID' && !selected)}>{saving ? 'Đang xử lý…' : subscription === 'TRIAL' ? 'Tạo cửa hàng và bắt đầu dùng thử' :
+      <button className="button" disabled={saving || (subscription === 'PAID' && !selected)}>{saving ? 'Đang xử lý…' : subscription === 'FREE' ? 'Tạo cửa hàng miễn phí' :
         simulatedDays ? 'Tạo cửa hàng và kích hoạt gói mô phỏng' : setup.data.onlinePayment ? 'Tạo cửa hàng và lấy mã thanh toán' : 'Gửi yêu cầu đăng ký gói'}</button>
     </form>}
   </section>;

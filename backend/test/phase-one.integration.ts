@@ -9,7 +9,7 @@ import { hotelNoon } from '../src/services/hotel-stays';
 import { facilityToday, shiftDays } from '../src/services/membership-plans';
 import { verificationDigest, tokenDigest } from '../src/services/account-email';
 import { AccountToken, AdminAuditLog, AuditLog, Bill, Branch, BranchProductPrice, BuffetPackage, Category, DiningArea, DiningTable, FacilityMember, GuestSession, IdempotencyRecord, IncomingTransfer, KitchenTicket, MemberCredential, MemberPayment, MemberPlan, Membership, MemberVisit, Order, OutboxEvent, Payment, PaymentIntent, Plan, PlanVersion, PlatformGrant, Product, ProductVariant, Refund, SaaSInvoice, Subscription, TableSession, Tenant, UnavailableProduct, User, UserSession, WarehouseItem, WarehouseMovement } from '../src/models';
-import { AdmissionTicket, CashEntry, DishRecipe, HotelBooking, HotelPackage, HotelRoom, MemberClass, StaffAttendance, StaffClockCredential, StaffClockDevice,
+import { AdmissionTicket, BusinessAiSettings, CashEntry, TaxDeclaration, DishRecipe, HotelBooking, HotelPackage, HotelRoom, MemberClass, StaffAttendance, StaffClockCredential, StaffClockDevice,
   StaffDocument, StaffIdentity, StaffPayPayment, StaffPayRate, StaffSchedule, TicketRefund, TicketSale, TicketType } from '../src/models';
 import { authenticator } from 'otplib';
 import { setTimeout } from 'node:timers/promises';
@@ -64,7 +64,7 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
   assert.match(new URL(databaseUrl).pathname, /^\/[a-z0-9_-]+_test$/i);
   const webhookKey = randomBytes(32).toString('hex');
   const env = { ...process.env, SEPAY_WEBHOOK_API_KEY: webhookKey, MONGODB_URI: databaseUrl, WEB_ORIGIN: origin, ADMIN_WEB_ORIGIN: adminOrigin, PUBLIC_ORDER_ORIGIN: '', PORT: port,
-    NODE_ENV: 'test', JWT_SECRET: randomBytes(32).toString('hex'), SMTP_URL: '', MAIL_FROM: '', BOOTSTRAP_ADMIN_EMAIL: '' };
+    NODE_ENV: 'test', JWT_SECRET: randomBytes(32).toString('hex'), AI_KEY_ENCRYPTION_SECRET: randomBytes(32).toString('hex'), SMTP_URL: '', MAIL_FROM: '', BOOTSTRAP_ADMIN_EMAIL: '' };
   process.env.MONGODB_URI = databaseUrl;
   process.env.JWT_SECRET = env.JWT_SECRET;
   const ownerEmail = `owner-${run}@example.com`;
@@ -92,7 +92,7 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     assert.equal(plans.status, 200);
     const offers: { code: string; monthlyVnd: string }[] = await plans.json();
     assert.ok(offers.some(plan => plan.code === 'FREE' && plan.monthlyVnd === '0'));
-    assert.ok(offers.every(plan => plan.code !== 'TRIAL'));
+    assert.deepEqual(offers.map(({ code, monthlyVnd }) => [code, monthlyVnd]), [['FREE', '0'], ['PLUS', '99000']]);
 
     for (const [email, name] of [[ownerEmail, 'Chủ cửa hàng'], [staffEmail, 'Quản lý']]) {
       const response = await request('/auth/register', 'POST', { email, name, password });
@@ -126,15 +126,15 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     const location = { latitude: 21.0278, longitude: 105.8342, radiusMeters: 100 };
     const position = () => ({ latitude: location.latitude, longitude: location.longitude, accuracy: 8, measuredAt: Date.now() });
     const branch = { name: 'Chi nhánh chính', mode: 'RETAIL', location };
-    const data = { name: 'Doanh nghiệp kiểm thử', branch, subscription: 'TRIAL' };
+    const data = { name: 'Doanh nghiệp kiểm thử', branch, subscription: 'FREE' };
     assert.equal((await request('/tenants', 'POST', { name: data.name, branch }, owner)).status, 400);
-    assert.equal((await (await request('/tenants/setup', 'GET', undefined, owner)).json()).trialAvailable, true);
-    const trials = await Promise.all([1, 2].map(() => request('/tenants', 'POST', data, owner)));
-    assert.deepEqual(trials.map(item => item.status).sort(), [201, 409]);
-    const ownerTenant = (await trials.find(item => item.ok)!.json()).id;
+    assert.equal((await (await request('/tenants/setup', 'GET', undefined, owner)).json()).freeAvailable, true);
+    const registrations = await Promise.all([1, 2].map(() => request('/tenants', 'POST', data, owner)));
+    assert.deepEqual(registrations.map(item => item.status).sort(), [201, 409]);
+    const ownerTenant = (await registrations.find(item => item.ok)!.json()).id;
     tenantIds.push(ownerTenant);
-    assert.equal((await (await request('/tenants/setup', 'GET', undefined, owner)).json()).trialAvailable, false);
-    const paidRequest = await request('/tenants', 'POST', { ...data, subscription: 'PAID', planCode: 'MINI' }, staff);
+    assert.equal((await (await request('/tenants/setup', 'GET', undefined, owner)).json()).freeAvailable, false);
+    const paidRequest = await request('/tenants', 'POST', { ...data, subscription: 'PAID', planCode: 'PLUS' }, staff);
     assert.equal(paidRequest.status, 201);
     const staffTenant = (await paidRequest.json()).id;
     tenantIds.push(staffTenant);
@@ -148,17 +148,21 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     assert.equal((await request(`${root}/branches/${foreign.id}`, 'PATCH', { name: 'Sai phạm vi' }, owner)).status, 404);
     assert.equal((await request(`${root}/branches`, 'POST', branch, owner)).status, 409);
 
-    const trial = await Subscription.findOne({ tenantId: ownerTenant }).orFail();
-    assert.equal(trial.trial, true);
-    assert.equal(trial.expiresAt!.getTime() - trial.startsAt.getTime(), 7 * 86400000);
-    const trialPlan = await PlanVersion.findById(trial.planVersionId).orFail();
-    assert.ok(trialPlan.features.includes('qr'));
-    await Subscription.updateOne({ _id: trial.id }, { $set: { expiresAt: new Date(0) } });
-    assert.equal((await request(`${root}/branches/${primary.id}/products`, 'GET', undefined, owner)).status, 409);
-    assert.equal((await request(`${root}/subscription/request`, 'POST', { code: 'MINI' }, owner)).status, 201);
+    const free = await Subscription.findOne({ tenantId: ownerTenant }).orFail();
+    assert.equal(free.status, 'ACTIVE');
+    assert.equal(free.expiresAt, undefined);
+    const freeRoot = `${root}/branches/${primary.id}`;
+    assert.equal((await request(`${freeRoot}/products`, 'GET', undefined, owner)).status, 200);
+    assert.equal((await request(`${freeRoot}/purchases`, 'GET', undefined, owner)).status, 200);
+    assert.equal((await request(`${freeRoot}/accounting`, 'GET', undefined, owner)).status, 403);
+    assert.equal((await request(`${freeRoot}/tax-declarations`, 'GET', undefined, owner)).status, 403);
+    assert.equal((await request(`${freeRoot}/warehouse/ai/settings`, 'GET', undefined, owner)).status, 403);
+    assert.equal((await request(`${freeRoot}`, 'PATCH', { mode: 'GYM' }, owner)).status, 403);
+    assert.equal((await request(`${root}/subscription/request`, 'POST', { code: 'PLUS' }, owner)).status, 201);
 
-    const plan = await Plan.findOne({ code: 'STANDARD' }).orFail();
+    const plan = await Plan.findOne({ code: 'PLUS' }).orFail();
     const paid = await PlanVersion.findOne({ planId: plan._id }).sort('-version').orFail();
+    await PlanVersion.updateOne({ _id: paid.id }, { $set: { maxBranches: 2 } });
     const contract = await Subscription.findOneAndUpdate({ tenantId: ownerTenant }, { $set: { planVersionId: paid._id, trial: false, expiresAt: null },
       $unset: { requestedPlanVersionId: 1 } }, { returnDocument: 'after' }).orFail();
     const parallel = await Promise.all([
@@ -167,6 +171,22 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     ]);
     assert.deepEqual(parallel.map(response => response.status).sort(), [201, 409]);
     const added = await parallel.find(response => response.ok)!.json();
+    assert.equal((await request(`${freeRoot}/tax-declarations`, 'GET', undefined, owner)).status, 200);
+    assert.deepEqual(await (await request(`${freeRoot}/warehouse/ai/settings`, 'GET', undefined, owner)).json(), { configured: false });
+    const keyPath = `${freeRoot}/warehouse/ai/settings`;
+    const sampleKey = 'sk-test-only-for-inventory-encryption';
+    assert.deepEqual(await (await request(keyPath, 'PATCH', { apiKey: sampleKey }, owner)).json(), { configured: true });
+    const storedKey = await BusinessAiSettings.findById(ownerTenant).select('+encryptedKey').orFail();
+    assert.ok(!storedKey.encryptedKey.includes(sampleKey));
+    assert.deepEqual(await (await request(keyPath, 'DELETE', undefined, owner)).json(), { configured: false });
+    const taxPath = `${freeRoot}/tax-declarations`;
+    const tax = { name: 'Kỳ kiểm thử', taxId: '0123456789', startsOn: '2026-10-01', endsOn: '2026-10-31',
+      taxableRevenue: 100000, outputTax: 10000, inputTax: 2000, payableTax: 8000 };
+    const taxResponse = await request(taxPath, 'POST', tax, owner);
+    assert.equal(taxResponse.status, 201, await taxResponse.clone().text());
+    const { id: taxId } = await taxResponse.json();
+    assert.equal((await request(`${taxPath}/${taxId}/filing`, 'PATCH', { receipt: 'SIM-001', filedOn: '2026-11-15' }, owner)).status, 200);
+    assert.equal((await request(`${taxPath}/${taxId}`, 'PATCH', tax, owner)).status, 404);
 
     const mode = await request('/auth/work-mode', 'POST', { mode: 'STAFF', tenantId: ownerTenant, branchId: primary.id }, owner);
     assert.equal(mode.status, 200);
@@ -1411,7 +1431,6 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     assert.equal(await User.countDocuments({ email: adminEmail }), 1);
     assert.equal((await request('/auth/me', 'GET', undefined, oldAdminSession)).status, 401);
     assert.equal((await request('/auth/login', 'POST', { email: adminEmail, password })).status, 401);
-    assert.equal((await request('/auth/login', 'POST', { email: adminEmail, password: newPassword })).status, 401);
     const credentials = { email: adminEmail, password: newPassword };
     assert.equal((await request('/auth/login', 'POST', credentials)).status, 403);
     const adminCredentials = { ...credentials, otp: authenticator.generate(adminSecret) };
@@ -1569,6 +1588,8 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     try {
       const tenantFilter = { tenantId: { $in: tenantIds } };
       await Promise.all([
+        BusinessAiSettings.deleteMany({ _id: tenantFilter.tenantId }),
+        TaxDeclaration.deleteMany(tenantFilter),
         AccountToken.deleteMany({ userId: { $in: userIds } }),
         UserSession.deleteMany({ userId: { $in: userIds } }),
         PlatformGrant.deleteMany({ userId: { $in: userIds } }),

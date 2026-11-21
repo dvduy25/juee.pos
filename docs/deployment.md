@@ -77,3 +77,11 @@ docker run --rm -p 3001:80 juee-site
 3. Tạo một doanh nghiệp thử, gửi yêu cầu gói, từ chối rồi gửi lại và duyệt. Đối chiếu ngày hết hạn, mã giao dịch, lịch sử quản trị và khả năng truy cập sau khi khóa hoặc hết hạn. Kiểm tra tài khoản chỉ có quyền xem.
 4. Chạy `npm test`, `npm run build`, `npm audit --omit=dev` và `npm run test:integration` với database thử có tên kết thúc bằng `_test`. Chạy quy trình thanh toán, hoàn tiền, soát vé, nhận/trả phòng và QR gọi món qua trình duyệt và thiết bị tại quầy.
 5. Chạy qua reverse proxy cho môi trường tự quản. Cấu hình `TRUST_PROXY_HOPS` theo số proxy tin cậy trên đường đến API, bảo đảm đường vào API đi đúng tuyến đã cấu hình. Kiểm tra nhiều IP thực tế và áp giới hạn tại proxy nếu API chạy nhiều bản sao. Kiểm tra cảnh báo khi API/MongoDB/SMTP gián đoạn và chuẩn bị cách quay lại image trước.
+
+## Gói dịch vụ và trợ lý kho AI
+
+Khi nâng cấp từ bảng giá cũ, đặt `APPLY_DEFAULT_SERVICE_PLANS=true` trên API cho lần triển khai đầu. API công bố gói Miễn phí và Nâng cao, thêm phiên bản mới và ẩn các gói mặc định cũ. Các thuê bao và yêu cầu thanh toán đã có tiếp tục tham chiếu phiên bản đã chọn. Tắt biến này sau khi xác minh `/api/v1/plans`. Khi chạy seed trên database mới, bảng giá được khởi tạo cùng các chỉ mục.
+
+Đặt `AI_KEY_ENCRYPTION_SECRET` riêng cho API thông qua biến môi trường. Dùng giá trị ngẫu nhiên ổn định ít nhất 32 ký tự và sao lưu trong nơi quản lý bí mật. Nếu đổi giá trị, chủ doanh nghiệp cần lưu lại khóa OpenAI. Chủ doanh nghiệp gói Nâng cao nhập khóa OpenAI của mình trong **Quản lý doanh nghiệp → Trợ lý kho AI**. Dữ liệu chứng từ được gửi đến OpenAI khi chủ doanh nghiệp yêu cầu tạo nháp. Phiếu nhập hoặc xuất chỉ được ghi khi chủ doanh nghiệp chọn mặt hàng kho và xác nhận.
+
+Trong **Quản lý doanh nghiệp → Kê khai thuế**, chủ doanh nghiệp có thể lưu số liệu đã đối chiếu, xuất CSV làm việc và ghi mã tiếp nhận sau khi nộp bên ngoài ứng dụng.

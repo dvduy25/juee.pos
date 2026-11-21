@@ -12,7 +12,7 @@ export async function publishedPlans() {
     return revision && { code: plan.code, name: plan.name, description: plan.description,
       monthlyVnd: revision.monthlyVnd, yearlyVnd: revision.yearlyVnd ?? revision.monthlyVnd * 12n,
       maxBranches: revision.maxBranches, maxStaff: revision.maxStaff, maxQrTables: revision.maxQrTables,
-      features: revision.features.filter(feature => feature !== 'inventory') };
+      features: revision.features };
   }));
   return items.filter(Boolean).sort((a, b) => a.monthlyVnd === b.monthlyVnd
     ? a.code.localeCompare(b.code) : a.monthlyVnd < b.monthlyVnd ? -1 : 1);

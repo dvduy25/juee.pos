@@ -1,4 +1,4 @@
-export type SubscriptionStatus = { status: string; startsAt: string; expiresAt?: string | null; trial?: boolean };
+export type SubscriptionStatus = { status: string; startsAt: string; expiresAt?: string | null; trial?: boolean; features?: string[] };
 export type Membership = { role: string; tenant: { id: string; name: string }; subscription?: SubscriptionStatus; canEditSharedCatalog?: boolean };
 export type ServicePlan = { code: string; name: string; description: string; monthlyVnd: string; yearlyVnd: string;
   maxBranches: number; maxStaff: number; maxQrTables: number; features: string[] };

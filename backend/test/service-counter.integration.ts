@@ -49,9 +49,10 @@ test('service branches sell warehouse goods from reception and account for them 
       const user = await expectJson(await request('/auth/register', 'POST', { ...credentials, name: 'Quản lý quầy' }));
       userIds.push(user.id);
       const { accessToken: owner } = await expectJson(await request('/auth/login', 'POST', credentials));
-      const site = await expectJson(await request('/tenants', 'POST', { name: `Quầy ${mode}`, subscription: 'TRIAL',
+      const site = await expectJson(await request('/tenants', 'POST', { name: `Quầy ${mode}`, subscription: 'PAID', planCode: 'PLUS',
         branch: { name: 'Quầy chính', mode, location: { latitude: 21, longitude: 105, radiusMeters: 100 } } }, owner));
       tenantIds.push(site.id);
+      await Subscription.updateOne({ tenantId: site.id }, { $set: { status: 'ACTIVE' }, $unset: { requestedPlanVersionId: 1, requestedAt: 1, requestId: 1 } });
       const branchId = site.branches[0].id;
       const root = `/tenants/${site.id}/branches/${branchId}`;
       const scope = { tenantId: new mongoose.Types.ObjectId(site.id), branchId: new mongoose.Types.ObjectId(branchId) };

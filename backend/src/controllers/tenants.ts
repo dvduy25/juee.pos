@@ -9,7 +9,9 @@ import { label, objectId, read } from '../validators/common';
 import { transaction } from '../config/db';
 import { Branch, HotelBooking, IncomingTransfer, Membership, Plan, PlanVersion, SaaSCheckout, SaaSInvoice, Subscription, SystemNotification, TableSession, Tenant, User, UserSession, branchModes, loginRoles, tableBranchModes } from '../models';
 import { activePlan, paidPlan, simulatedPlanDays, simulatedSubscription, simulatedSubscriptionsEnabled, subscriptionStatus,
-  tenantMembership, trialDays } from '../services/tenants';
+  tenantMembership } from '../services/tenants';
+import { revisions } from '../services/plans';
+import { basicSales, freePlanCode } from '../services/service-plan-catalog';
 import { canManageBranches } from '../middleware/policy';
 import { branchLocation } from '../validators/order-location';
 import { createSubscriptionCheckout, sameSubscriptionDestination, subscriptionPaymentConfig } from '../services/subscription-payments';
@@ -23,14 +25,30 @@ const branchSchema = z.object({
 const branchChanges = branchSchema.partial().extend({ bankAccount: branchSchema.shape.bankAccount.nullable() }).refine(input => Object.keys(input).length > 0);
 const branchFields = 'name tenantId mode createdAt bankAccount location';
 const planCode = z.string().regex(/^[A-Z][A-Z0-9_]{1,29}$/);
-const trialBranch = branchSchema.extend({ mode: branchSchema.shape.mode.exclude(['HYBRID']) });
 const tenantInput = z.discriminatedUnion('subscription', [
-  z.object({ name: label, branch: trialBranch, subscription: z.literal('TRIAL') }).strict(),
+  z.object({ name: label, branch: branchSchema.extend({ mode: z.literal('RETAIL') }), subscription: z.literal('FREE') }).strict(),
   z.object({ name: label, branch: branchSchema, subscription: z.literal('PAID'), planCode }).strict(),
 ]);
 
-function trialAvailable(userId: string, session?: ClientSession) {
-  return Membership.exists({ userId, role: 'OWNER' }).session(session ?? null).then(owner => !owner);
+function firstOwnedBusiness(userId: string, session?: ClientSession) {
+  return Membership.findOne({ userId, role: 'OWNER' }).sort('createdAt _id').select('tenantId').session(session ?? null).lean();
+}
+
+async function freePlan(session: ClientSession) {
+  const plan = await Plan.findOne({ code: freePlanCode, published: true }).session(session).lean();
+  const revision = plan && (await revisions(plan._id, session))[0];
+  if (!revision || revision.monthlyVnd !== 0n || !revision.features.includes(basicSales)) {
+    throw new ConflictException('Gói miễn phí chưa sẵn sàng.');
+  }
+  return revision;
+}
+
+function canSwitchToFree(contract: { expiresAt?: Date | null }, monthlyVnd: bigint) {
+  return monthlyVnd === 0n || (!!contract.expiresAt && contract.expiresAt <= new Date());
+}
+
+function lockOwner(userId: string, session: ClientSession) {
+  return User.updateOne({ _id: userId, locked: { $ne: true } }, { $set: { tenantWriteToken: randomUUID() } }, { session, timestamps: false });
 }
 
 @Controller('tenants')
@@ -43,13 +61,15 @@ export class TenantsController {
     const ids = memberships.map(item => item.tenantId);
     const [tenants, subscriptions, branches] = await Promise.all([
       Tenant.find({ _id: { $in: ids }, locked: { $ne: true } }).select('name').sort('name _id').lean(),
-      Subscription.find({ tenantId: { $in: ids } }).select('tenantId status startsAt expiresAt trial simulated').lean(),
+      Subscription.find({ tenantId: { $in: ids } }).select('tenantId status startsAt expiresAt trial simulated planVersionId').lean(),
       Branch.find({ tenantId: { $in: memberships.filter(item => item.role === 'MANAGER' && !staffMode).map(item => item.tenantId) } })
         .select('tenantId').lean(),
     ]);
     const byTenant = new Map(memberships.map(item => [String(item.tenantId), item]));
-    const contracts = new Map(subscriptions.map(({ tenantId, status, startsAt, expiresAt, trial, simulated }) =>
-      [String(tenantId), { status: subscriptionStatus(status, simulated), startsAt, expiresAt, trial }]));
+    const versions = await PlanVersion.find({ _id: { $in: subscriptions.map(item => item.planVersionId) } }).select('features').lean();
+    const features = new Map(versions.map(version => [String(version._id), version.features]));
+    const contracts = new Map(subscriptions.map(({ tenantId, status, startsAt, expiresAt, trial, simulated, planVersionId }) =>
+      [String(tenantId), { status: subscriptionStatus(status, simulated), startsAt, expiresAt, trial, features: features.get(String(planVersionId)) ?? [] }]));
     return tenants.map(tenant => {
       const item = byTenant.get(String(tenant._id));
       const role = staffMode ? 'CASHIER' : item?.role;
@@ -63,9 +83,8 @@ export class TenantsController {
   @Get('setup')
   async setup(@Req() req: Request) {
     const { userId } = await authenticate(req, { management: true });
-    const user = found(await User.findById(userId).select('trialStartedAt').lean());
     const onlinePayment = !!subscriptionPaymentConfig();
-    return { trialAvailable: !user.trialStartedAt && await trialAvailable(userId), trialDays, onlinePayment,
+    return { freeAvailable: !await firstOwnedBusiness(userId), onlinePayment,
       simulatedPlanDays: !onlinePayment && simulatedSubscriptionsEnabled() ? simulatedPlanDays : null };
   }
 
@@ -76,30 +95,26 @@ export class TenantsController {
     const payments = subscriptionPaymentConfig();
     return transaction(async session => {
       const { id: sessionId, userId } = await authenticate(req, { management: true, session });
-      const user = found(await User.findOneAndUpdate({ _id: userId, locked: { $ne: true } },
-        { $set: { tenantWriteToken: randomUUID() } }, { session, timestamps: false }).select('trialStartedAt').lean());
+      await lockOwner(userId, session);
       const now = new Date();
-      const trial = input.subscription === 'TRIAL';
-      if (trial && (user.trialStartedAt || !await trialAvailable(userId, session))) {
-        throw new ConflictException('Mỗi tài khoản được dùng thử một lần cho cửa hàng đầu tiên.');
+      const free = input.subscription === 'FREE';
+      if (free && await firstOwnedBusiness(userId, session)) {
+        throw new ConflictException('Gói miễn phí áp dụng cho doanh nghiệp đầu tiên. Hãy chọn gói trả phí cho doanh nghiệp mới.');
       }
-      const plan = trial && await Plan.findOne({ code: 'TRIAL' }).session(session).lean();
       const revision = input.subscription === 'PAID' ? await paidPlan(input.planCode, [input.branch.mode], session) :
-        plan && await PlanVersion.findOne({ planId: plan._id, version: 1 }).session(session).lean();
-      if (!revision) throw new ConflictException('Gói dùng thử chưa được cấu hình. Hãy liên hệ quản trị viên JUEE POS.');
+        await freePlan(session);
       const tenant = await Tenant.insertOne({ name: input.name }, { session });
       const tenantId = tenant._id;
       await Membership.insertOne({ tenantId, userId, role: 'OWNER', branchIds: [] }, { session });
       const branch = await Branch.insertOne({ tenantId, ...input.branch }, { session });
-      const subscription = trial ? { trial: true, expiresAt: new Date(now.getTime() + trialDays * 86400000) } :
+      const subscription = free ? { status: 'ACTIVE' as const } :
         !payments && simulatedSubscriptionsEnabled() ? simulatedSubscription(revision._id, now) :
           { status: 'PENDING', requestedPlanVersionId: revision._id, requestedAt: now, requestId: randomUUID() } as const;
       const contract = await Subscription.insertOne({ tenantId, planVersionId: revision._id, startsAt: now, ...subscription }, { session });
-      if (!trial && payments && contract.requestId) {
+      if (!free && payments && contract.requestId) {
         await createSubscriptionCheckout(payments, contract, revision, contract.requestId, session);
       }
       await UserSession.updateOne({ _id: sessionId }, { $set: { selectedBranch: { tenantId, branchId: branch._id } } }, { session });
-      if (trial) await User.updateOne({ _id: userId }, { $set: { trialStartedAt: now } }, { session });
       return { _id: tenantId, name: tenant.name, createdAt: tenant.createdAt, branches: [branch.toObject()] };
     });
   }
@@ -163,7 +178,10 @@ export class TenantsController {
       const { userId } = await authenticate(req, { management: true, session });
       const { membership } = await tenantMembership(userId, tenantId, session);
       if (!canManageBranches(membership.role, membership.branchIds.map(String), branchId)) throw new ForbiddenException();
-      await activePlan(tenantId, session, true);
+      const plan = await activePlan(tenantId, session, true);
+      if (plan.features.includes(basicSales) && input.mode && input.mode !== 'RETAIL') {
+        throw new ForbiddenException('Gói miễn phí chỉ hỗ trợ mô hình bán lẻ.');
+      }
       if (input.bankAccount !== undefined && membership.role !== 'OWNER') throw new ForbiddenException('Chỉ chủ doanh nghiệp sửa tài khoản nhận tiền.');
       if (input.location && membership.role !== 'OWNER') throw new ForbiddenException('Chỉ chủ doanh nghiệp được ghim vị trí chi nhánh.');
       if (input.mode && !tableBranchModes.includes(input.mode) && await TableSession.exists({ tenantId, branchId, status: 'OPEN' }).session(session)) {
@@ -198,13 +216,14 @@ export class TenantsController {
     const contract = found(await Subscription.findOne({ tenantId }).lean());
     const version = found(await PlanVersion.findById(contract.planVersionId).setOptions({ useBigInt64: true }).lean());
     const payments = subscriptionPaymentConfig();
-    const [plan, invoices, requested, quote] = await Promise.all([
+    const [plan, invoices, requested, quote, firstBusiness] = await Promise.all([
       Plan.findById(version.planId).lean().then(value => found(value)),
       SaaSInvoice.find({ subscriptionId: contract._id }).select('reference amountVnd paidAt paymentCode')
         .sort('-createdAt').limit(50).setOptions({ useBigInt64: true }).lean(),
       contract.requestedPlanVersionId && PlanVersion.findById(contract.requestedPlanVersionId).setOptions({ useBigInt64: true }).lean(),
       payments && membership.role === 'OWNER' && contract.requestId
         ? SaaSCheckout.findOne({ subscriptionId: contract._id, requestId: contract.requestId }).lean() : null,
+      membership.role === 'OWNER' ? firstOwnedBusiness(userId) : null,
     ]);
     const requestedPlan = requested && await Plan.findById(requested.planId).select('name code').lean();
     let checkout;
@@ -219,6 +238,8 @@ export class TenantsController {
     }
     return { ...contract, status: subscriptionStatus(contract.status, contract.simulated),
       onlinePayment: !!payments, checkout,
+      freeAvailable: !!firstBusiness?.tenantId.equals(tenantId) && !contract.requestedPlanVersionId &&
+        !version.features.includes(basicSales) && canSwitchToFree(contract, version.monthlyVnd),
       simulatedPlanDays: !payments && simulatedSubscriptionsEnabled() ? simulatedPlanDays : null,
       planVersion: { ...version, maxBranches: contract.trial ? 1 : version.maxBranches, plan }, invoices,
       requestedPlan: requestedPlan && requested ? { code: requestedPlan.code, name: requestedPlan.name, monthlyVnd: requested.monthlyVnd } : null };
@@ -234,13 +255,27 @@ export class TenantsController {
       const { userId } = await authenticate(req, { management: true, session });
       const { membership } = await tenantMembership(userId, tenantId, session);
       if (membership.role !== 'OWNER') throw new ForbiddenException();
+      if (code === freePlanCode) await lockOwner(userId, session);
       await Tenant.updateOne({ _id: tenantId }, { $set: { branchWriteToken: randomUUID() } }, { session });
       const branches = await Branch.find({ tenantId }).select('mode').session(session).lean();
-      const revision = await paidPlan(code, branches.map(branch => branch.mode), session);
       const current = await Subscription.findOne({ tenantId }).session(session).lean();
       if (current?.status === 'SUSPENDED' || current?.status === 'CANCELED') {
         throw new ConflictException('Thuê bao đang bị tạm dừng hoặc đã hủy. Hãy liên hệ quản trị viên.');
       }
+      if (code === freePlanCode) {
+        const first = await firstOwnedBusiness(userId, session);
+        const revision = await freePlan(session);
+        if (current?.planVersionId.equals(revision._id) && current.status === 'ACTIVE') return { ok: true, simulated: false };
+        const version = current && await PlanVersion.findById(current.planVersionId).setOptions({ useBigInt64: true }).session(session).lean();
+        if (!first?.tenantId.equals(tenantId) || current?.requestedPlanVersionId || (current && version && !canSwitchToFree(current, version.monthlyVnd))) {
+          throw new ConflictException('Doanh nghiệp này chưa đủ điều kiện chuyển sang gói miễn phí.');
+        }
+        await validatePlanForTenant(mongoId(tenantId), revision, session);
+        await Subscription.updateOne({ tenantId }, { $set: { planVersionId: revision._id, status: 'ACTIVE', startsAt: new Date() },
+          $unset: { expiresAt: 1, trial: 1, simulated: 1, rejectedRequest: 1 } }, { session, upsert: true });
+        return { ok: true, simulated: false };
+      }
+      const revision = await paidPlan(code, branches.map(branch => branch.mode), session);
       if (payments) {
         const quote = current?.requestId && await SaaSCheckout.findOne({ requestId: current.requestId, subscriptionId: current._id }).session(session).lean();
         if (quote && await IncomingTransfer.exists({ subscriptionId: quote.subscriptionId, checkoutId: quote._id, status: 'REVIEW' }).session(session)) {

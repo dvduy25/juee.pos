@@ -26,6 +26,7 @@ const groups = [
   { label: 'Hàng hóa', items: [
     { id: 'warehouse', label: 'Kho hàng', Icon: Warehouse },
     { id: 'purchases', label: 'Nhập hàng', Icon: ShoppingBag },
+    { id: 'warehouse-ai', label: 'Trợ lý kho AI', Icon: Warehouse },
   ] },
   { label: 'Tài chính', items: [
     { id: 'reports', label: 'Báo cáo', Icon: BarChart3 },
@@ -33,6 +34,7 @@ const groups = [
     { id: 'transactions', label: 'Giao dịch', Icon: ReceiptText },
     { id: 'cancellations', label: 'Lịch sử hủy', Icon: ClipboardX },
     { id: 'accounting', label: 'Thuế và kế toán', Icon: Calculator },
+    { id: 'tax-declarations', label: 'Kê khai thuế', Icon: ReceiptText },
   ] },
   { label: 'Tài khoản', items: [
     { id: 'subscription', label: 'Gói dịch vụ', Icon: Settings },
@@ -42,7 +44,9 @@ const groups = [
 
 type CompanySection = typeof groups[number]['items'][number]['id'];
 
-export function companyNavigation(mode?: Branch['mode'], active = true, role = 'OWNER') {
+const basicSections = new Set<CompanySection>(['overview', 'branches', 'products', 'categories', 'warehouse', 'purchases', 'transactions', 'cancellations']);
+
+export function companyNavigation(mode?: Branch['mode'], active = true, role = 'OWNER', features: string[] = []) {
   const retail = !!mode && usesRetail(mode);
   const food = !!mode && usesTables(mode);
   const membership = !!mode && usesMemberships(mode);
@@ -52,15 +56,17 @@ export function companyNavigation(mode?: Branch['mode'], active = true, role = '
     'hotel-settings': mode === 'HOTEL', 'ticket-types': mode === 'TICKETS',
     promotions: retail, customers: retail || food, warehouse: true, purchases: true, reports: true, cashbook: true,
     transactions: retail || food, cancellations: true, accounting: true, subscription: true, security: true,
+    'warehouse-ai': role === 'OWNER' && features.includes('ai-inventory'),
+    'tax-declarations': role === 'OWNER' && features.includes('tax-declarations'),
   };
   return groups.map(group => ({ label: group.label, items: group.items.filter(({ id }) =>
-    id === 'subscription' ? role === 'OWNER' : id === 'security' || (!!mode && active && available[id]),
+    id === 'subscription' ? role === 'OWNER' : id === 'security' || (!!mode && active && available[id] && (!features.includes('basic-sales') || basicSections.has(id))),
   ).map(item => ({ ...item, label: item.id === 'member-plans' && mode === 'POOL' ? 'Gói bơi' :
     item.id === 'warehouse' && food && !retail ? 'Kho nguyên liệu' : item.label })) })).filter(group => group.items.length);
 }
 
-export function companySection(requested: string | null | undefined, mode?: Branch['mode'], active = true, role = 'OWNER') {
-  const items = companyNavigation(mode, active, role).flatMap(group => group.items);
+export function companySection(requested: string | null | undefined, mode?: Branch['mode'], active = true, role = 'OWNER', features: string[] = []) {
+  const items = companyNavigation(mode, active, role, features).flatMap(group => group.items);
   const aliases: Record<string, CompanySection> = { registers: 'staff', 'warehouse-catalog': 'purchases' };
   const target = requested && Object.hasOwn(aliases, requested) ? aliases[requested] : requested;
   const fallback = requested === 'products' ? 'menu' : requested === 'menu' ? 'products' : 'overview';

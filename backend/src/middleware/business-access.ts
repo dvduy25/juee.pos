@@ -5,9 +5,10 @@ import { randomUUID } from 'node:crypto';
 import { authenticate } from './auth';
 import { found, mongoId } from '../utils/db';
 import { objectId, read } from '../validators/common';
-import { AuditLog, Branch, Membership, OutboxEvent, Tenant, tableBranchModes, type BranchMode, type Role } from '../models';
+import { AuditLog, Branch, Membership, OutboxEvent, PlanVersion, Tenant, tableBranchModes, type BranchMode, type Role } from '../models';
 import { canManageBranches, hasBranchAccess } from './policy';
 import { activePlan, activeSubscription, tenantMembership } from '../services/tenants';
+import { basicSales } from '../services/service-plan-catalog';
 
 const permissions = {
   'catalog.read': ['OWNER', 'MANAGER', 'CASHIER', 'WAITER', 'INVENTORY', 'ACCOUNTANT'],
@@ -47,6 +48,9 @@ const permissions = {
   'company.report': ['OWNER', 'MANAGER'],
   'company.revenue': ['OWNER', 'MANAGER'],
   'finance.manage': ['OWNER', 'MANAGER'],
+  'warehouse.ai': ['OWNER'],
+  'tax.manage': ['OWNER'],
+  'purchases.manage': ['OWNER', 'MANAGER'],
   'staff.manage': ['OWNER'],
   'staff.profiles': ['OWNER', 'MANAGER'],
   'staff.schedule': ['OWNER', 'MANAGER'],
@@ -60,6 +64,11 @@ const permissions = {
 } satisfies Record<string, Role[]>;
 
 type Permission = keyof typeof permissions;
+const basicSalesPermissions = new Set<Permission>([
+  'catalog.read', 'products.write', 'catalog.branch-write', 'catalog.availability',
+  'orders.read', 'orders.create', 'orders.edit', 'orders.cancel', 'orders.cancellations', 'bills.read', 'payments.collect',
+  'refunds.approve', 'transfers.review', 'warehouse.read', 'warehouse.write', 'purchases.manage',
+]);
 const staffPermissions = new Set<Permission>([
   'catalog.read', 'orders.read', 'orders.create', 'orders.accept', 'bills.read', 'payments.collect', 'tables.serve', 'registers.read', 'kitchen.serve', 'members.read',
   'hotel.operate', 'tickets.operate', 'members.create', 'staff.clock', 'member-classes.read', 'member-classes.attendance',
@@ -83,7 +92,11 @@ async function branchAccess(userId: string, scope: Scope, permission: Permission
   if (!allows(role, permission)) throw new ForbiddenException();
   if (!hasBranchAccess(membership.role, membership.branchIds, scope.branchId, (id, branch) => id.equals(branch))) throw new ForbiddenException();
   const branch = found(await Branch.findOne({ _id: scope.branchId, tenantId: scope.tenantId }).session(session ?? null).lean());
-  await activeSubscription(scope.tenantId, session, !!session);
+  const contract = await activeSubscription(scope.tenantId, session, !!session);
+  if (!basicSalesPermissions.has(permission) &&
+    await PlanVersion.exists({ _id: contract.planVersionId, features: basicSales }).session(session ?? null)) {
+    throw new ForbiddenException('Tính năng này thuộc gói Nâng cao. Xem mục Gói dịch vụ để nâng cấp.');
+  }
   if (session) {
     // Serialize against tenant locks and membership changes in the same transaction.
     await Tenant.updateOne({ _id: scope.tenantId, locked: { $ne: true } }, { $set: { branchWriteToken: randomUUID() } }, { session });
@@ -107,7 +120,7 @@ export async function requireModule(scope: Scope, feature: string, session?: Cli
   const plan = await activePlan(scope.tenantId, session, !!session);
   if (!plan.features.includes(feature)) {
     const names: Record<string, string> = { pos: 'bán hàng tại quầy', qr: 'bàn và gọi món QR', kitchen: 'màn hình bếp / pha chế',
-      registers: 'ca thu ngân' };
+      registers: 'ca thu ngân', 'ai-inventory': 'trợ lý kho AI', 'tax-declarations': 'kê khai thuế' };
     throw new ForbiddenException(`Gói hiện tại chưa hỗ trợ ${names[feature] ?? 'chức năng này'}. Chủ cửa hàng có thể chọn gói phù hợp trong mục Gói dịch vụ.`);
   }
 }

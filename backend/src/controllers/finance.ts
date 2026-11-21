@@ -53,7 +53,7 @@ function linkCashbookPayroll(scope: Scope): PipelineStage.FacetPipelineStage[] {
 export class FinanceController {
   @Get('purchases')
   async purchases(@Req() req: Request, @Param() route: Route, @Query() query: unknown) {
-    const { scope } = await access(req, route.tenantId, route.branchId, 'finance.manage');
+    const { scope } = await access(req, route.tenantId, route.branchId, 'purchases.manage');
     const { page } = read(z.object({ page: pageSchema }), query);
     return PurchaseReceipt.find(scope).sort('-createdAt -_id').skip((page - 1) * 50).limit(50).lean();
   }
@@ -61,7 +61,7 @@ export class FinanceController {
   @Get('purchases/export')
   @Header('Cache-Control', 'no-store')
   async exportPurchases(@Req() req: Request, @Param() route: Route, @Query() query: unknown) {
-    const { scope } = await access(req, route.tenantId, route.branchId, 'finance.manage');
+    const { scope } = await access(req, route.tenantId, route.branchId, 'purchases.manage');
     const { period, on } = read(reportPeriodQuery, query);
     const range = selectedReportRange(period, on);
     async function* rows() {
@@ -83,7 +83,7 @@ export class FinanceController {
 
   @Get('purchases/:id')
   async purchaseDetail(@Req() req: Request, @Param() route: Route) {
-    const { scope } = await access(req, route.tenantId, route.branchId, 'finance.manage');
+    const { scope } = await access(req, route.tenantId, route.branchId, 'purchases.manage');
     return found(await PurchaseReceipt.findOne({ ...scope, _id: read(objectId, route.id) }).lean(), 'Không tìm thấy phiếu nhập hàng.');
   }
 
@@ -94,9 +94,9 @@ export class FinanceController {
     const input = read(z.object({ supplier: label, reference: label.optional(), method: z.enum(recordedPaymentMethods),
       lines: z.array(line).min(1).max(30).refine(lines => new Set(lines.map(item => `${item.itemId}:${item.expiresOn ?? ''}`)).size === lines.length,
         'Mỗi mặt hàng và hạn sử dụng chỉ nhập một dòng.') }).strict(), body);
-    const { scope, actorId } = await access(req, route.tenantId, route.branchId, 'finance.manage');
+    const { scope, actorId } = await access(req, route.tenantId, route.branchId, 'purchases.manage');
     return idempotent(scope, 'PURCHASE', key, { actorId, input }, async session => {
-      await access(req, route.tenantId, route.branchId, 'finance.manage', session);
+      await access(req, route.tenantId, route.branchId, 'purchases.manage', session);
       const items = await WarehouseItem.find({ ...scope, _id: { $in: input.lines.map(item => item.itemId) } }).session(session);
       const byId = new Map(items.map(item => [item.id, item]));
       const lines = input.lines.map(line => {

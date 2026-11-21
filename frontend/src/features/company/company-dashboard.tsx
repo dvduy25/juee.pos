@@ -24,11 +24,13 @@ import { MemberCheckInManagement, MemberPlans } from './member-settings';
 import { HotelSettings } from './hotel-settings';
 import { CancellationHistory } from './cancellations';
 import { companySection } from './navigation';
+import { InventoryAi } from './inventory-ai';
+import { TaxDeclarations } from './tax-declarations';
 
 export function CompanyDashboard({ requested }: { requested?: string }) {
-  const { company, role, staffMode, branches, branch } = useBusiness();
+  const { company, role, staffMode, branches, branch, membership } = useBusiness();
   if (!company || staffMode) return <p className="error" role="alert">Hãy dùng tài khoản chủ doanh nghiệp hoặc quản lý được giao chi nhánh.</p>;
-  const { id: current, label } = companySection(requested, branch.mode, true, role);
+  const { id: current, label } = companySection(requested, branch.mode, true, role, membership.subscription?.features);
   return <div className="company-dashboard">
     <header className="company-title"><h1>{label}</h1></header>
     {current === 'overview' && <CompanyOverview/>}
@@ -53,6 +55,8 @@ export function CompanyDashboard({ requested }: { requested?: string }) {
     {current === 'subscription' && <SubscriptionManagement/>}
     {current === 'staff' && <StaffWorkspace management/>}
     {current === 'warehouse' && <WarehouseDashboard key={branch.id}/>}
+    {current === 'warehouse-ai' && <InventoryAi key={branch.id}/>}
+    {current === 'tax-declarations' && <TaxDeclarations/>}
     {current === 'purchases' && <Purchases key={branch.id}/>}
     {current === 'accounting' && <Accounting key={branch.id}/>}
     {current === 'promotions' && <Promotions key={branch.id}/>}
@@ -61,17 +65,18 @@ export function CompanyDashboard({ requested }: { requested?: string }) {
 }
 
 function CompanyOverview() {
-  const { company, tenantId, branches, branch } = useBusiness();
+  const { company, tenantId, branches, branch, membership } = useBusiness();
   const [period, setPeriod] = useState('today');
-  const query = useData<Revenue>(`/company/revenue?period=${period}`, 15000);
+  const basic = membership.subscription?.features?.includes('basic-sales');
+  const query = useData<Revenue>(`/company/revenue?period=${period}`, 15000, !basic);
   return <>
-    <Panel title="Doanh thu theo chi nhánh">
+    {!basic && <Panel title="Doanh thu theo chi nhánh">
       <div className="actions business-filters"><label>Kỳ báo cáo<select value={period} onChange={event => setPeriod(event.target.value)}>
         <option value="today">Hôm nay</option><option value="month">Tháng này</option>
       </select></label></div>
       <State query={query}/>
       {query.data && <RevenueDetails report={query.data}/>}
-    </Panel>
+    </Panel>}
     <div className="columns">
       <Panel title="Doanh nghiệp của bạn">
         {company?.businesses.map(item => <div className="list-row" key={item.tenant.id}>

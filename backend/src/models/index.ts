@@ -342,7 +342,7 @@ export const StaffPayPayment = model('StaffPayPayment', staffPayments);
 
 export const Plan = model('Plan', new Schema({
   code: { ...text, unique: true }, name: text, description: { type: String, default: '' },
-  published: { type: Boolean, default: true },
+  published: { type: Boolean, default: true }, catalogRevision: Number,
 }, { collection: 'Plan', timestamps: true }));
 
 const versions = new Schema({
@@ -574,3 +574,15 @@ incomingTransfers.index({ provider: 1, transactionId: 1 }, { unique: true });
 incomingTransfers.index({ tenantId: 1, branchId: 1, status: 1, createdAt: -1 });
 incomingTransfers.index({ subscriptionId: 1, status: 1, createdAt: -1 }, { partialFilterExpression: { subscriptionId: { $type: 'objectId' } } });
 export const IncomingTransfer = model('IncomingTransfer', incomingTransfers);
+
+export const BusinessAiSettings = model('BusinessAiSettings', new Schema({
+  _id: Schema.Types.ObjectId, encryptedKey: { ...text, select: false },
+}, { timestamps: true }));
+
+const taxDeclarations = new Schema({
+  tenantId: id, name: text, taxId: text, startsOn: text, endsOn: text,
+  taxableRevenue: money, outputTax: money, inputTax: money, payableTax: money,
+  note: String, receipt: String, filedOn: String,
+}, { timestamps: true });
+taxDeclarations.index({ tenantId: 1, endsOn: -1, createdAt: -1 });
+export const TaxDeclaration = model('TaxDeclaration', taxDeclarations);

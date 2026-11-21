@@ -17,11 +17,12 @@ type Contract = SubscriptionStatus & {
   simulated?: boolean;
   simulatedPlanDays: number | null;
   onlinePayment: boolean;
+  freeAvailable: boolean;
   checkout?: Checkout;
 };
 type Checkout = { reference: string; amount: number; bank: string; account: string; holder: string;
   expiresAt: string; status: 'PENDING' | 'EXPIRED' | 'REVIEW'; qrUrl: string };
-const features: Record<string, string> = { pos: 'Bán hàng tại quầy', qr: 'Bàn và gọi món QR', kitchen: 'Bếp / pha chế', chain: 'Quản lý chuỗi' };
+const features: Record<string, string> = { pos: 'Bán hàng tại quầy', inventory: 'Nhập kho', registers: 'Ca thu ngân', qr: 'Bàn và gọi món QR', kitchen: 'Bếp / pha chế', chain: 'Quản lý chuỗi', 'ai-inventory': 'Trợ lý kho AI', 'tax-declarations': 'Kê khai thuế' };
 const statuses: Record<string, string> = { PENDING: 'Chờ kích hoạt', SUSPENDED: 'Tạm dừng', CANCELED: 'Đã hủy' };
 
 export function SubscriptionManagement() {
@@ -47,7 +48,7 @@ export function StoreSubscription({ member, branches, active }: { member: Member
   const canRequest = owner && checkout?.status !== 'REVIEW' && !['SUSPENDED', 'CANCELED'].includes(contract?.status ?? '');
   const planSelection = canRequest && (choosing || (!active && !contract?.requestedPlan && !query.isPending));
   const plans = useServicePlans(planSelection);
-  const choices = suitablePlans(plans.data ?? [], branches.map(branch => branch.mode));
+  const choices = suitablePlans(plans.data ?? [], branches.map(branch => branch.mode), contract?.freeAvailable);
   const selected = choices.find(plan => plan.code === code)?.code ?? '';
   const latestReceipt = contract?.invoices[0]?.id;
 
@@ -66,7 +67,8 @@ export function StoreSubscription({ member, branches, active }: { member: Member
         client.invalidateQueries({ queryKey: ['business'] })]);
       setChoosing(false);
       setCode('');
-      if (result.simulated) setNotice('Đã kích hoạt gói mô phỏng. Bạn có thể sử dụng các tính năng của gói ngay.');
+      if (selected === 'FREE') setNotice('Đã kích hoạt gói Miễn phí.');
+      else if (result.simulated) setNotice('Đã kích hoạt gói mô phỏng. Bạn có thể sử dụng các tính năng của gói ngay.');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Chưa gửi được yêu cầu.'); }
     finally { setSaving(false); submitting.current = false; }
   }
@@ -84,7 +86,7 @@ export function StoreSubscription({ member, branches, active }: { member: Member
           statuses[contract.status] ?? (contract.expiresAt && new Date(contract.expiresAt) <= new Date() ? 'Đã hết hạn' : 'Chưa bắt đầu')}</strong></div>
         {contract.status !== 'PENDING' && <div className="list-row">Ngày hết hạn<strong>{contract.expiresAt ? date(contract.expiresAt) : 'Không giới hạn'}</strong></div>}
         <div className="list-row">Hạn mức<strong>{contract.planVersion.maxBranches} chi nhánh · {contract.planVersion.maxStaff} nhân viên</strong></div>
-        <div className="list-row">Tính năng<strong>{contract.planVersion.features.filter(key => key !== 'inventory' && key !== 'registers').map(key => features[key] ?? key).join(', ') || '—'}</strong></div>
+        <div className="list-row">Tính năng<strong>{contract.planVersion.features.filter(key => key !== 'basic-sales').map(key => features[key] ?? key).join(', ') || '—'}</strong></div>
         {contract.requestedPlan && <p className="notice" role="status">Yêu cầu gói <strong>{contract.requestedPlan.name}</strong> · {currency.format(BigInt(contract.requestedPlan.monthlyVnd))} / tháng.
           {' '}{simulatedDays ? 'Bạn có thể kích hoạt gói này ở chế độ mô phỏng.' :
             !contract.onlinePayment ? 'Đang chờ quản trị viên xác nhận thanh toán và kích hoạt.' :
@@ -102,7 +104,7 @@ export function StoreSubscription({ member, branches, active }: { member: Member
         {contract?.onlinePayment && <p className="muted">Mỗi lần thanh toán tiếp tục gói hiện tại thêm 30 ngày. Khi đổi gói, chu kỳ 30 ngày mới bắt đầu ngay sau khi xác nhận.</p>}
         {checkout?.status === 'PENDING' && <p className="muted">Nếu đã chuyển tiền theo mã hiện tại, hãy chờ xác nhận trước khi chọn gói khác.</p>}
         {error && <p className="error" role="alert">{error}</p>}
-        <div className="actions"><button className="button" disabled={saving || !selected}>{saving ? 'Đang xử lý…' : simulatedDays ?
+        <div className="actions"><button className="button" disabled={saving || !selected}>{saving ? 'Đang xử lý…' : selected === 'FREE' ? 'Kích hoạt miễn phí' : simulatedDays ?
           'Kích hoạt gói mô phỏng' : contract?.onlinePayment ? 'Lấy mã VietQR' : 'Gửi yêu cầu đăng ký gói'}</button>
           {choosing && <button type="button" className="plain" disabled={saving} onClick={() => setChoosing(false)}>Đóng</button>}</div>
       </form>}

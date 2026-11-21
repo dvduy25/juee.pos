@@ -24,21 +24,21 @@ type LayoutProps = WorkspaceLayoutProps & {
   accountSecurityHref?: string;
 };
 
-function CompanyNavigation({ mode, active, role }: { mode?: Branch['mode']; active: boolean; role: string }) {
+function CompanyNavigation({ mode, active, role, features }: { mode?: Branch['mode']; active: boolean; role: string; features?: string[] }) {
   const pathname = usePathname();
   const params = useSearchParams();
-  const current = companySection(pathname === '/dashboard/company/security' ? 'security' : params.get('tab'), mode, active, role).id;
-  return companyNavigation(mode, active, role).map(group => <div className="desk-nav-group" key={group.label}>
+  const current = companySection(pathname === '/dashboard/company/security' ? 'security' : params.get('tab'), mode, active, role, features).id;
+  return companyNavigation(mode, active, role, features).map(group => <div className="desk-nav-group" key={group.label}>
     <p>{group.label}</p><div>{group.items.map(({ id, label, Icon }) => <Link key={id} href={companyHref(id)} title={label}
       aria-current={current === id ? 'page' : undefined}><Icon size={18} aria-hidden="true"/><span>{label}</span></Link>)}</div>
   </div>);
 }
 
-export function CompanyLayout({ branchMode, active = false, onCreateBusiness, ...props }: LayoutProps & {
-  branchMode?: Branch['mode']; active?: boolean; onCreateBusiness?: () => void;
+export function CompanyLayout({ branchMode, active = false, onCreateBusiness, features, ...props }: LayoutProps & {
+  branchMode?: Branch['mode']; active?: boolean; features?: string[]; onCreateBusiness?: () => void;
 }) {
   const sections = <Suspense>
-    {(props.role === 'OWNER' || props.role === 'MANAGER') && <CompanyNavigation mode={branchMode} active={active} role={props.role}/>}
+    {(props.role === 'OWNER' || props.role === 'MANAGER') && <CompanyNavigation mode={branchMode} active={active} role={props.role} features={features}/>}
   </Suspense>;
   const footer = <div className="desk-nav-group company-navigation-footer"><div>
     {onCreateBusiness && <button className="company-create" type="button" title="Tạo doanh nghiệp" onClick={onCreateBusiness}>

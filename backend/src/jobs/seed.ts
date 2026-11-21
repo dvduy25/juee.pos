@@ -2,28 +2,14 @@ import mongoose from 'mongoose';
 import { hash, verify } from 'argon2';
 import { authenticator } from 'otplib';
 import { connectDatabase, ensureIndexes, transaction } from '../config/db';
-import { AccountToken, Plan, PlanVersion, PlatformGrant, User, UserSession } from '../models';
+import { AccountToken, Plan, PlatformGrant, User, UserSession } from '../models';
+import { syncServicePlans } from '../services/service-plan-catalog';
 import { isDuplicate } from '../utils/db';
 
 async function main() {
   await connectDatabase();
   await ensureIndexes();
-  const plans = [
-    { code: 'TRIAL', name: 'Dùng thử 7 ngày', published: false, monthlyVnd: 0n, yearlyVnd: 0n, maxBranches: 1, maxStaff: 5, maxQrTables: 30, features: ['pos', 'qr', 'kitchen', 'registers'] },
-    { code: 'FREE', name: 'Free', monthlyVnd: 0n, yearlyVnd: 0n, maxBranches: 1, maxStaff: 2, maxQrTables: 5, features: ['pos'] },
-    { code: 'MINI', name: 'Mini', monthlyVnd: 39000n, yearlyVnd: 468000n, maxBranches: 1, maxStaff: 5, maxQrTables: 30, features: ['pos', 'qr', 'kitchen'] },
-    { code: 'STANDARD', name: 'Standard', monthlyVnd: 79000n, yearlyVnd: 948000n, maxBranches: 2, maxStaff: 15, maxQrTables: 80, features: ['pos', 'qr', 'kitchen'] },
-    { code: 'PRO', name: 'Pro', monthlyVnd: 149000n, yearlyVnd: 1788000n, maxBranches: 5, maxStaff: 50, maxQrTables: 200, features: ['pos', 'qr', 'kitchen', 'registers'] },
-    { code: 'BUSINESS', name: 'Business', monthlyVnd: 249000n, yearlyVnd: 2988000n, maxBranches: 20, maxStaff: 200, maxQrTables: 1000, features: ['pos', 'qr', 'kitchen', 'registers', 'chain'] },
-  ];
-  for (const { code, name, published = true, ...revision } of plans) {
-    await transaction(async session => {
-      const plan = await Plan.findOneAndUpdate({ code }, { $setOnInsert: { code, name, published } }, { upsert: true, returnDocument: 'after', session, timestamps: false });
-      if (!await PlanVersion.exists({ planId: plan!._id }).session(session)) {
-        await PlanVersion.insertOne({ planId: plan!._id, version: 1, ...revision }, { session });
-      }
-    });
-  }
+  await syncServicePlans();
   console.log('Các gói dịch vụ mặc định đã sẵn sàng.');
   const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
   if (!adminEmail) return;

@@ -195,7 +195,7 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
   if (!staffMode && !loading && !error && ((!member && !selectedScope) || creating)) return <StoreSetup {...props}
     onBack={member && (() => setCreating(false))} onCreate={(tenantId, branchId) => { changeBranch({ tenantId, branchId }); setCreating(false); }}/>;
   return <Layout {...props} mode={mode} tenant={member?.tenant.name} branch={branch?.name} role={member?.role} picker={picker} modePicker={modePicker} navigation={nav}
-    branchMode={branch?.mode} active={active} onCreateBusiness={company && member?.role === 'OWNER' && active && branch ? () => setCreating(true) : undefined}
+    branchMode={branch?.mode} active={active} features={member?.subscription?.features} onCreateBusiness={company && member?.role === 'OWNER' && active && branch ? () => setCreating(true) : undefined}
     accountSecurityHref={accountSecurityHref}
     workMode={!company && canSwitch && <WorkModeControl key={String(staffMode)} staffMode={staffMode} tenantId={tenantId} branchId={branch?.id}
       description={employeeDescription(mode)} hasPassword={props.user.hasPassword !== false}

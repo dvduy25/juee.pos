@@ -328,10 +328,10 @@ function ActionDialog({ action, plans, close, done }: { action: AdminAction; pla
         <label>Giá năm (VNĐ)<input name="yearlyVnd" pattern="[0-9]{1,15}" defaultValue={revision?.yearlyVnd}/></label>
         <div className="form-grid">
           <label>Chi nhánh<input type="number" name="maxBranches" min={1} defaultValue={revision?.maxBranches ?? 1} required/></label>
-          <label>Nhân sự<input type="number" name="maxStaff" min={1} defaultValue={revision?.maxStaff ?? 2} required/></label>
+          <label>Nhân sự<input type="number" name="maxStaff" min={0} defaultValue={revision?.maxStaff ?? 2} required/></label>
           <label>Bàn QR<input type="number" name="maxQrTables" min={0} defaultValue={revision?.maxQrTables ?? 0} required/></label>
         </div>
-        <label>Tính năng, phân cách bằng dấu phẩy<input name="features" defaultValue={revision?.features.filter(feature => feature !== 'inventory').join(', ')}/></label>
+        <label>Tính năng, phân cách bằng dấu phẩy<input name="features" defaultValue={revision?.features.join(', ')}/></label>
         <label className="check"><input type="checkbox" name="published" defaultChecked={row?.published ?? true}/> Hiển thị gói</label>
       </>}
       {action.fields === 'invoice' && <>

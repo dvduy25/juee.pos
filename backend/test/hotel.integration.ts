@@ -48,11 +48,12 @@ test('hotel API receives open hourly stays and settles overtime on nightly and p
     const login = await request('/auth/login', 'POST', credentials);
     assert.equal(login.status, 201);
     const { accessToken: owner } = await login.json();
-    const tenant = await request('/tenants', 'POST', { name: 'Khách sạn kiểm thử', subscription: 'TRIAL',
+    const tenant = await request('/tenants', 'POST', { name: 'Khách sạn kiểm thử', subscription: 'PAID', planCode: 'PLUS',
       branch: { name: 'Cơ sở kiểm thử', mode: 'HOTEL', location: { latitude: 21, longitude: 105, radiusMeters: 100 } } }, owner);
     assert.equal(tenant.status, 201);
     const site = await tenant.json();
     tenantId = site.id;
+    await Subscription.updateOne({ tenantId: site.id }, { $set: { status: 'ACTIVE' }, $unset: { requestedPlanVersionId: 1, requestedAt: 1, requestId: 1 } });
     const root = `/tenants/${tenantId}/branches/${site.branches[0].id}`;
     const bookingsUrl = `${root}/hotel-bookings`;
     const roomsUrl = `${root}/hotel-rooms`;

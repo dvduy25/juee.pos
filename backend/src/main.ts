@@ -13,6 +13,7 @@ import { apiRateLimit, authLimitWindow } from './middleware/rate-limits';
 import { TenantsController } from './controllers/tenants';
 import { PlatformController } from './controllers/platform';
 import { publishedPlans } from './services/plans';
+import { syncServicePlans } from './services/service-plan-catalog';
 import { connectDatabase, verifyProductionIndexes } from './config/db';
 import { jsonTransform } from './utils/db';
 import { CatalogController, ProductImagesController } from './controllers/catalog';
@@ -24,6 +25,8 @@ import { OperationsController } from './controllers/operations';
 import { MemberKioskController, MembersController } from './controllers/members';
 import { WarehouseController } from './controllers/warehouse';
 import { FinanceController } from './controllers/finance';
+import { InventoryAiController } from './controllers/inventory-ai';
+import { TaxDeclarationsController } from './controllers/tax-declarations';
 import { HotelController } from './controllers/hotel';
 import { TicketsController } from './controllers/tickets';
 import { StaffWorkController } from './controllers/staff-work';
@@ -72,7 +75,7 @@ class PublicPlansController {
   published() { return publishedPlans(); }
 }
 
-@Module({ controllers: [HealthController, AuthController, AdminAuthController, TenantsController, PlatformController, PublicPlansController, CatalogController, ProductImagesController, SalesController, RestaurantController, GuestController, OperationsController, StaffWorkController, StaffDeviceController, PayrollController, WarehouseController, FinanceController, MembersController, MemberKioskController, HotelController, TicketsController, RealtimeController, PaymentWebhookController] })
+@Module({ controllers: [HealthController, AuthController, AdminAuthController, TenantsController, PlatformController, PublicPlansController, CatalogController, ProductImagesController, SalesController, RestaurantController, GuestController, OperationsController, StaffWorkController, StaffDeviceController, PayrollController, WarehouseController, FinanceController, InventoryAiController, TaxDeclarationsController, MembersController, MemberKioskController, HotelController, TicketsController, RealtimeController, PaymentWebhookController] })
 class AppModule {}
 
 async function main() {
@@ -116,6 +119,7 @@ async function main() {
   if (process.env.NODE_ENV === 'production') await verifyProductionIndexes();
   else if (googleConfig()) await verifyProductionIndexes(['User']);
   if (subscriptionPayments) await verifyProductionIndexes(['SaaSCheckout', 'SaaSInvoice', 'IncomingTransfer']);
+  if (process.env.APPLY_DEFAULT_SERVICE_PLANS === 'true') await syncServicePlans();
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: ['error', 'warn', 'log'] });
   if (proxyHops) app.set('trust proxy', proxyHops);
   app.useGlobalFilters(new DatabaseErrors());

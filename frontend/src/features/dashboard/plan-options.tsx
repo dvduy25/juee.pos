@@ -6,9 +6,9 @@ import { currency } from '@/lib/format';
 import { api } from '@/services/api-client';
 import { usesTables, type Branch, type ServicePlan } from '@/types/business';
 
-export function suitablePlans(plans: ServicePlan[], modes: Branch['mode'][]) {
+export function suitablePlans(plans: ServicePlan[], modes: Branch['mode'][], freeAvailable = false) {
   const needsTables = modes.some(usesTables);
-  return plans.filter(plan => BigInt(plan.monthlyVnd) > 0n && plan.maxBranches >= modes.length &&
+  return plans.filter(plan => (BigInt(plan.monthlyVnd) > 0n || (freeAvailable && plan.code === 'FREE' && modes.length === 1 && modes[0] === 'RETAIL')) && plan.maxBranches >= modes.length &&
     plan.features.includes('pos') && (!needsTables || (plan.features.includes('qr') && plan.features.includes('kitchen'))));
 }
 
@@ -25,7 +25,7 @@ export function PlanOptions({ plans, choices, selected, onSelect }: {
       {choices.map(plan => <label className="branch-model" key={plan.code}>
         <input type="radio" name="plan" value={plan.code} checked={selected === plan.code} onChange={() => onSelect(plan.code)} required/>
         <strong>{plan.name}</strong><span>{currency.format(BigInt(plan.monthlyVnd))} / tháng</span>
-        <small>{plan.maxBranches} chi nhánh · {plan.maxStaff} nhân viên</small>
+        <small>{plan.maxBranches} chi nhánh{plan.maxStaff > 0 && ` · ${plan.maxStaff} nhân viên`}</small>
         {plan.features.includes('qr') && <small>Tối đa {plan.maxQrTables} bàn QR</small>}
       </label>)}
     </fieldset>}

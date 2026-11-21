@@ -5,7 +5,6 @@ import { found } from '../utils/db';
 import { Membership, Plan, PlanVersion, Subscription, Tenant, loginRoles, tableBranchModes, type BranchMode } from '../models';
 import { revisions } from './plans';
 
-export const trialDays = 7;
 export const simulatedPlanDays = 30;
 
 export function simulatedSubscriptionsEnabled(environment = process.env.NODE_ENV) {

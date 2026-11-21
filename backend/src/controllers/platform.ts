@@ -21,8 +21,8 @@ const pageNumber = z.coerce.number().int().min(1).max(10000).default(1);
 const pageQuery = z.object({ page: pageNumber, q: z.string().trim().max(100).default(''), status: z.enum(['active', 'locked']).optional() });
 const revisionSchema = z.object({
   monthlyVnd: z.string().regex(/^\d{1,15}$/).transform(value => BigInt(value)), yearlyVnd: z.string().regex(/^\d{1,15}$/).transform(value => BigInt(value)).optional(),
-  maxBranches: z.number().int().min(1).max(10000), maxStaff: z.number().int().min(1).max(100000),
-  maxQrTables: z.number().int().min(0).max(100000), features: z.array(label).max(50).transform(features => features.filter(feature => feature !== 'inventory')),
+  maxBranches: z.number().int().min(1).max(10000), maxStaff: z.number().int().min(0).max(100000),
+  maxQrTables: z.number().int().min(0).max(100000), features: z.array(label).max(50),
 }).strict();
 const planSchema = z.object({
   name: label, description: z.string().max(1000), published: z.boolean(), revision: revisionSchema, reason,

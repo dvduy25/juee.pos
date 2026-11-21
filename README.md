@@ -28,7 +28,7 @@ Cấu hình backend nằm trong `backend/.env`. Khi cài mới, tạo tệp này
 - **MongoDB Atlas.** Điền URI có tên database vào `MONGODB_URI`. Tài khoản database cần quyền truy cập database và IP của máy phải nằm trong Atlas IP Access List. Máy này đã cấu hình Atlas, API cổng `5001` và web cổng `3000`.
 - **MongoDB cục bộ.** Chọn URI tới replica set local trong `backend/.env`, sau đó chạy `npm run db:local`. Script dùng `mongod` trên PATH hoặc bản MongoDB 8.2.6 cho Apple Silicon tại `~/.cache/mongodb-binaries`. Các máy dùng vị trí khác có thể đặt `MONGOD_BIN`. Nếu dùng Docker Desktop, chạy `docker compose up -d --wait mongo` và dùng cổng `27017` trong URI.
 
-Chạy `npm run db:seed` để bổ sung các gói mặc định, gồm gói dùng thử 7 ngày.
+Chạy `npm run db:seed` để bổ sung các gói mặc định, gồm Miễn phí cho doanh nghiệp bán lẻ đầu tiên và Nâng cao 99.000 đồng/tháng cho mỗi doanh nghiệp.
 
 Mở hai terminal tại thư mục gốc.
 
