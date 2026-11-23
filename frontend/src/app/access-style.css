@@ -17,7 +17,7 @@
   content: '';
   background:
     linear-gradient(106deg, #171024e6 0%, #25183eb8 34%, #21173024 73%, #1c13254d 100%),
-    url('/gioi-thieu/assets/hero.jpg') 72% 45% / cover no-repeat;
+    url('/gioi-thieu/assets/hero.webp') 72% 45% / cover no-repeat;
   animation: access-backdrop 900ms cubic-bezier(.2,.7,.25,1) both;
 }
 .access-header {
@@ -184,7 +184,7 @@
   .access-page::before {
     background:
       linear-gradient(180deg, #21132d60, #1a122994 52%, #21162de3),
-      url('/gioi-thieu/assets/hero.jpg') 78% 45% / cover no-repeat;
+      url('/gioi-thieu/assets/hero.webp') 78% 45% / cover no-repeat;
   }
   .access-card { border-radius: 16px; }
 }

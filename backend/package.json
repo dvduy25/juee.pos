@@ -7,6 +7,7 @@
     "seed": "node --env-file-if-exists=.env --import tsx src/jobs/seed.ts",
     "test": "node --import tsx --test test/*.test.ts",
     "test:integration": "node --import tsx --test test/*.integration.ts",
+    "images:optimize": "node --env-file-if-exists=.env --import tsx src/jobs/optimize-product-images.ts",
     "indexes": "node --env-file-if-exists=.env --import tsx src/jobs/indexes.ts",
     "start": "node --env-file-if-exists=.env dist/main.js"
   },
@@ -26,6 +27,7 @@
     "qrcode-terminal": "^0.11.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.0",
+    "sharp": "0.35.5",
     "zod": "^3.25.0"
   },
   "devDependencies": {

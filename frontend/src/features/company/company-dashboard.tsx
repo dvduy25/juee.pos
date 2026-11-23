@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { Building2 } from 'lucide-react';
 import { Panel, State } from '@/components/business-ui';
@@ -12,11 +13,7 @@ import { branchNames, roleNames } from '@/features/dashboard/navigation';
 import { TransactionManagement } from '@/features/dashboard/sales';
 import { Customers } from '@/features/dashboard/operations';
 import { MemberDirectory } from '@/features/dashboard/members';
-import { Reports } from '@/features/dashboard/reports';
 import { SubscriptionManagement } from '@/features/dashboard/store-subscription';
-import { Catalog, Categories, RetailCatalog } from './catalog';
-import { Accounting, Cashbook, Promotions, Purchases } from './finance';
-import { StaffWorkspace } from './staff-work';
 import { WarehouseDashboard } from './warehouse';
 import { TicketTypes } from './ticket-types';
 import { BuffetSettings, TableSettings } from './table-settings';
@@ -24,8 +21,19 @@ import { MemberCheckInManagement, MemberPlans } from './member-settings';
 import { HotelSettings } from './hotel-settings';
 import { CancellationHistory } from './cancellations';
 import { companySection } from './navigation';
-import { InventoryAi } from './inventory-ai';
-import { TaxDeclarations } from './tax-declarations';
+
+const tabLoading = () => <div className="skeleton" role="status" aria-label="Đang tải nội dung"/>;
+const Reports = dynamic(() => import('@/features/dashboard/reports').then(module => module.Reports), { loading: tabLoading });
+const Catalog = dynamic(() => import('./catalog').then(module => module.Catalog), { loading: tabLoading });
+const Categories = dynamic(() => import('./catalog').then(module => module.Categories), { loading: tabLoading });
+const RetailCatalog = dynamic(() => import('./catalog').then(module => module.RetailCatalog), { loading: tabLoading });
+const Accounting = dynamic(() => import('./finance').then(module => module.Accounting), { loading: tabLoading });
+const Cashbook = dynamic(() => import('./finance').then(module => module.Cashbook), { loading: tabLoading });
+const Promotions = dynamic(() => import('./finance').then(module => module.Promotions), { loading: tabLoading });
+const Purchases = dynamic(() => import('./finance').then(module => module.Purchases), { loading: tabLoading });
+const StaffWorkspace = dynamic(() => import('./staff-work').then(module => module.StaffWorkspace), { loading: tabLoading });
+const InventoryAi = dynamic(() => import('./inventory-ai').then(module => module.InventoryAi), { loading: tabLoading });
+const TaxDeclarations = dynamic(() => import('./tax-declarations').then(module => module.TaxDeclarations), { loading: tabLoading });
 
 export function CompanyDashboard({ requested }: { requested?: string }) {
   const { company, role, staffMode, branches, branch, membership } = useBusiness();

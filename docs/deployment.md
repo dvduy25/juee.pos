@@ -25,7 +25,7 @@ Tệp `backend/.env.production` là tệp cấu hình của máy triển khai. D
 
 Production chỉ chấp nhận HTTPS với `WEB_ORIGIN` và `PUBLIC_ORDER_ORIGIN`. API kiểm tra các chỉ mục duy nhất và TTL của những collection dùng để bảo vệ tài khoản, giao dịch, mã vé và các lần gửi lại yêu cầu. Lệnh seed ở trên tạo chỉ mục. Với database đã có gói mặc định, có thể chạy `node backend/dist/jobs/indexes.js` trong container trước khi mở bản mới.
 
-Nếu nền tảng triển khai trực tiếp từ mã nguồn, đặt thư mục làm việc ở gốc và dùng `npm ci && npm run build:api` để dựng, `npm run start:api` để chạy.
+Nếu nền tảng triển khai trực tiếp từ mã nguồn, đặt thư mục làm việc ở gốc và dùng `npm ci --include=dev && npm run build:api` để dựng, `npm run start:api` để chạy.
 
 ## 2. Web app quản lý
 
@@ -85,3 +85,9 @@ Khi nâng cấp từ bảng giá cũ, đặt `APPLY_DEFAULT_SERVICE_PLANS=true` 
 Đặt `AI_KEY_ENCRYPTION_SECRET` riêng cho API thông qua biến môi trường. Dùng giá trị ngẫu nhiên ổn định ít nhất 32 ký tự và sao lưu trong nơi quản lý bí mật. Nếu đổi giá trị, chủ doanh nghiệp cần lưu lại khóa OpenAI. Chủ doanh nghiệp gói Nâng cao nhập khóa OpenAI của mình trong **Quản lý doanh nghiệp → Trợ lý kho AI**. Dữ liệu chứng từ được gửi đến OpenAI khi chủ doanh nghiệp yêu cầu tạo nháp. Phiếu nhập hoặc xuất chỉ được ghi khi chủ doanh nghiệp chọn mặt hàng kho và xác nhận.
 
 Trong **Quản lý doanh nghiệp → Kê khai thuế**, chủ doanh nghiệp có thể lưu số liệu đã đối chiếu, xuất CSV làm việc và ghi mã tiếp nhận sau khi nộp bên ngoài ứng dụng.
+
+## Dung lượng ảnh sản phẩm
+
+API tự nén ảnh sản phẩm tải lên khi bản WebP nhẹ hơn. Ảnh lớn được thu về tối đa 1.200 px mỗi cạnh trong bản nén. Ảnh nhỏ và ảnh động được giữ nguyên khi phù hợp. Quy trình đọc ảnh hóa đơn và lưu tài liệu nghiệp vụ vẫn dùng dữ liệu gốc.
+
+Từ thư mục gốc, chạy `npm run images:optimize -w @juee/api` để đo dung lượng có thể giảm trên MongoDB được cấu hình. Xem kết quả `savedBytes`. Sau khi sao lưu và kiểm tra trên bản sao, dùng `npm run images:optimize -w @juee/api -- --apply` để cập nhật ảnh cũ. Có thể dùng `node backend/dist/jobs/optimize-product-images.js` trong container đã dựng. Công cụ giữ nguyên liên kết ảnh và bỏ qua sản phẩm nếu ảnh được thay trong lúc đang xử lý. Số byte tiết kiệm là dung lượng dữ liệu ảnh. MongoDB có thể giữ các khối đĩa đã cấp phát để tái sử dụng.

@@ -1,18 +1,18 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .
 ARG API_ORIGIN
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN test -n "$API_ORIGIN" && API_ORIGIN="$API_ORIGIN" npm run build
+RUN --mount=type=cache,target=/app/.next/cache test -n "$API_ORIGIN" && API_ORIGIN="$API_ORIGIN" npm run build
 
 FROM node:22-bookworm-slim
 WORKDIR /app
 ARG API_ORIGIN
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 API_ORIGIN=$API_ORIGIN
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev
 COPY --from=build --chown=node:node /app/.next .next
 COPY --from=build /app/next.config.mjs next.config.mjs
 USER node

@@ -14,7 +14,7 @@ import { scopedRoute } from '../routes/branch';
 import { catalog, productBranchFilter, productTypeFilter } from '../services/catalog';
 import { dishRecipeInput, saveDishRecipe } from '../services/dish-recipes';
 import { buffetMenuFilter } from '../services/buffet';
-import { productImageLimits, productImagePath, readProductImage } from '../services/product-image';
+import { optimizeProductImage, productImageLimits, productImagePath, readProductImage } from '../services/product-image';
 
 const variantSchema = z.object({
   sku: z.string().trim().min(1).max(80).transform(value => value.toUpperCase()).optional(),
@@ -60,6 +60,14 @@ async function validateCategory(tenantId: Types.ObjectId, categoryId: string | n
 
 @Controller(scopedRoute)
 export class CatalogController {
+  private async uploadImage(req: Request, params: { tenantId: string; branchId: string },
+    permission: 'products.write' | 'catalog.branch-write', file?: { buffer: Buffer }) {
+    const image = readProductImage(file);
+    if (!image) return undefined;
+    await access(req, params.tenantId, params.branchId, permission);
+    return optimizeProductImage(image);
+  }
+
   @Get('categories')
   async categories(@Req() req: Request, @Param() params: { tenantId: string; branchId: string }) {
     const { scope } = await access(req, params.tenantId, params.branchId, 'catalog.read');
@@ -142,7 +150,7 @@ export class CatalogController {
     @UploadedFile() file?: { buffer: Buffer }) {
     const { variants, ingredients, ...input } = read(productSchema.extend({ variants: z.array(variantSchema).min(1).max(30),
       ingredients: dishRecipeInput.optional() }), productBody(req, body));
-    const imageFile = readProductImage(file);
+    const imageFile = await this.uploadImage(req, params, 'products.write', file);
     return transaction(async session => {
       const { scope, actorId, branch } = await access(req, params.tenantId, params.branchId, 'products.write', session);
       if (serviceCounterModes.includes(branch.mode)) {
@@ -186,7 +194,7 @@ export class CatalogController {
   async listWarehouseProduct(@Req() req: Request, @Param() params: { tenantId: string; branchId: string }, @Body() body: unknown,
     @UploadedFile() file?: { buffer: Buffer }) {
     const input = read(retailListing.extend({ warehouseItemId: objectId }), productBody(req, body));
-    const image = readProductImage(file);
+    const image = await this.uploadImage(req, params, 'catalog.branch-write', file);
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, params.tenantId, params.branchId, 'catalog.branch-write', session);
       if (!retailBranchModes.includes(branch.mode)) throw new ConflictException('Chỉ đăng bán hàng kho tại quầy bán lẻ.');
@@ -214,7 +222,7 @@ export class CatalogController {
     @Body() body: unknown, @UploadedFile() file?: { buffer: Buffer }) {
     const id = read(objectId, params.id);
     const input = read(retailListing, productBody(req, body));
-    const image = readProductImage(file);
+    const image = await this.uploadImage(req, params, 'catalog.branch-write', file);
     return transaction(async session => {
       const { scope, actorId } = await access(req, params.tenantId, params.branchId, 'catalog.branch-write', session);
       const product = found(await Product.findOne({ tenantId: scope.tenantId, retailBranchId: scope.branchId, _id: id }).session(session));
@@ -237,7 +245,7 @@ export class CatalogController {
   async update(@Req() req: Request, @Param() params: { tenantId: string; branchId: string; id: string }, @Body() body: unknown,
     @UploadedFile() file?: { buffer: Buffer }) {
     const id = read(objectId, params.id);
-    const imageFile = readProductImage(file);
+    const imageFile = await this.uploadImage(req, params, 'catalog.branch-write', file);
     const { categoryId, removeImage, ...input } = read(productSchema.partial().extend({
       categoryId: objectId.nullable().optional(), status: z.enum(['ACTIVE', 'ARCHIVED']).optional(), removeImage: z.literal(true).optional(),
     }).refine(value => !!imageFile || Object.keys(value).length > 0), productBody(req, body));

@@ -1,5 +1,6 @@
 import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
+import sharp from 'sharp';
 
 const maxImageSize = 4 * 1024 * 1024;
 export const productImageLimits = { fileSize: maxImageSize + 1, files: 1, fields: 1 };
@@ -25,4 +26,21 @@ export function readProductImage(file: { buffer: Buffer } | undefined) {
 
 export function productImagePath(productId: string, version: string) {
   return `/api/v1/product-images/${productId}/${version}`;
+}
+
+const maxProductEdge = 1200;
+
+export async function optimizeProductImage<T extends { bytes: Buffer; contentType: string }>(image: T): Promise<T> {
+  try {
+    const source = sharp(image.bytes, { limitInputPixels: 32_000_000 });
+    const { width, height, pages } = await source.metadata();
+    const fits = (width ?? 0) <= maxProductEdge && (height ?? 0) <= maxProductEdge;
+    if ((pages ?? 1) > 1 || (fits && (image.contentType === 'image/webp' || image.bytes.length <= 16_384))) return image;
+    const bytes = await source.rotate()
+      .resize({ width: maxProductEdge, height: maxProductEdge, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 82 }).toBuffer();
+    return bytes.length < image.bytes.length ? { ...image, bytes, contentType: 'image/webp' } : image;
+  } catch {
+    throw new BadRequestException('Không đọc được ảnh sản phẩm hoặc ảnh có độ phân giải quá lớn.');
+  }
 }
