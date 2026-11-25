@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#161129">
   <meta name="description" content="Khám phá JUEE POS, phần mềm quản lý bán hàng, nhà hàng, hội viên, khách sạn và bán vé theo chi nhánh.">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="JUEE POS | Gọn việc tại quầy. Rõ từng chi nhánh.">
+  <meta property="og:title" content="JUEE POS | Quản lý bán hàng và vận hành chi nhánh">
   <meta property="og:description" content="Khám phá quy trình bán hàng, gọi món, check-in, đặt phòng và soát vé với JUEE POS.">
   <title>JUEE POS | Quản lý bán hàng và vận hành chi nhánh</title>
   <link rel="icon" href="__JUEE_ASSETS__/mark.png" type="image/png">
@@ -20,12 +20,12 @@
       <a class="brand" href="#dau-trang" aria-label="JUEE POS, về đầu trang"><span class="brand-mark" aria-hidden="true"><i></i><i></i></span> JUEE<span class="brand-pos">POS</span></a>
       <nav aria-label="Điều hướng chính">
         <a href="#giai-phap">Giải pháp</a>
-        <a href="#quan-ly">Quản lý doanh nghiệp</a>
+        <a href="#quan-ly">Tính năng</a>
+        <a href="#bat-dau">Cách bắt đầu</a>
         <a href="__JUEE_APP__/pricing">Bảng giá</a>
         <a href="#hoi-dap">Hỏi đáp</a>
-        <a href="#lien-he">Liên hệ</a>
       </nav>
-      <a class="button ink" href="__JUEE_APP__/dashboard">Mở ứng dụng</a>
+      <div class="nav-account"><a href="__JUEE_APP__/login">Đăng nhập</a><a class="button ink" href="__JUEE_APP__/register">Đăng ký</a></div>
     </div>
   </header>
 
@@ -33,10 +33,10 @@
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-content">
         <p class="hero-label"><span></span> PHẦN MỀM QUẢN LÝ BÁN HÀNG</p>
-        <h1 id="hero-title">Gọn việc tại quầy.<br><em>Rõ từng chi nhánh.</em></h1>
-        <p class="hero-description">Từ một cửa hàng đến nhiều chi nhánh, JUEE POS giúp đội ngũ phục vụ, thanh toán và theo dõi vận hành tại một nơi.</p>
+        <h1 id="hero-title">Quản lý bán hàng, <em>kho và chi nhánh.</em></h1>
+        <p class="hero-description">Bán tại quầy, nhận món qua QR, kiểm kê và theo dõi doanh thu trên JUEE POS. Chọn quy trình phù hợp với cửa hàng của bạn.</p>
         <div class="hero-actions">
-          <a class="button violet" href="__JUEE_APP__/dashboard">Mở JUEE POS</a>
+          <a class="button violet" href="__JUEE_APP__/register">Tạo tài khoản miễn phí</a>
           <a class="button ghost" href="#giai-phap"><span data-icon="play" aria-hidden="true"></span> Trải nghiệm demo</a>
         </div>
       </div>
@@ -117,14 +117,43 @@
             <p>Xếp ca, chấm công, tính lương. Chủ doanh nghiệp chọn chi nhánh và các trang quản lý được xem hoặc thao tác.</p>
             <div class="feature-detail"><span>Lịch ca</span><span>Quyền truy cập</span></div>
           </article>
+          <article>
+            <span class="feature-icon orange" data-icon="receipt" aria-hidden="true"></span>
+            <h3>Thanh toán và in hóa đơn</h3>
+            <p>Thu tiền mặt hoặc ghi nhận chuyển khoản. Bật tự động in để mở cửa sổ in khi đã thu đủ tiền.</p>
+          </article>
+          <article>
+            <span class="feature-icon" data-icon="scan" aria-hidden="true"></span>
+            <h3>Trợ lý kho AI</h3>
+            <p>Tải ảnh hóa đơn hoặc thực đơn. AI đề xuất mặt hàng và số lượng để bạn kiểm tra, sửa và xác nhận trước khi lưu.</p>
+          </article>
+          <article>
+            <span class="feature-icon green" data-icon="store" aria-hidden="true"></span>
+            <h3>Quản lý theo chi nhánh</h3>
+            <p>Chuyển giữa các điểm bán để xem dữ liệu từng nơi. Giao nhân viên đúng chi nhánh và quyền phù hợp với công việc.</p>
+          </article>
         </div>
       </div>
     </section>
 
+    <section class="frame onboarding" id="bat-dau" aria-labelledby="onboarding-title">
+      <div class="section-heading">
+        <div><h2 id="onboarding-title">Thiết lập cửa hàng đầu tiên</h2></div>
+        <a class="button ink" href="__JUEE_APP__/register">Bắt đầu miễn phí</a>
+      </div>
+      <ol class="onboarding-steps">
+        <li><h3>Tạo tài khoản</h3><p>Đăng ký bằng email hoặc chọn Google nếu tùy chọn này khả dụng.</p></li>
+        <li><h3>Chọn mô hình quản lý</h3><p>Chọn bán lẻ, nhà hàng, quán nước, hội viên, khách sạn hoặc thu vé. Đặt tên cửa hàng và chi nhánh chính.</p></li>
+        <li><h3>Thêm dữ liệu để bắt đầu</h3><p>Tạo sản phẩm, thực đơn, phòng hoặc loại vé theo mô hình đã chọn. Thêm nhân viên nếu cần giao ca.</p></li>
+      </ol>
+    </section>
+
     <section class="frame faq" id="hoi-dap" aria-labelledby="faq-title">
-      <div><p class="eyebrow"><span></span> HỎI ĐÁP</p><h2 id="faq-title">Trước khi bắt đầu.</h2></div>
+      <div><h2 id="faq-title">Câu hỏi thường gặp</h2></div>
       <div class="faq-list">
-        <details><summary>JUEE POS có dùng được cho nhiều chi nhánh không?</summary><p>Có. Chủ doanh nghiệp có thể chọn từng chi nhánh để xem doanh thu, tồn kho và hoạt động. Số chi nhánh phụ thuộc vào gói sử dụng.</p></details>
+        <details><summary>JUEE POS có dùng được cho nhiều chi nhánh không?</summary><p>Có. Chủ doanh nghiệp có thể thêm chi nhánh và xem riêng doanh thu, tồn kho và hoạt động của từng nơi.</p></details>
+        <details><summary>Tôi cần gì để dùng Trợ lý kho AI?</summary><p>Chủ doanh nghiệp thêm khóa AI của mình trong Trợ lý kho AI. Hệ thống hỗ trợ Gemini và OpenAI. Chi phí sử dụng AI, nếu có, do nhà cung cấp AI tính theo tài khoản của bạn.</p></details>
+        <details><summary>Có in được hóa đơn hoặc phiếu bếp không?</summary><p>Có. Thu ngân có thể bật tự động in hóa đơn khi thu đủ tiền. Màn hình bếp có nút in từng phiếu và hỗ trợ khổ 58 mm hoặc 80 mm. Bạn chọn máy in trong cửa sổ in của trình duyệt.</p></details>
         <details><summary>Nhà hàng có thể nhận món bằng mã QR như thế nào?</summary><p>Cửa hàng tạo mã QR theo bàn. Khách quét mã để xem thực đơn và gửi món trong phạm vi cửa hàng đã cài. Nhân viên nhận món rồi chuyển bếp.</p></details>
         <details><summary>Lễ tân có thể đặt trước hoặc nhận phòng ngay không?</summary><p>Có. Cả phòng theo giờ, combo và qua đêm đều có hai lựa chọn. Đặt trước cần ngày giờ khách đến. Check-in ngay ghi nhận thời gian hiện tại và chuyển phòng sang đang lưu trú.</p></details>
         <details><summary>Tôi có thể dùng miễn phí không?</summary><p>Toàn bộ tính năng JUEE POS miễn phí cho mọi doanh nghiệp và chi nhánh.</p></details>
@@ -147,7 +176,7 @@
     <div class="frame footer-content">
       <a class="brand" href="#dau-trang" aria-label="JUEE POS, về đầu trang"><span class="brand-mark" aria-hidden="true"><i></i><i></i></span> JUEE<span class="brand-pos">POS</span></a>
       <p>Quản lý bán hàng và vận hành chi nhánh.</p>
-      <nav class="footer-links" aria-label="Điều hướng cuối trang"><a href="__JUEE_APP__/register">Đăng ký</a><a href="#lien-he">Liên hệ</a><a href="#dau-trang">Về đầu trang</a></nav>
+      <nav class="footer-links" aria-label="Điều hướng cuối trang"><a href="__JUEE_APP__/login">Đăng nhập</a><a href="__JUEE_APP__/register">Đăng ký</a><a href="#lien-he">Liên hệ</a><a href="#dau-trang">Về đầu trang</a></nav>
     </div>
   </footer>
 </body>

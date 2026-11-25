@@ -125,15 +125,6 @@
     background: var(--tint);
   }
 
-  .kitchen-board {
-    background-color: var(--workspace-wash);
-    background-image: radial-gradient(color-mix(in srgb, var(--field-line) 54%, transparent) 1px, transparent 1px);
-    background-size: 12px 12px;
-  }
-
-  .kitchen-ticket { box-shadow: 0 2px 5px #0d152224, 0 12px 24px #18223012; }
-  .kitchen-ticket::before { background: linear-gradient(150deg, var(--accent), var(--button-end)); }
-  .kitchen-ticket-item[data-waiting="false"] .kitchen-quantity { background: var(--surface); color: var(--muted); }
   .pos-catalog .product-tile { border-color: var(--line); }
   .pos-catalog .product-tile:focus-within { border-color: var(--workspace-edge); }
   .pos-catalog .product-tile button:enabled { border: 1px solid var(--line); }
@@ -176,14 +167,11 @@
     .desk-profile[open] > .desk-profile-menu { animation: workspace-enter 170ms var(--workspace-ease); }
     .desk-drawer[open] { animation: workspace-drawer-in 240ms var(--workspace-ease); }
     dialog[open]::backdrop { animation: workspace-backdrop-in 180ms ease-out; }
-    .desk-profile-trigger > svg, .kitchen-summary > summary > svg { transition: rotate 170ms var(--workspace-ease); }
+    .desk-profile-trigger > svg, .kitchen-summary-chevron { transition: rotate 170ms var(--workspace-ease); }
     .desk-profile[open] .desk-profile-trigger > svg { rotate: 180deg; }
-    .kitchen-summary[open] > summary > svg { transform: none; rotate: 180deg; }
     :is(.auth-card, .member-kiosk-card, .guest-header, .member-kiosk-result, .desk-content .success) {
       animation: workspace-enter 245ms var(--workspace-ease);
     }
-
-    .kitchen-ticket { animation: workspace-enter 260ms var(--workspace-ease); }
 
     @media (hover: hover) and (pointer: fine) {
       :is(.desk-shortcut, a.table-card, button.service-option, .table-preview-grid a, .setup-model):hover {

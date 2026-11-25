@@ -39,7 +39,7 @@ docker build -f frontend/Dockerfile \
 docker run --rm -p 3000:3000 juee-web
 ```
 
-Nếu dựng trực tiếp trên nền tảng Node.js, chọn thư mục gốc, chạy `npm ci && npm run build:web` và chạy `npm run start:web` sau khi dựng. App quản lý ở `/dashboard`, bảng giá ở `/pricing` và bản giới thiệu cùng tên miền ở `/gioi-thieu`.
+Nếu dựng trực tiếp trên nền tảng Node.js, chọn thư mục gốc, chạy `npm ci && npm run build:web` và chạy `npm run start:web` sau khi dựng. Trang giới thiệu ở `/`, app quản lý ở `/dashboard` và bảng giá ở `/pricing`. Đường dẫn cũ `/gioi-thieu` chuyển về trang chủ.
 
 ## 3. Super Admin
 

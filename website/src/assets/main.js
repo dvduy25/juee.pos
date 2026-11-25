@@ -14,6 +14,8 @@ const icons = {
   ticket: '<path d="M4 6h16a1 1 0 0 1 1 1v2a3 3 0 0 0 0 6v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a3 3 0 0 0 0-6V7a1 1 0 0 1 1-1zM14 6v2m0 3v2m0 3v2"/>',
   chart: '<path d="M4 4v16h16M8 16l4-5 3 2 5-7"/>',
   package: '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3zM4 7.5l8 4.5 8-4.5M12 12v9m-4-15.7 8 4.5"/>',
+  receipt: '<path d="M6 3l2 2 2-2 2 2 2-2 2 2 2-2v18l-2-2-2 2-2-2-2 2-2-2-2 2zM9 9h6m-6 4h6"/>',
+  scan: '<path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4M8 12h8m-6-4h4m-4 8h4"/>',
   users: '<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2M16 5a3 3 0 0 1 0 6m4 9v-2a4 4 0 0 0-3-3.9"/>'
 };
 

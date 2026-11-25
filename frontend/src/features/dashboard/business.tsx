@@ -260,7 +260,7 @@ export function BusinessDashboard({ section = 'overview', bill }: { section?: st
   </section>;
   const hotelDesk = key === 'hotel-rooms' || key === 'hotel-bookings' || key === 'hotel-calendar';
   return <div className="service-workspace">
-    {!hotelDesk && <div className="desk-page-title"><h1>{sectionTitle(key, mode)}</h1></div>}
+    {!hotelDesk && key !== 'kitchen' && <div className="desk-page-title"><h1>{sectionTitle(key, mode)}</h1></div>}
     {key === 'payments' ? <Bills key={bill} initialBill={bill}/> : <View/>}
   </div>;
 }

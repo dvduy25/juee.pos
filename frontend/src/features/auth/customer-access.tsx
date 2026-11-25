@@ -130,7 +130,7 @@ export function CustomerLogin() {
     });
   }
 
-  return <AuthScene title="Đăng nhập" description="Vào cửa hàng của bạn trên JUEE POS.">
+  return <AuthScene interactive title="Đăng nhập" description="Vào cửa hàng của bạn trên JUEE POS.">
     {error && <p className="error access-feedback" role="alert">{error}</p>}
     <form className="access-form" method="post" onSubmit={submit}>
       <fieldset disabled={pending} aria-busy={pending}>
@@ -185,7 +185,7 @@ export function CustomerRegister() {
     });
   }
 
-  return <AuthScene title="Tạo tài khoản" description="Dùng email bạn có thể truy cập để đăng ký JUEE POS.">
+  return <AuthScene interactive title="Tạo tài khoản" description="Dùng email bạn có thể truy cập để đăng ký JUEE POS.">
     {created && <p className="success access-feedback" role="status">Đã tạo tài khoản.</p>}
     {error && <p className="error access-feedback" role="alert">{error}</p>}
     {created ? <Link className="button access-submit" href="/login">Đến trang đăng nhập <ArrowRight size={18} aria-hidden="true"/></Link> :

@@ -19,11 +19,15 @@ export default function config(phase) {
       ] }];
     },
     async redirects() {
-      return [{ source: '/dashboard', has: [{ type: 'query', key: 'register' }], destination: '/register', permanent: false }];
+      return [
+        { source: '/dashboard', has: [{ type: 'query', key: 'register' }], destination: '/register', permanent: false },
+        { source: '/gioi-thieu', destination: '/', permanent: true },
+        { source: '/gioi-thieu/index.html', destination: '/', permanent: true },
+        { source: '/juee-site/index.html', destination: '/', permanent: true },
+      ];
     },
     async rewrites() {
       return [
-        { source: '/gioi-thieu', destination: '/gioi-thieu/index.html' },
         { source: '/api/v1/:path*', destination: `${origin}/api/v1/:path*` },
         { source: '/docs/:path*', destination: `${origin}/docs/:path*` },
         { source: '/docs-json', destination: `${origin}/docs-json` },

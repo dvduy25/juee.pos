@@ -11,6 +11,7 @@ dist/
 .mongo-data/
 
 /frontend/public/gioi-thieu/
+/frontend/public/juee-site/
 /generated_images/
 
 /website/.sites-checkout/

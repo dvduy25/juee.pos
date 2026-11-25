@@ -1,8 +1,8 @@
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 
 const integrated = process.argv.includes('--integrated');
-const output = new URL(integrated ? '../frontend/public/gioi-thieu/' : './dist/', import.meta.url);
-const assetRoot = integrated ? '/gioi-thieu/assets' : './assets';
+const output = new URL(integrated ? '../frontend/public/juee-site/' : './dist/', import.meta.url);
+const assetRoot = integrated ? '/juee-site/assets' : './assets';
 const app = integrated ? '' : new URL(process.env.APP_ORIGIN || 'http://localhost:3000');
 if (app && (!['http:', 'https:'].includes(app.protocol) || app.username || app.password || app.pathname !== '/' || app.search || app.hash)) {
   throw new Error('APP_ORIGIN phải là địa chỉ gốc của web app, ví dụ https://app.example.com');
@@ -27,4 +27,4 @@ const page = template.replaceAll('__JUEE_ASSETS__', assetRoot).replaceAll('__JUE
 await mkdir(output, { recursive: true });
 await cp(new URL('./src/assets/', import.meta.url), new URL('assets/', output), { recursive: true });
 await writeFile(new URL('index.html', output), page);
-console.log(integrated ? 'Đã tạo trang /gioi-thieu cho web app.' : `Website sẵn sàng trong website/dist. Web app: ${app.origin}`);
+console.log(integrated ? 'Đã tạo trang chủ giới thiệu cho web app.' : `Website sẵn sàng trong website/dist. Web app: ${app.origin}`);

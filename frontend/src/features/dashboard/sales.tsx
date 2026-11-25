@@ -1,10 +1,10 @@
 'use client';
 
-import { Suspense, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { createPortal, flushSync } from 'react-dom';
-import { Armchair, ArrowUpRight, ChevronDown, ClipboardList, Clock, Pencil, Printer, ReceiptText, ShoppingBag, Users } from 'lucide-react';
+import { Armchair, ArrowUpRight, Check, CheckCheck, ChefHat, ChevronDown, CircleAlert, ClipboardList, Clock, CookingPot, History, Pencil, Printer, ReceiptText, ShoppingBag, StickyNote, Users } from 'lucide-react';
 import { eventStream } from '@/services/api-client';
 import Link from 'next/link';
 import { amount, currency, date, printReceipt, submit, value } from '@/lib/format';
@@ -16,6 +16,8 @@ import { useAction, useBusiness, useData } from '@/hooks/use-business';
 import { tableMenuHref, tableState, takeawayMenuHref, usesTables, type Buffet, type DiningSession, type DiningTable, type KitchenSummary, type TableResponse } from '@/types/business';
 import { elapsedTime, isWaitingForService, itemTiming, useOrderClock, type Preparation } from '@/lib/order-timing';
 import { RetailOrderEditor, type RetailOrderForEdit } from './retail-order-editor';
+import { AutoPrintSwitch, printPaidReceipt } from './receipt-print';
+import { sectionTitle } from './navigation';
 
 const orderStatus: Record<string, string> = { PLACED: 'Chờ xác nhận', ACCEPTED: 'Đã nhận', COMPLETED: 'Đã thanh toán', CANCELED: 'Đã hủy' };
 const billStatus: Record<string, string> = { OPEN: 'Chờ thu tiền', PAID: 'Đã thanh toán', VOID: 'Đã hủy', REFUNDED: 'Đã hoàn tiền' };
@@ -206,9 +208,11 @@ export function BillDetail({ id, tableSessionId, guestCount, visible = true, man
 }) {
   const details = useData<Bill & { orders: Pick<Order, 'id' | 'items' | 'takeaway'>[]; payments: Payment[]; transferIntents?: ActiveTransfer[] }>(
     `/bills/${id}${cashbook ? '?view=cashbook' : ''}`, 6000, visible);
-  const { role } = useBusiness();
+  const { role, root } = useBusiness();
   const [openedIntent, setIntent] = useState<Intent>();
   const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState(false);
+  const openBill = useRef<string>(undefined);
   const paymentAmount = useRef<HTMLInputElement>(null);
   const action = useAction();
   const bill = details.data;
@@ -230,10 +234,28 @@ export function BillDetail({ id, tableSessionId, guestCount, visible = true, man
     {!!bill.discountAmount && <div className="list-row">Giảm giá {bill.promotionName ?? bill.discountCode}<strong>−{currency.format(bill.discountAmount)}</strong></div>}
     {!!bill.taxAmount && <div className="list-row">Thuế<strong>{currency.format(bill.taxAmount)}</strong></div>}
   </>;
-  async function printBill() {
+  const printBill = useCallback(async () => {
+    setPrintError(false);
     flushSync(() => setPrinting(true));
     try { await printReceipt(); } finally { setPrinting(false); }
-  }
+  }, []);
+  const status = bill?.status;
+  useEffect(() => {
+    if (!visible || !collect || (status !== 'PAID' && status !== 'OPEN')) {
+      openBill.current = undefined;
+      return;
+    }
+    if (status === 'OPEN') {
+      openBill.current = id;
+      return;
+    }
+    if (openBill.current !== id) return;
+    const task = window.setTimeout(() => {
+      openBill.current = undefined;
+      void printPaidReceipt(root, id, printBill).catch(() => setPrintError(true));
+    }, 0);
+    return () => window.clearTimeout(task);
+  }, [visible, collect, status, id, root, printBill]);
   return <Panel title={`Hóa đơn ${shortId(id)}`} className="bill-detail"><State query={details}/>
     {bill && <>
       <div className="bill-meta"><span className={`badge bill-status-${bill.status.toLowerCase()}`}>{billStatus[bill.status]}</span>
@@ -258,6 +280,7 @@ export function BillDetail({ id, tableSessionId, guestCount, visible = true, man
         }
       })}>
         <label>Số tiền thu (đ)<input ref={paymentAmount} key={due} name="amount" type="number" min="1" max={due} defaultValue={due} required/></label>
+        <AutoPrintSwitch/>
         <div className="actions business-filters"><button className="button" disabled={action.pending} value="cash">Xác nhận tiền mặt</button>
           <button className="plain" disabled={action.pending} value="transfer">Tạo QR chuyển khoản</button></div>
       </form>}
@@ -322,7 +345,8 @@ export function BillDetail({ id, tableSessionId, guestCount, visible = true, man
             <button className="button" disabled={action.pending}>Xác nhận đã hoàn tiền</button>
           </form></details>}
       </div>)}
-      <button className="plain no-print" onClick={() => void printBill()}><Printer size={17}/> {cashbook ? 'In / lưu PDF' : 'In hóa đơn'}</button>
+      <button className="plain no-print" onClick={() => void printBill().catch(() => setPrintError(true))}><Printer size={17}/> {cashbook ? 'In / lưu PDF' : 'In hóa đơn'}</button>
+      {printError && <p className="error no-print" role="alert">Không mở được trình in. Hãy bấm nút in để thử lại.</p>}
       {printing && createPortal(<div className="print-receipt bill-print">
         <strong>HÓA ĐƠN #{shortId(id)}</strong>
         <p>{date(bill.createdAt)} · {billStatus[bill.status]}{takeaway && ' · Mang về'}</p>
@@ -679,6 +703,7 @@ export function TableDiscounts() {
 type Ticket = { id: string; orderId: string; tableName?: string; takeaway?: boolean; createdAt: string; orderedAt?: string;
   items: (Preparation & { name: string; quantity: number; note?: string; modifiers: string[] })[] };
 const portionCount = new Intl.NumberFormat('vi-VN');
+const kitchenWaitingStatus: Record<string, string> = { COOKING: 'Đang làm', READY: 'Sẵn sàng' };
 
 function useKitchenStream(enabled: boolean, view: 'kitchen' | 'service') {
   const { root } = useBusiness();
@@ -720,9 +745,9 @@ function useKitchenStream(enabled: boolean, view: 'kitchen' | 'service') {
 }
 
 export function Kitchen() {
-  const { role } = useBusiness();
+  const { role, branch, mode } = useBusiness();
   const view = ['WAITER', 'CASHIER'].includes(role) ? 'service' : 'kitchen';
-  const [queue, setQueue] = useState('active');
+  const [queue, setQueue] = useState<'active' | 'history'>('active');
   const [page, setPage] = useState(1);
   const [paper, setPaper] = useState('80');
   const [printing, setPrinting] = useState<Ticket>();
@@ -738,13 +763,36 @@ export function Kitchen() {
     try { await printReceipt(); } finally { setPrinting(undefined); }
   }
 
-  return <>
+  return <section className="kitchen-workspace" aria-labelledby="kitchen-heading">
+    <header className="kitchen-header">
+      <div className="kitchen-heading">
+        <span className="kitchen-heading-icon"><ChefHat size={26} aria-hidden="true"/></span>
+        <div><p>{branch.name}</p><h1 id="kitchen-heading">{sectionTitle('kitchen', mode)}</h1></div>
+      </div>
+      <div className="kitchen-header-tools">
+        <label className="kitchen-paper"><Printer size={17} aria-hidden="true"/> Khổ giấy
+          <select value={paper} onChange={event => {
+            setPaper(event.target.value); localStorage.setItem('juee-kitchen-paper', event.target.value);
+          }}><option value="80">80 mm</option><option value="58">58 mm</option></select>
+        </label>
+      </div>
+    </header>
+    <div className="kitchen-queue" role="group" aria-label="Lọc phiếu bếp">
+      <button type="button" aria-pressed={queue === 'active'} onClick={() => { setQueue('active'); setPage(1); }}>
+        <CookingPot size={18} aria-hidden="true"/> Đang xử lý
+      </button>
+      <button type="button" aria-pressed={queue === 'history'} onClick={() => { setQueue('history'); setPage(1); }}>
+        <History size={18} aria-hidden="true"/> Lịch sử 24 giờ
+      </button>
+    </div>
     <details className="card kitchen-summary">
       <summary>
-        <strong>Tổng hợp chế biến</strong>
-        <span className="badge" aria-live="polite">{summary.data ? `${portionCount.format(summary.data.totalQuantity)} phần chưa ra` :
-          summary.isError ? 'Chưa tải được' : 'Đang tải…'}</span>
-        <ChevronDown size={18} aria-hidden="true"/>
+        <span className="kitchen-summary-icon"><ClipboardList size={20} aria-hidden="true"/></span>
+        <span className="kitchen-summary-label"><strong>Tổng hợp món chờ</strong>
+          <small>{summary.data ? `${portionCount.format(summary.data.dishes.length)} món` :
+            summary.isError ? 'Chưa tải được' : 'Đang tải…'}</small></span>
+        {summary.data && <span className="kitchen-summary-total"><strong>{portionCount.format(summary.data.totalQuantity)}</strong> phần chưa ra</span>}
+        <ChevronDown className="kitchen-summary-chevron" size={18} aria-hidden="true"/>
       </summary>
       <State query={summary}/>
       {summary.data?.dishes.length === 0 && <p className="muted">Hiện không còn phần nào chờ ra.</p>}
@@ -754,48 +802,54 @@ export function Kitchen() {
           <td>{portionCount.format(dish.quantity)}</td></tr>)}</tbody>
       </table></div>}
     </details>
-    <div className="actions business-filters kitchen-controls">
-      <label>Đơn<select value={queue} onChange={event => { setQueue(event.target.value); setPage(1); }}>
-        <option value="active">Chờ ra món hoặc xác nhận hủy</option><option value="history">Lịch sử 24 giờ</option>
-      </select></label>
-      <label>Khổ giấy phiếu bếp<select value={paper} onChange={event => {
-        setPaper(event.target.value); localStorage.setItem('juee-kitchen-paper', event.target.value);
-      }}><option value="80">80 mm</option><option value="58">58 mm</option></select></label>
-    </div>
     <State query={tickets}/>{action.feedback}
-    {tickets.data?.length === 0 && <p className="card kitchen-empty">{queue === 'active' ? 'Hiện không có món chờ xử lý.' : 'Chưa có phiếu hoàn tất trong 24 giờ qua.'}</p>}
-    {!!tickets.data?.length && <div className="kitchen-board" aria-label="Bảng ghim phiếu bếp">{tickets.data.map(ticket => {
+    {tickets.data?.length === 0 && <div className="card kitchen-empty">
+      <CheckCheck size={29} aria-hidden="true"/>
+      <p>{queue === 'active' ? 'Hiện không có món chờ xử lý.' : 'Chưa có phiếu hoàn tất trong 24 giờ qua.'}</p>
+    </div>}
+    {!!tickets.data?.length && <div className="kitchen-board" aria-label="Danh sách phiếu bếp">{tickets.data.map(ticket => {
       const orderedAt = ticket.orderedAt ?? ticket.createdAt;
       const remaining = ticket.items.reduce((count, item) => count + (isWaitingForService(item.status) ? item.quantity : 0), 0);
       const awaitingCancellation = ticket.items.some(item => item.status === 'CANCELED' && item.cancelReason && !item.cancelConfirmedAt);
       const elapsed = remaining ? elapsedTime(orderedAt, now) : '';
-      return <article key={ticket.id} className="kitchen-ticket">
+      const overdue = remaining > 0 && now - Date.parse(orderedAt) >= 15 * 60_000;
+      return <article key={ticket.id} className="kitchen-ticket" data-state={awaitingCancellation ? 'cancel' : remaining ? 'waiting' : 'done'}>
         <header className="kitchen-ticket-header">
           <div><h2>{ticket.takeaway ? 'Mang về' : ticket.tableName || 'Tại quầy'}</h2>
-            <p>#{shortId(ticket.orderId)} <time dateTime={orderedAt}>{date(orderedAt)}</time></p></div>
+            <p><span>#{shortId(ticket.orderId)}</span> <time dateTime={orderedAt}>{date(orderedAt)}</time></p></div>
           <button className="plain kitchen-ticket-print" type="button" aria-label={`In phiếu ${shortId(ticket.orderId)}`} onClick={() => void printTicket(ticket)}>
             <Printer size={19} aria-hidden="true"/>
           </button>
         </header>
         <div className="kitchen-ticket-progress">
-          <strong>{remaining ? `${remaining} phần chờ ra` : awaitingCancellation ? 'Chờ xác nhận hủy' : 'Đã xử lý'}</strong>
-          {elapsed && <span>Chờ {elapsed}</span>}
+          {remaining > 0 && <strong className="kitchen-tag" data-tone="waiting"><CookingPot size={15} aria-hidden="true"/> {portionCount.format(remaining)} phần chờ ra</strong>}
+          {awaitingCancellation && <strong className="kitchen-tag" data-tone="cancel"><CircleAlert size={15} aria-hidden="true"/> Chờ xác nhận hủy</strong>}
+          {!remaining && !awaitingCancellation && <strong className="kitchen-tag" data-tone="done"><CheckCheck size={15} aria-hidden="true"/> Đã xử lý</strong>}
+          {elapsed && <span className="kitchen-elapsed" data-overdue={overdue}><Clock size={15} aria-hidden="true"/> Chờ {elapsed}</span>}
         </div>
         <ul className="kitchen-ticket-items">
         {ticket.items.map(item => {
           const waiting = isWaitingForService(item.status);
           const canceled = item.status === 'CANCELED';
+          const confirmCancel = canceled && item.cancelReason && !item.cancelConfirmedAt;
           const timing = itemTiming(orderedAt, item.status, item.servedAt, now);
+          const status = canceled ? (confirmCancel ? 'Chờ xác nhận hủy' : 'Đã hủy') : waiting ?
+            (kitchenWaitingStatus[item.status] ?? 'Chờ ra món') : timing || 'Đã ra món';
           return <li className="kitchen-ticket-item" key={item.id} data-waiting={waiting} data-canceled={canceled}>
-            <div className="kitchen-item-name"><strong className="kitchen-quantity">{item.quantity}×</strong><div><strong>{item.name}</strong>
-              {!!item.modifiers.length && <small>{item.modifiers.join(', ')}</small>}{item.note && <small>{item.note}</small>}</div></div>
-            <small>{canceled ? (item.cancelConfirmedAt ? 'Đã xác nhận hủy' : 'Đã hủy') : timing || (waiting ? 'Chờ ra món' : 'Đã ra món')}</small>
-            {canceled && item.cancelReason && <small>Lý do · {item.cancelReason}</small>}
-            {canceled && item.cancelReason && !item.cancelConfirmedAt && <button type="button" className="button" disabled={action.pending}
+            <span className="kitchen-quantity">{portionCount.format(item.quantity)}×</span>
+            <div className="kitchen-item-content">
+              <strong className="kitchen-item-name">{item.name}</strong>
+              {!!item.modifiers.length && <ul className="kitchen-modifiers">{item.modifiers.map((modifier, index) =>
+                <li key={index}>{modifier}</li>)}</ul>}
+              {item.note && <p className="kitchen-item-note"><StickyNote size={15} aria-hidden="true"/> {item.note}</p>}
+              {canceled && item.cancelReason && <p className="kitchen-item-note" data-tone="cancel"><CircleAlert size={15} aria-hidden="true"/> {item.cancelReason}</p>}
+              {item.status !== 'NEW' && <small className="kitchen-item-status">{status}</small>}
+            </div>
+            {confirmCancel && <button type="button" className="kitchen-item-action" data-tone="cancel" disabled={action.pending}
               onClick={() => void action.send(`/kitchen/items/${item.id}/confirm-cancel`, undefined, { message: 'Bếp đã xác nhận hủy.' })}>Xác nhận hủy</button>}
-            {waiting && <button type="button" className="button" disabled={action.pending}
+            {waiting && <button type="button" className="kitchen-item-action" data-tone="done" disabled={action.pending}
               onClick={() => void action.send(`/kitchen/items/${item.id}/transition`, { status: 'SERVED' }, { message: 'Đã xác nhận ra món.' })}>
-              Xác nhận đã ra món</button>}
+              <Check size={17} aria-hidden="true"/> Xác nhận đã ra món</button>}
           </li>;
         })}
         </ul>
@@ -808,5 +862,5 @@ export function Kitchen() {
         {!!item.modifiers.length && <p>{item.modifiers.join(', ')}</p>}{item.note && <p>{item.note}</p>}
         {item.status === 'CANCELED' && item.cancelReason && <p>Lý do · {item.cancelReason}</p>}</div>)}
     </div>, document.body)}
-  </>;
+  </section>;
 }

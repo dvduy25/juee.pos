@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from '
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { flushSync } from 'react-dom';
 import { Plus, Search, ShoppingBasket } from 'lucide-react';
 import { api } from '@/services/api-client';
 import { amount, currency, printReceipt, submit } from '@/lib/format';
@@ -16,6 +17,7 @@ import { salePrice } from '@/lib/sale-price';
 import { tableMenuHref, tableState, takeawayMenuHref, usesServiceCounter, usesTables, type BuffetSection, type DiningSession, type TableResponse } from '@/types/business';
 import { TableOrders, TableService, TakeawayOrders } from './sales';
 import { eligibleRetailOffers, RetailPromotionSelect, type RetailPricing } from './retail-promotions';
+import { AutoPrintSwitch, printPaidReceipt } from './receipt-print';
 
 type Cart = { product: string; productId: string; variant: Variant; quantity: number; buffetExtra?: boolean; modifierPrice: number; modifierIds: string[]; options: string; key: string };
 export function Pos() {
@@ -65,7 +67,8 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
   const [buffetSection, setBuffetSection] = useState<BuffetSection>('included');
   const tableId = selectedTable.id;
   const [receipt, setReceipt] = useState<{ order: { id: string; items: { id: string; name: string; quantity: number; unitPrice: number }[];
-    totalAmount: number; discountAmount: number; taxAmount: number; promotionName?: string }; bill: { id: string } }>();
+    totalAmount: number; discountAmount: number; taxAmount: number; promotionName?: string }; bill: { id: string; status: string } }>();
+  const [printError, setPrintError] = useState(false);
   const action = useAction();
   const serviceChange = useAction();
   const categories = useData<Category[]>('/categories');
@@ -221,7 +224,13 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
         atTable ? `Đã thêm món vào ${table?.name} và chuyển bếp.` : 'Đã tạo đơn chờ thanh toán. Mở Đơn hàng để lập hóa đơn.' });
     if (result) {
       setCart([]); setDiscount(0); setCustomer(''); setPromotionId('');
-      if ('bill' in result) setReceipt(result);
+      if ('bill' in result) {
+        setPrintError(false);
+        flushSync(() => setReceipt(result));
+        if (result.bill.status === 'PAID') {
+          void printPaidReceipt(root, result.bill.id, printReceipt).catch(() => setPrintError(true));
+        }
+      }
       if (takeaway && !currentSession && 'id' in result && result.tableSessionId) router.replace(takeawayMenuHref(result.tableSessionId));
     } else if (!food) void pricing.refetch();
   }
@@ -348,6 +357,7 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
       const button = (event.nativeEvent as SubmitEvent).submitter;
       void checkout(button?.getAttribute('value') !== 'pending');
     })}>
+      <AutoPrintSwitch/>
       <div className="actions business-filters"><button className="button" disabled={!canCheckout}
         value="cash">Thu tiền mặt</button>
         <button className="plain" disabled={!canCheckout} value="pending">Tạo đơn chờ thanh toán</button></div>
@@ -409,6 +419,7 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
           {!!receipt.order.taxAmount && <p>Thuế {currency.format(receipt.order.taxAmount)}</p>}
           <strong>Tổng tiền {currency.format(receipt.order.totalAmount)}</strong>
           <button className="button no-print" onClick={() => void printReceipt()}>In hóa đơn</button>
+          {printError && <p className="error no-print" role="alert">Không mở được trình in. Bấm In hóa đơn để thử lại.</p>}
         </Panel>}
       </div>
     </div>

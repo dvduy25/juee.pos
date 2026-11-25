@@ -17,7 +17,7 @@
   content: '';
   background:
     linear-gradient(106deg, #171024e6 0%, #25183eb8 34%, #21173024 73%, #1c13254d 100%),
-    url('/gioi-thieu/assets/hero.webp') 72% 45% / cover no-repeat;
+    url('/juee-site/assets/hero.webp') 72% 45% / cover no-repeat;
   animation: access-backdrop 900ms cubic-bezier(.2,.7,.25,1) both;
 }
 .access-header {
@@ -175,6 +175,83 @@
   letter-spacing: .32em;
   font-size: 19px;
 }
+.access-page-interactive {
+  padding-inline: clamp(16px, 5vw, 80px);
+  background: #161027;
+}
+.access-page-interactive::before {
+  background: radial-gradient(ellipse at 18% 12%, #3d2359 0%, transparent 64%), linear-gradient(135deg, #171024, #261639);
+}
+.access-page-interactive .access-header {
+  position: relative;
+  z-index: 2;
+  width: min(100%, 1120px);
+  margin-inline: auto;
+}
+.access-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.16fr) minmax(330px, .84fr);
+  align-items: stretch;
+  width: min(100%, 1120px);
+  margin-inline: auto;
+  border: 1px solid #ffffff28;
+  border-radius: 25px;
+  box-shadow: 0 28px 70px #10092078;
+}
+.access-preview {
+  display: flex;
+  align-items: flex-end;
+  min-height: 480px;
+  padding: clamp(22px, 4vw, 44px);
+  border-radius: 24px 0 0 24px;
+  background: linear-gradient(0deg, #150e25e8, transparent 55%), url('/juee-site/assets/hero.webp') 63% center / cover no-repeat;
+}
+.access-preview a {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #ffffff73;
+  border-radius: 10px;
+  color: #fff;
+  background: #1c1324b3;
+  font-weight: 660;
+}
+.access-preview a:hover { background: #34204f; }
+.access-stage .access-card {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  padding: clamp(22px, 3.8vw, 50px);
+  border: 0;
+  border-radius: 0 24px 24px 0;
+  box-shadow: none;
+}
+.access-stage .access-title { margin-bottom: 23px; }
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .access-page-interactive::after {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    pointer-events: none;
+    top: 0;
+    left: 0;
+    width: 600px;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle, #d3a1fd54, #a767e724 42%, transparent 69%);
+    transform: translate3d(calc(var(--access-pointer-x, 0px) - 50%), calc(var(--access-pointer-y, 0px) - 50%), 0);
+    opacity: 0;
+    transition: opacity 180ms ease-out;
+  }
+  .access-page-interactive[data-pointer="active"]::after { opacity: 1; }
+}
 @keyframes access-backdrop { from { opacity: .45; transform: scale(1.025); } to { opacity: 1; transform: scale(1); } }
 @keyframes access-card-enter { from { opacity: 0; transform: translateY(13px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes access-spin { to { transform: rotate(360deg); } }
@@ -184,7 +261,7 @@
   .access-page::before {
     background:
       linear-gradient(180deg, #21132d60, #1a122994 52%, #21162de3),
-      url('/gioi-thieu/assets/hero.webp') 78% 45% / cover no-repeat;
+      url('/juee-site/assets/hero.webp') 78% 45% / cover no-repeat;
   }
   .access-card { border-radius: 16px; }
 }
@@ -192,4 +269,11 @@
   .access-page::before, .access-card, .access-card .access-spinner { animation: none; }
   .access-card :is(input, .access-submit) { transition: none; }
   .access-card .access-submit:not(:disabled):hover { transform: none; }
+}
+@media (max-width: 720px) {
+  .access-stage { display: block; max-width: 440px; }
+  .access-preview { display: none; }
+  .access-stage .access-card { border-radius: 20px; }
+  .access-page-interactive .access-header { max-width: 440px; }
+  .access-page-interactive::before { background: radial-gradient(ellipse at top left, #42265f, #191127 72%); }
 }

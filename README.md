@@ -11,7 +11,7 @@
 | `website/` | Website giới thiệu tĩnh, mã nguồn trong `website/src/` | `npm run dev:site` |
 | `docs/` | Kiến trúc và hướng dẫn triển khai | |
 
-Backend và frontend dùng chung `package-lock.json` ở thư mục gốc. Website giới thiệu là phần độc lập, mặc định chạy ở [localhost:3001](http://localhost:3001), với nút **Mở ứng dụng** dẫn tới web app. Khi chạy web app, trình dựng đồng thời tạo trang `/gioi-thieu` từ cùng mã nguồn.
+Backend và frontend dùng chung `package-lock.json` ở thư mục gốc. Website giới thiệu có thể chạy riêng ở [localhost:3001](http://localhost:3001). Web app dùng cùng mã nguồn để hiển thị trang giới thiệu ngay tại `/`, với khu vực quản lý ở `/dashboard`.
 
 Xem [triển khai riêng API, web app và website](docs/deployment.md).
 
