@@ -179,30 +179,49 @@
 .access-cursor { display: none; }
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
   .access-cursor {
+    --access-x: var(--access-pointer-x, 50%);
+    --access-y: var(--access-pointer-y, 50%);
     display: block;
     position: absolute;
     inset: 0;
     z-index: -1;
     pointer-events: none;
+    mask-image: radial-gradient(circle 145px at var(--access-x) var(--access-y), #000 28px, #000d 67px, transparent 100%);
     opacity: 0;
     transition: opacity 240ms ease-out;
   }
-  .access-cursor::before, .access-cursor::after {
-    content: '';
+  .access-cursor-glow {
     position: absolute;
-    inset: 0;
-  }
-  .access-cursor::before {
-    background: var(--access-backdrop);
-    transform: scale(1.09, 1.05);
-    transform-origin: var(--access-pointer, 50% 50%);
-    mask-image: radial-gradient(circle 110px at var(--access-pointer, 50% 50%), #000 24px, #000c 51px, transparent 100%);
-  }
-  .access-cursor::after {
-    background: radial-gradient(ellipse 54px 45px at var(--access-pointer, 50% 50%),
-      #0d071bd9 0%, #170d29ad 19%, #a98bd65c 27%, #9874ce24 40%, transparent 100%);
+    z-index: 1;
+    top: var(--access-y);
+    left: var(--access-x);
+    width: 122px;
+    aspect-ratio: 1;
+    translate: -50% -50%;
+    background: radial-gradient(circle, #110a229e 0%, #1d123885 15%, #a98bd64a 28%, #9874ce19 52%, transparent 70%);
   }
   .access-page-interactive[data-pointer="active"] .access-cursor { opacity: 1; }
+  @supports (mask-image: linear-gradient(black, transparent)) {
+    .access-cursor::before, .access-cursor::after {
+      --access-side: 1;
+      --access-mask-angle: var(--access-direction, 0deg);
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--access-backdrop);
+      transform: translate3d(calc(var(--access-shift-x, 0px) * var(--access-side)),
+        calc(var(--access-shift-y, 0px) * var(--access-side)), 0) scale(1.055);
+      transform-origin: var(--access-x) var(--access-y);
+      mask-image: linear-gradient(var(--access-mask-angle), transparent calc(50% - 9px), #000 calc(50% + 15px));
+      mask-size: 320px 320px;
+      mask-position: calc(var(--access-x) - 160px) calc(var(--access-y) - 160px);
+      mask-repeat: no-repeat;
+    }
+    .access-cursor::after {
+      --access-side: -1;
+      --access-mask-angle: calc(var(--access-direction, 0deg) + 180deg);
+    }
+  }
 }
 @keyframes access-backdrop { from { opacity: .45; transform: scale(1.025); } to { opacity: 1; transform: scale(1); } }
 @keyframes access-card-enter { from { opacity: 0; transform: translateY(13px); } to { opacity: 1; transform: translateY(0); } }
