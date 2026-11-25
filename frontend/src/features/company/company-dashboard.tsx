@@ -24,6 +24,7 @@ import { companySection } from './navigation';
 
 const tabLoading = () => <div className="skeleton" role="status" aria-label="Đang tải nội dung"/>;
 const Reports = dynamic(() => import('@/features/dashboard/reports').then(module => module.Reports), { loading: tabLoading });
+const OwnerPerformance = dynamic(() => import('./owner-performance').then(module => module.OwnerPerformance), { loading: tabLoading });
 const Catalog = dynamic(() => import('./catalog').then(module => module.Catalog), { loading: tabLoading });
 const Categories = dynamic(() => import('./catalog').then(module => module.Categories), { loading: tabLoading });
 const RetailCatalog = dynamic(() => import('./catalog').then(module => module.RetailCatalog), { loading: tabLoading });
@@ -38,6 +39,7 @@ const TaxDeclarations = dynamic(() => import('./tax-declarations').then(module =
 export function CompanyDashboard({ requested }: { requested?: string }) {
   const { company, role, staffMode, branches, branch } = useBusiness();
   if (!company || staffMode) return <p className="error" role="alert">Hãy dùng tài khoản chủ doanh nghiệp hoặc quản lý được giao chi nhánh.</p>;
+  if (requested === 'owner-performance' && role !== 'OWNER') return <p className="error" role="alert">Chỉ chủ doanh nghiệp được xem báo cáo tổng hợp.</p>;
   const { id: current, label } = companySection(requested, branch.mode, true, role);
   const photoAction = (role === 'OWNER' || role === 'MANAGER') && (current === 'menu' || current === 'purchases');
   return <div className="company-dashboard">
@@ -62,6 +64,7 @@ export function CompanyDashboard({ requested }: { requested?: string }) {
     {current === 'ticket-types' && <TicketTypes/>}
     {current === 'transactions' && <TransactionManagement/>}
     {current === 'cancellations' && <CancellationHistory key={branch.id}/>}
+    {current === 'owner-performance' && <OwnerPerformance/>}
     {current === 'reports' && <Reports key={branch.id} company/>}
     {current === 'customers' && <Customers/>}
     {current === 'subscription' && <SubscriptionManagement/>}

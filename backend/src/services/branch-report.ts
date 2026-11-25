@@ -1,7 +1,7 @@
 import type { Scope } from '../middleware/business-access';
 import { CashEntry, HotelBooking, MemberPayment, Order, PurchaseReceipt, TicketRefund, TicketSale } from '../models';
 import { cashJournal } from './cash-journal';
-import { expenseGroup, summarizeExpenses, type GroupedExpense } from './operating-expenses';
+import { cashEntryRange, expenseGroup, summarizeExpenses, type GroupedExpense } from './operating-expenses';
 import { inventoryReport, profitAfterInventory, profitReport } from './profit-report';
 import type { ReportPeriod, revenueRange } from './revenue';
 
@@ -49,11 +49,8 @@ async function cashReport(scope: Scope, range: Range, period: ReportPeriod) {
   return { income, expenses, net: income - expenses, otherExpenses: operatingExpenses.total, operatingExpenses, breakdown, series: rows?.series ?? [] };
 }
 
-export async function branchReport(scope: Scope, range: Range, period: ReportPeriod) {
-  const [sales, inventory, purchases, cash, orders, processing, rooms, tickets, ticketRefunds, memberPlans] = await Promise.all([
-    profitReport(scope, range), inventoryReport(scope, range), purchaseReport(scope, range), cashReport(scope, range, period),
-    Order.countDocuments({ ...scope, createdAt: range }),
-    Order.countDocuments({ ...scope, createdAt: range, status: { $in: ['PLACED', 'ACCEPTED'] } }),
+function serviceSales(scope: Scope, range: Range) {
+  return Promise.all([
     HotelBooking.aggregate<ServiceSale>([{ $match: { ...scope, status: 'CHECKED_OUT', paidAt: range } },
       { $group: { _id: '$roomCode', quantity: { $sum: 1 }, amount: { $sum: '$amount' } } }]),
     TicketSale.aggregate<ServiceSale>([{ $match: { ...scope, paidAt: range } },
@@ -63,20 +60,50 @@ export async function branchReport(scope: Scope, range: Range, period: ReportPer
     MemberPayment.aggregate<ServiceSale>([{ $match: { ...scope, paidAt: range } },
       { $group: { _id: '$planName', quantity: { $sum: 1 }, amount: { $sum: '$amount' } } }]),
   ]);
+}
+
+function serviceAmounts([rooms, tickets, ticketRefunds, memberPlans]: Awaited<ReturnType<typeof serviceSales>>) {
+  const sum = (rows: ServiceSale[]) => rows.reduce((total, row) => total + row.amount, 0);
+  return { serviceRevenue: sum(rooms) + sum(tickets) - sum(ticketRefunds), memberRevenue: sum(memberPlans) };
+}
+
+function financialTotals(profit: Parameters<typeof profitAfterInventory>[0], inventory: Parameters<typeof profitAfterInventory>[1],
+  services: Awaited<ReturnType<typeof serviceSales>>, expenses: number) {
+  const { serviceRevenue, memberRevenue } = serviceAmounts(services);
+  const recognizedRevenue = profit.netSales + serviceRevenue + memberRevenue;
+  const adjustedProfit = profitAfterInventory({ ...profit, netSales: recognizedRevenue }, inventory);
+  return { recognizedRevenue, serviceRevenue, memberRevenue, adjustedProfit, profitBeforeTax: adjustedProfit.amount - expenses };
+}
+
+export async function branchPerformance(scope: Scope, range: Range) {
+  const [sales, inventory, services, [costs]] = await Promise.all([
+    profitReport(scope, range, false), inventoryReport(scope, range, true), serviceSales(scope, range),
+    CashEntry.aggregate<{ total: number }>([{ $match: { ...cashEntryRange(scope, range), direction: 'OUT' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }]),
+  ]);
+  const operatingExpenses = costs?.total ?? 0;
+  const { recognizedRevenue, adjustedProfit, profitBeforeTax } = financialTotals(sales, inventory, services, operatingExpenses);
+  return { revenue: recognizedRevenue, operatingExpenses, profitBeforeTax, provisional: adjustedProfit.provisional };
+}
+
+export async function branchReport(scope: Scope, range: Range, period: ReportPeriod) {
+  const [sales, inventory, purchases, cash, orders, processing, serviceRows] = await Promise.all([
+    profitReport(scope, range), inventoryReport(scope, range), purchaseReport(scope, range), cashReport(scope, range, period),
+    Order.countDocuments({ ...scope, createdAt: range }),
+    Order.countDocuments({ ...scope, createdAt: range, status: { $in: ['PLACED', 'ACCEPTED'] } }),
+    serviceSales(scope, range),
+  ]);
+  const [rooms, tickets, ticketRefunds, memberPlans] = serviceRows;
 
   const services = [...rooms.map(item => ({ ...item, unit: 'lượt trả phòng', name: `Phòng ${item._id}`, id: `room:${item._id}` })),
     ...tickets.map(item => ({ ...item, unit: 'vé', name: item._id, id: `ticket:${item._id}` })),
     ...ticketRefunds.map(item => ({ ...item, quantity: -item.quantity, amount: -item.amount,
       unit: 'vé', name: `Hoàn vé · ${item._id}`, id: `ticket-refund:${item._id}` }))];
-  const serviceRevenue = services.reduce((total, item) => total + item.amount, 0);
-  const memberRevenue = memberPlans.reduce((total, item) => total + item.amount, 0);
   const paidPlans = memberPlans.map(({ _id, ...item }) => ({ ...item, unit: 'gói hội viên', name: _id, id: `member:${_id}` }));
   const { soldItems, ...profit } = sales;
   const salesItems = [...soldItems.map(item => ({ ...item, unit: 'hàng/món' })),
     ...services.map(({ _id, ...item }) => item), ...paidPlans].sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name, 'vi'));
-  const recognizedRevenue = profit.netSales + serviceRevenue + memberRevenue;
-  const adjustedProfit = profitAfterInventory({ ...profit, netSales: recognizedRevenue }, inventory);
-  const profitBeforeTax = adjustedProfit.amount - cash.operatingExpenses.total;
+  const financial = financialTotals(profit, inventory, serviceRows, cash.operatingExpenses.total);
   const collected = cash.breakdown.filter(row => revenueSources.includes(row.source));
   const gross = collected.reduce((total, row) => total + row.amount, 0);
   const refunded = cash.breakdown.filter(row => row.source === 'REFUND' || row.source === 'TICKET_REFUND')
@@ -88,7 +115,6 @@ export async function branchReport(scope: Scope, range: Range, period: ReportPer
     start: range.$gte, end: range.$lte, gross, refunded, revenue: gross - refunded, orders, processing,
     byMethod, top: soldItems.slice(0, 5).map(({ name, quantity }) => ({ _id: name, quantity })),
     series: cash.series.filter(row => row.amount > 0).map(({ _id, amount }) => ({ _id: period === 'month' ? `${_id.slice(8)}/${_id.slice(5, 7)}` : _id, amount })),
-    profit, inventory, purchases, cash, salesItems, serviceRevenue, memberRevenue, recognizedRevenue, adjustedProfit,
-    profitBeforeTax, operatingProfit: profitBeforeTax,
+    profit, inventory, purchases, cash, salesItems, ...financial, operatingProfit: financial.profitBeforeTax,
   };
 }

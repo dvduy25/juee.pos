@@ -1,4 +1,4 @@
-import { Body, ConflictException, Controller, ForbiddenException, Get, Param, Patch, Post, Req } from '@nestjs/common';
+import { Body, ConflictException, Controller, ForbiddenException, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Request } from 'express';
 import { z } from 'zod';
@@ -12,6 +12,8 @@ import { revisions } from '../services/plans';
 import { freePlanCode, freeRevision } from '../services/service-plan-catalog';
 import { canManageBranches } from '../middleware/policy';
 import { branchLocation } from '../validators/order-location';
+import { reportPeriodQuery, selectedReportRange } from '../validators/reports';
+import { ownerPerformance } from '../services/owner-performance';
 
 const branchSchema = z.object({
   name: label, mode: z.enum(branchModes),
@@ -56,6 +58,13 @@ export class TenantsController {
   async setup(@Req() req: Request) {
     await authenticate(req, { management: true });
     return { freeAvailable: true, onlinePayment: false, simulatedPlanDays: null };
+  }
+
+  @Get('owner-performance')
+  async performance(@Req() req: Request, @Query() query: unknown) {
+    const { userId } = await authenticate(req, { management: true });
+    const { period, on, tenantId } = read(reportPeriodQuery.extend({ tenantId: objectId.optional() }).strict(), query);
+    return ownerPerformance(userId, selectedReportRange(period, on), tenantId);
   }
 
   @Post()

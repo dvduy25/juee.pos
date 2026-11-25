@@ -45,7 +45,7 @@ let nextWindow: Promise<void> | undefined;
 
 async function request(path: string, method = 'GET', data?: unknown, accessToken?: string, extra?: Record<string, string>) {
   // Keep the long integration scenario below the API's shared per-minute limit.
-  if (requestCount >= 294) {
+  if (requestCount >= 298) {
     nextWindow ??= setTimeout(Math.max(0, firstRequestAt + 63_000 - Date.now())).then(() => {
       firstRequestAt = Date.now();
       requestCount = 0;
@@ -671,6 +671,7 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     assert.equal(replay.status, 201);
     assert.equal((await replay.json()).bill.id, sale.bill.id);
     assert.equal(await Payment.countDocuments({ billId: sale.bill.id }), 1);
+    assert.equal((await request('/tenants/owner-performance', 'GET', undefined, selling)).status, 403);
     const back = await request('/auth/work-mode', 'POST', { mode: 'MANAGEMENT', password }, selling);
     assert.equal(back.status, 200);
     owner = (await back.json()).accessToken;
@@ -733,6 +734,22 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     assert.equal(afterCosts.operatingProfit, 400);
     assert.equal(afterCosts.profitBeforeTax, 400);
     assert.equal(afterCosts.cash.operatingExpenses.total, 600);
+    const ownerPerformancePath = '/tenants/owner-performance?period=month';
+    const ownerPerformance = await request(ownerPerformancePath, 'GET', undefined, owner);
+    assert.equal(ownerPerformance.status, 200);
+    const performance = await ownerPerformance.json();
+    assert.deepEqual(performance.stores.map((store: { id: string }) => store.id).sort(), [ownerTenant, restaurantId].sort());
+    const storePerformance = performance.stores.find((store: { id: string }) => store.id === ownerTenant);
+    const primaryPerformance = storePerformance.branches.find((branch: { id: string }) => branch.id === primary.id);
+    assert.deepEqual([primaryPerformance.revenue, primaryPerformance.operatingExpenses, primaryPerformance.profitBeforeTax, primaryPerformance.provisional],
+      [afterCosts.recognizedRevenue, afterCosts.cash.operatingExpenses.total, afterCosts.profitBeforeTax, afterCosts.adjustedProfit.provisional]);
+    assert.equal(performance.revenue, performance.stores.reduce((sum: number, store: { revenue: number }) => sum + store.revenue, 0));
+    assert.equal(storePerformance.profitBeforeTax, storePerformance.branches.reduce((sum: number, branch: { profitBeforeTax: number }) =>
+      sum + branch.profitBeforeTax, 0));
+    const selectedPerformance = await (await request(`${ownerPerformancePath}&tenantId=${ownerTenant}`, 'GET', undefined, owner)).json();
+    assert.deepEqual(selectedPerformance.stores, [storePerformance]);
+    assert.equal((await request(`${ownerPerformancePath}&tenantId=${ownerTenant}`, 'GET', undefined, staff)).status, 403);
+    assert.equal((await request(ownerPerformancePath, 'GET', undefined, delegatedManager)).status, 403);
     const pastCsv = await request(`${branchRoot}/cashbook/export?period=today&on=2024-06-10`, 'GET', undefined, owner);
     assert.match(await pastCsv.text(), /Tiền mặt bằng/);
 

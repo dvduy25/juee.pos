@@ -29,6 +29,7 @@ const groups = [
     { id: 'warehouse-ai', label: 'Trợ lý kho AI', Icon: Warehouse },
   ] },
   { label: 'Tài chính', items: [
+    { id: 'owner-performance', label: 'Doanh thu và lợi nhuận', Icon: BarChart3 },
     { id: 'reports', label: 'Báo cáo', Icon: BarChart3 },
     { id: 'cashbook', label: 'Sổ quỹ', Icon: Wallet },
     { id: 'transactions', label: 'Giao dịch', Icon: ReceiptText },
@@ -57,6 +58,7 @@ export function companyNavigation(mode?: Branch['mode'], active = true, role = '
     transactions: retail || food, cancellations: true, accounting: true, subscription: true, security: true,
     'warehouse-ai': role === 'OWNER' || role === 'MANAGER',
     'tax-declarations': role === 'OWNER',
+    'owner-performance': role === 'OWNER',
   };
   return groups.map(group => ({ label: group.label, items: group.items.filter(({ id }) =>
     id === 'subscription' ? role === 'OWNER' : id === 'security' || (!!mode && active && available[id]),

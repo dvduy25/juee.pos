@@ -73,7 +73,7 @@ function paymentIds(scope: Scope): PipelineStage.Lookup {
     pipeline: [{ $match: scope }, { $project: { _id: 1 } }] } };
 }
 
-export async function profitReport(scope: Scope, range: Range) {
+export async function profitReport(scope: Scope, range: Range, includeItems = true) {
   const sales = Bill.aggregate<Sale>([
     { $match: { ...scope, status: { $in: paidStatuses }, $or: [{ settledAt: range }, { settledAt: null, updatedAt: { $gte: range.$gte } }] } },
     ...recognizedAt(scope), { $match: { recognizedAt: range } }, settledOrders(scope),
@@ -123,6 +123,7 @@ export async function profitReport(scope: Scope, range: Range) {
       missingCostLines += cost.missingCostLines;
       missingBuffetCostLines += cost.missingBuffetCostLines;
       restockedCost += returnedCost(bill.orders, bill.earlyReturns.flatMap(refund => refund.returnLines));
+      if (!includeItems) continue;
       for (const order of bill.orders) {
         for (const line of order.items) {
           if (line.cancelReason) continue;
@@ -165,7 +166,7 @@ export function inventoryCountValue(quantity: number, unpricedQuantity: number, 
   return { amount: recordedValue, status: 'PARTIAL' as const };
 }
 
-export async function inventoryReport(scope: Scope, range: Range) {
+export async function inventoryReport(scope: Scope, range: Range, countsOnly = false) {
   const isCount = { $eq: ['$operation', 'COUNT'] };
   const manualReceipt = { $and: [{ $eq: ['$operation', 'RECEIPT'] }, { $eq: [{ $ifNull: ['$referenceId', null] }, null] }] };
   const retailReturns = [warehouseRetailEditReturn, warehouseRetailCancelReturn];
@@ -173,10 +174,11 @@ export async function inventoryReport(scope: Scope, range: Range) {
   const excess = { $and: [isCount, { $gt: ['$delta', 0] }] };
   const costMissing = { $eq: [{ $ifNull: ['$unitCost', null] }, null] };
   const value = { $floor: { $add: [0.5, { $divide: [{ $multiply: [{ $abs: '$delta' }, { $ifNull: ['$unitCost', 0] }] }, 1000] }] } };
+  const movements = countsOnly ? { operation: 'COUNT' } : { $or: [{ operation: 'COUNT' }, { operation: 'RECEIPT', referenceId: null },
+    { operation: 'RECEIPT', referenceId: { $type: 'objectId' }, note: { $in: retailReturns } },
+    { operation: 'ISSUE', note: { $in: [warehouseSaleNote, warehouseRecipeNote] }, referenceId: { $type: 'objectId' } }] };
   const items = await WarehouseMovement.aggregate<InventoryItem>([
-    { $match: { ...scope, createdAt: range, $or: [{ operation: 'COUNT' }, { operation: 'RECEIPT', referenceId: null },
-      { operation: 'RECEIPT', referenceId: { $type: 'objectId' }, note: { $in: retailReturns } },
-      { operation: 'ISSUE', note: { $in: [warehouseSaleNote, warehouseRecipeNote] }, referenceId: { $type: 'objectId' } }] } },
+    { $match: { ...scope, createdAt: range, ...movements } },
     { $sort: { createdAt: 1, _id: 1 } }, { $set: { delta: { $subtract: [effectiveCountQuantity, '$before'] } } },
     { $group: { _id: { itemId: '$itemId', unit: '$unit' }, name: { $last: '$itemName' }, unit: { $last: '$unit' },
       manualReceipts: { $sum: { $cond: [manualReceipt, '$quantity', 0] } },
