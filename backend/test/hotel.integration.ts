@@ -42,7 +42,7 @@ test('hotel API receives open hourly stays and settles overtime on nightly and p
     }
     assert.ok(healthy);
     const credentials = { email: `hotel-${randomUUID()}@example.com`, password: 'hotel-test-password-1' };
-    const created = await request('/auth/register', 'POST', { ...credentials, name: 'Lễ tân kiểm thử' });
+    const created = await request('/auth/register', 'POST', { ...credentials, name: 'Lễ tân kiểm thử', phone: '0901234510' });
     assert.equal(created.status, 201);
     userId = (await created.json()).id;
     const login = await request('/auth/login', 'POST', credentials);

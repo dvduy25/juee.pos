@@ -1,4 +1,7 @@
 .access-page {
+  --access-backdrop:
+    linear-gradient(106deg, #171024e6 0%, #25183eb8 34%, #21173024 73%, #1c13254d 100%),
+    url('/juee-site/assets/hero.webp') 72% 45% / cover no-repeat;
   min-height: 100dvh;
   position: relative;
   isolation: isolate;
@@ -15,9 +18,7 @@
   z-index: -1;
   inset: 0;
   content: '';
-  background:
-    linear-gradient(106deg, #171024e6 0%, #25183eb8 34%, #21173024 73%, #1c13254d 100%),
-    url('/juee-site/assets/hero.webp') 72% 45% / cover no-repeat;
+  background: var(--access-backdrop);
   animation: access-backdrop 900ms cubic-bezier(.2,.7,.25,1) both;
 }
 .access-header {
@@ -180,43 +181,42 @@
   .access-cursor {
     display: block;
     position: absolute;
+    inset: 0;
     z-index: -1;
     pointer-events: none;
-    top: 0;
-    left: 0;
-    width: 184px;
-    aspect-ratio: 1;
-    border-radius: 50%;
-    background: radial-gradient(circle, #080412 0 17px, #170b26 19px, #be80f88c 20px, #9650ea60 25px, #6e35c52e 45px, transparent 70%);
-    transform: translate3d(calc(var(--access-pointer-x, 0px) - 50%), calc(var(--access-pointer-y, 0px) - 50%), 0);
     opacity: 0;
-    transition: opacity 180ms ease-out;
+    transition: opacity 240ms ease-out;
   }
-  .access-cursor::before {
+  .access-cursor::before, .access-cursor::after {
     content: '';
     position: absolute;
-    inset: 50%;
-    width: 54px;
-    aspect-ratio: 1;
-    translate: -50% -50%;
-    border-radius: 50%;
-    background: conic-gradient(#eac8ff, #9b55f3 26%, #6339ab40 48%, #e39cc9 68%, #fff1df 84%, #eac8ff);
-    mask-image: radial-gradient(circle, transparent 17px, #000 19px 22px, transparent 27px);
+    inset: 0;
+  }
+  .access-cursor::before {
+    background: var(--access-backdrop);
+    transform: scale(1.09, 1.05);
+    transform-origin: var(--access-pointer, 50% 50%);
+    mask-image: radial-gradient(circle 110px at var(--access-pointer, 50% 50%), #000 24px, #000c 51px, transparent 100%);
+  }
+  .access-cursor::after {
+    background: radial-gradient(ellipse 54px 45px at var(--access-pointer, 50% 50%),
+      #0d071bd9 0%, #170d29ad 19%, #a98bd65c 27%, #9874ce24 40%, transparent 100%);
   }
   .access-page-interactive[data-pointer="active"] .access-cursor { opacity: 1; }
-  .access-page-interactive[data-pointer="active"] .access-cursor::before { animation: access-spin 4s linear infinite; }
 }
 @keyframes access-backdrop { from { opacity: .45; transform: scale(1.025); } to { opacity: 1; transform: scale(1); } }
 @keyframes access-card-enter { from { opacity: 0; transform: translateY(13px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes access-spin { to { transform: rotate(360deg); } }
 @media (max-width: 650px) {
-  .access-page { padding: 14px 14px 26px; gap: 14px; justify-items: center; }
-  .access-header { width: min(100%, 440px); }
-  .access-page::before {
-    background:
+  .access-page {
+    --access-backdrop:
       linear-gradient(180deg, #21132d60, #1a122994 52%, #21162de3),
       url('/juee-site/assets/hero.webp') 78% 45% / cover no-repeat;
+    padding: 14px 14px 26px;
+    gap: 14px;
+    justify-items: center;
   }
+  .access-header { width: min(100%, 440px); }
   .access-card { border-radius: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {

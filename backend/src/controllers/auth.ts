@@ -9,16 +9,18 @@ import jwt from 'jsonwebtoken';
 import { authenticator } from 'otplib';
 import { z } from 'zod';
 import { found, isDuplicate } from '../utils/db';
-import { accountEmail as email, accountPassword as password, label, objectId, read } from '../validators/common';
+import { accountEmail as email, accountPassword as password, accountPhone, label, objectId, read } from '../validators/common';
 import { transaction } from '../config/db';
 import { AccountToken, Branch, PlatformGrant, User, UserSession } from '../models';
 import { canAdmin, canManageBranches } from '../middleware/policy';
 import { authenticate, sessionIssuer, sessionSurfaceFilter, signingSecret, verifyAdminOrigin, verifyOrigin, type SessionSurface } from '../middleware/auth';
 import { requestAccountLink, requireAccountMail, signupNeedsVerification, tokenDigest, verificationDigest } from '../services/account-email';
 import { requireBusinessAvailable, canSignIntoBusinessAccount, tenantMembership } from '../services/tenants';
-import { beginGoogle, exchangeGoogleCode, googleConfig, googleDestination, googleFlowCookie, readGoogleFlow } from '../services/google-auth';
+import { beginGoogle, beginGoogleSignup, exchangeGoogleCode, googleConfig, googleDestination, googleFlowCookie, googleSignupCookie,
+  readGoogleFlow, readGoogleSignup } from '../services/google-auth';
 
 const accountToken = z.string().regex(/^[a-f0-9]{64}$/);
+const signupConflict = 'Email hoặc số điện thoại đã được đăng ký.';
 const authCookies = { customer: 'juee_refresh', admin: 'juee_admin_refresh' } as const;
 const sessionLifetimes = { customer: 14 * 86400 * 1000, admin: 8 * 3600 * 1000 };
 const cookieOptions = (surface: SessionSurface) => ({
@@ -37,6 +39,11 @@ function requirePassword(hash: string | null | undefined): string {
 
 function cookieToken(req: Request, surface: SessionSurface) {
   return req.headers.cookie?.match(new RegExp(`(?:^|;\\s*)${authCookies[surface]}=([a-f0-9]{64})(?:;|$)`))?.[1];
+}
+
+function namedCookie(req: Request, name: string) {
+  const prefix = name + '=';
+  return req.headers.cookie?.split(/;\s*/).find(value => value.startsWith(prefix))?.slice(prefix.length);
 }
 
 function accessResponse(sessionId: string, modeVersion?: string | null, surface: SessionSurface = 'customer') {
@@ -87,30 +94,31 @@ async function loginSession(req: Request, res: Response, body: unknown, surface:
   return sessionResponse(res, session.id, refresh, expiresAt, undefined, surface);
 }
 
-async function googleCustomer(profile: Awaited<ReturnType<typeof exchangeGoogleCode>>) {
+async function googleCustomer(profile: Pick<Awaited<ReturnType<typeof exchangeGoogleCode>>, 'subject' | 'email' | 'name'>, registrationPhone?: string) {
   const refresh = randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + sessionLifetimes.customer);
-  const complete = () => transaction(async session => {
-    let user = await User.findOne({ googleSubject: profile.subject }).select('+managedByTenantId').session(session);
-    if (!user) {
-      if (await User.exists({ email: profile.email }).session(session)) throw new ConflictException();
-      user = await User.insertOne({ email: profile.email, name: profile.name, googleSubject: profile.subject,
-        emailVerificationRequired: true, emailVerifiedAt: new Date() }, { session });
-    }
-    if (user.locked || !user.emailVerifiedAt || user.managedByTenantId || await PlatformGrant.exists({ userId: user.id }).session(session) ||
-        !await canSignIntoBusinessAccount(user._id, session)) throw new ForbiddenException();
-    const authenticatedAt = new Date();
-    const active = await User.updateOne({ _id: user.id, locked: { $ne: true } }, { $set: { lastLoginAt: authenticatedAt } }, { session });
-    if (!active.matchedCount) throw new ForbiddenException();
-    const loggedIn = await UserSession.insertOne({ userId: user._id, refreshHash: digest(refresh), expiresAt,
-      surface: 'customer', mfa: false, googleAuthenticatedAt: authenticatedAt }, { session });
-    return { sessionId: loggedIn.id, refresh, expiresAt };
-  });
   try {
-    return await complete();
+    return await transaction(async session => {
+      let user = await User.findOne({ googleSubject: profile.subject }).select('+managedByTenantId').session(session);
+      if (registrationPhone && user) throw new ConflictException(signupConflict);
+      if (!user) {
+        if (await User.exists({ email: profile.email }).session(session)) throw new ConflictException(signupConflict);
+        if (!registrationPhone) return undefined;
+        user = await User.insertOne({ email: profile.email, name: profile.name, googleSubject: profile.subject, registrationPhone,
+          emailVerificationRequired: true, emailVerifiedAt: new Date() }, { session });
+      }
+      if (user.locked || !user.emailVerifiedAt || user.managedByTenantId || await PlatformGrant.exists({ userId: user.id }).session(session) ||
+          !await canSignIntoBusinessAccount(user._id, session)) throw new ForbiddenException();
+      const authenticatedAt = new Date();
+      const active = await User.updateOne({ _id: user.id, locked: { $ne: true } }, { $set: { lastLoginAt: authenticatedAt } }, { session });
+      if (!active.matchedCount) throw new ForbiddenException();
+      const loggedIn = await UserSession.insertOne({ userId: user._id, refreshHash: digest(refresh), expiresAt,
+        surface: 'customer', mfa: false, googleAuthenticatedAt: authenticatedAt }, { session });
+      return { sessionId: loggedIn.id, refresh, expiresAt };
+    });
   } catch (cause) {
-    if (!isDuplicate(cause)) throw cause;
-    return complete();
+    if (isDuplicate(cause)) throw new ConflictException(signupConflict);
+    throw cause;
   }
 }
 
@@ -188,7 +196,9 @@ export class AuthController {
     if (!config) return res.redirect(303, `/${entry}?google=unavailable`);
     const flow = beginGoogle(config, entry, typeof next === 'string' ? next : '');
     const cookie = googleFlowCookie();
+    const signup = googleSignupCookie();
     res.set('Referrer-Policy', 'no-referrer');
+    res.clearCookie(signup.name, signup.options);
     res.cookie(cookie.name, flow.cookie, { ...cookie.options, maxAge: flow.maxAge });
     return res.redirect(303, flow.url);
   }
@@ -196,9 +206,7 @@ export class AuthController {
   @Get('google/callback')
   async finishGoogle(@Req() req: Request, @Query() query: unknown, @Res() res: Response) {
     const cookie = googleFlowCookie();
-    const prefix = cookie.name + '=';
-    const raw = req.headers.cookie?.split(/;\s*/).find(value => value.startsWith(prefix))?.slice(prefix.length);
-    const flow = readGoogleFlow(raw);
+    const flow = readGoogleFlow(namedCookie(req, cookie.name));
     const entry = flow?.from ?? 'login';
     const config = googleConfig();
     const failure = (status: string) => res.redirect(303, `/${entry}?google=${status}`);
@@ -213,6 +221,12 @@ export class AuthController {
       const profile = await exchangeGoogleCode(config, flow, result.data.code);
       if (!profile.emailAuthoritative) return failure('unsupported_email');
       const customer = await googleCustomer(profile);
+      if (!customer) {
+        const signup = googleSignupCookie();
+        const pending = beginGoogleSignup({ ...profile, next: flow.next });
+        res.cookie(signup.name, pending.cookie, { ...signup.options, maxAge: pending.maxAge });
+        return res.redirect(303, '/register/google');
+      }
       sessionResponse(res, customer.sessionId, customer.refresh, customer.expiresAt);
       return res.redirect(303, googleDestination(flow.next, config.origin));
     } catch (cause) {
@@ -222,18 +236,35 @@ export class AuthController {
     }
   }
 
+  @Post('google/register')
+  @HttpCode(200)
+  async registerGoogle(@Body() body: unknown, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    verifyOrigin(req);
+    const cookie = googleSignupCookie();
+    const pending = readGoogleSignup(namedCookie(req, cookie.name));
+    const config = googleConfig();
+    if (!pending || !config) throw new UnauthorizedException('Phiên đăng ký Google đã hết hạn. Hãy chọn lại tài khoản Google.');
+    const { phone } = read(z.object({ phone: accountPhone }).strict(), body);
+    const customer = await googleCustomer(pending, phone);
+    if (!customer) throw new UnauthorizedException();
+    res.clearCookie(cookie.name, cookie.options);
+    sessionResponse(res, customer.sessionId, customer.refresh, customer.expiresAt);
+    return { destination: googleDestination(pending.next, config.origin) };
+  }
+
   @Post('register')
   async register(@Body() body: unknown, @Req() req: Request) {
     verifyOrigin(req);
-    const input = read(z.object({ email, password, name: label }).strict(), body);
+    const input = read(z.object({ email, password, phone: accountPhone, name: label }).strict(), body);
+    if (await User.exists({ $or: [{ email: input.email }, { registrationPhone: input.phone }] })) throw new ConflictException(signupConflict);
     const emailVerificationRequired = signupNeedsVerification();
     if (emailVerificationRequired) requireAccountMail();
     const passwordHash = await hash(input.password);
     let user;
     try {
-      user = await User.create({ email: input.email, name: input.name, passwordHash, emailVerificationRequired });
+      user = await User.create({ email: input.email, name: input.name, registrationPhone: input.phone, passwordHash, emailVerificationRequired });
     } catch (error) {
-      if (isDuplicate(error)) throw new ConflictException('Email đã được sử dụng');
+      if (isDuplicate(error)) throw new ConflictException(signupConflict);
       throw error;
     }
     const verificationSent = emailVerificationRequired && await requestAccountLink(user, 'VERIFY_EMAIL');

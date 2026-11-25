@@ -44,9 +44,9 @@ test('service branches sell warehouse goods from reception and account for them 
       if (!healthy) await setTimeout(200);
     }
     assert.ok(healthy);
-    for (const mode of ['GYM', 'POOL', 'HOTEL', 'TICKETS']) {
+    for (const [index, mode] of ['GYM', 'POOL', 'HOTEL', 'TICKETS'].entries()) {
       const credentials = { email: `counter-${randomUUID()}@example.com`, password: 'counter-test-password-1' };
-      const user = await expectJson(await request('/auth/register', 'POST', { ...credentials, name: 'Quản lý quầy' }));
+      const user = await expectJson(await request('/auth/register', 'POST', { ...credentials, name: 'Quản lý quầy', phone: `090123452${index}` }));
       userIds.push(user.id);
       const { accessToken: owner } = await expectJson(await request('/auth/login', 'POST', credentials));
       const site = await expectJson(await request('/tenants', 'POST', { name: `Quầy ${mode}`,

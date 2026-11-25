@@ -1,5 +1,7 @@
 import mongoose, { type ClientSession } from 'mongoose';
-import '../models';
+import { User, registrationPhoneIndex } from '../models';
+import { isDuplicate } from '../utils/db';
+import { accountPhone } from '../validators/common';
 
 export async function connectDatabase() {
   const uri = process.env.MONGODB_URI || process.env.DATABASE_URL;
@@ -47,6 +49,21 @@ export async function ensureIndexes() {
           });
         }
       }
+    }
+  }
+}
+
+export async function ensureRegistrationPhones() {
+  await User.collection.createIndex({ registrationPhone: 1 }, registrationPhoneIndex);
+  const legacy = User.find({ phone: { $type: 'string' }, registrationPhone: { $exists: false } }).select('phone').lean().cursor();
+  for await (const user of legacy) {
+    const phone = accountPhone.safeParse(user.phone);
+    if (!phone.success) continue;
+    try {
+      await User.updateOne({ _id: user._id, registrationPhone: { $exists: false } }, { $set: { registrationPhone: phone.data } }, { timestamps: false });
+    } catch (cause) {
+      // A different legacy account may already reserve this number.
+      if (!isDuplicate(cause)) throw cause;
     }
   }
 }

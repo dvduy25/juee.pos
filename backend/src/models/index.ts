@@ -21,12 +21,14 @@ export const memberKioskMethods = ['CARD', 'MEMBER_CODE'] as const;
 export type AccountTokenKind = 'VERIFY_EMAIL' | 'RESET_PASSWORD';
 
 const users = new Schema({
-  email: { ...text, unique: true }, name: text, phone: String, passwordHash: String, googleSubject: String,
+  email: { ...text, unique: true }, name: text, phone: String, registrationPhone: String, passwordHash: String, googleSubject: String,
   emailVerifiedAt: Date, emailVerificationRequired: Boolean, lastLoginAt: Date, trialStartedAt: Date, tenantWriteToken: String,
   managedByTenantId: { type: Schema.Types.ObjectId, select: false },
   locked: { type: Boolean, default: false },
 }, { collection: 'User', timestamps: true });
 users.index({ googleSubject: 1 }, { unique: true, partialFilterExpression: { googleSubject: { $type: 'string' } } });
+export const registrationPhoneIndex = { unique: true, partialFilterExpression: { registrationPhone: { $type: 'string' } } };
+users.index({ registrationPhone: 1 }, registrationPhoneIndex);
 export const User = model('User', users);
 
 const accountTokens = new Schema({

@@ -236,8 +236,9 @@ export class PlatformController {
       AdminAuditLog.find({ targetId: { $in: [tenant._id, ...tenant.subscriptions.map(item => item._id)] } }).sort('-createdAt').limit(25).lean(),
       SaaSInvoice.find({ subscriptionId: { $in: tenant.subscriptions.map(item => item._id) } }).sort('-createdAt').limit(25).setOptions({ useBigInt64: true }).lean(),
     ]);
-    const users = await User.find({ _id: { $in: owners.map(owner => owner.userId) } }).select('name email phone locked').lean();
-    return { ...tenant, branches, memberships: users.map(user => ({ user })), history, invoices };
+    const users = await User.find({ _id: { $in: owners.map(owner => owner.userId) } }).select('name email phone registrationPhone locked').lean();
+    const memberships = users.map(({ registrationPhone, ...user }) => ({ user: { ...user, phone: user.phone ?? registrationPhone } }));
+    return { ...tenant, branches, memberships, history, invoices };
   }
 
   @Get('branches')

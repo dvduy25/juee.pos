@@ -2,12 +2,13 @@ import { createHash, createPublicKey, randomBytes, type KeyObject } from 'node:c
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { signingSecret } from '../middleware/auth';
-import { accountEmail } from '../validators/common';
+import { accountEmail, label } from '../validators/common';
 
 const authorizeEndpoint = 'https://accounts.google.com/o/oauth2/v2/auth';
 const tokenEndpoint = 'https://oauth2.googleapis.com/token';
 const keysEndpoint = 'https://www.googleapis.com/oauth2/v3/certs';
 const stateIssuer = 'juee-pos-google-state';
+const signupIssuer = 'juee-pos-google-signup';
 const transactionLifetime = 600;
 const random = () => randomBytes(32).toString('base64url');
 const challenge = z.string().regex(/^[a-zA-Z0-9_-]{43}$/);
@@ -20,11 +21,22 @@ export function googleFlowCookie() {
   };
 }
 
+export function googleSignupCookie() {
+  const secure = process.env.NODE_ENV === 'production';
+  return {
+    name: secure ? '__Host-juee_google_signup' : 'juee_google_signup',
+    options: { httpOnly: true, secure, sameSite: 'strict' as const, path: secure ? '/' : '/api/v1/auth/google' },
+  };
+}
+
 const googleEntry = z.enum(['login', 'register']);
 const flowSchema = z.object({ state: challenge, nonce: challenge, verifier: challenge, from: googleEntry, next: z.string().max(1500) });
 type Flow = z.infer<typeof flowSchema>;
+const googleSubject = z.string().regex(/^[!-~]{1,255}$/);
+const signupSchema = z.object({ subject: googleSubject, email: accountEmail, name: label, next: z.string().max(1500) });
+type Signup = z.infer<typeof signupSchema>;
 const googleClaims = z.object({
-  sub: z.string().regex(/^[!-~]{1,255}$/), email: accountEmail, email_verified: z.union([z.literal(true), z.literal('true')]),
+  sub: googleSubject, email: accountEmail, email_verified: z.union([z.literal(true), z.literal('true')]),
   nonce: challenge, exp: z.number().int(), iat: z.number().int(), aud: z.union([z.string(), z.array(z.string())]),
   azp: z.string().optional(), hd: z.string().trim().min(1).max(253).optional(), name: z.string().optional(),
 });
@@ -69,6 +81,20 @@ export function readGoogleFlow(raw: string | undefined): Flow | undefined {
   if (!raw || raw.length > 3500) return undefined;
   try {
     return flowSchema.parse(jwt.verify(raw, signingSecret(), { issuer: stateIssuer, algorithms: ['HS256'] }));
+  } catch {
+    return undefined;
+  }
+}
+
+export function beginGoogleSignup({ subject, email, name, next }: Signup) {
+  const cookie = jwt.sign({ subject, email, name, next }, signingSecret(), { issuer: signupIssuer, expiresIn: transactionLifetime, algorithm: 'HS256' });
+  return { cookie, maxAge: transactionLifetime * 1000 };
+}
+
+export function readGoogleSignup(raw: string | undefined): Signup | undefined {
+  if (!raw || raw.length > 3500) return undefined;
+  try {
+    return signupSchema.parse(jwt.verify(raw, signingSecret(), { issuer: signupIssuer, algorithms: ['HS256'] }));
   } catch {
     return undefined;
   }

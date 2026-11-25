@@ -14,8 +14,7 @@ export function AuthScene({ title, description, interactive = false, children }:
     if (event.pointerType !== 'mouse') return;
     const page = event.currentTarget;
     const bounds = page.getBoundingClientRect();
-    page.style.setProperty('--access-pointer-x', `${event.clientX - bounds.left}px`);
-    page.style.setProperty('--access-pointer-y', `${event.clientY - bounds.top}px`);
+    page.style.setProperty('--access-pointer', `${event.clientX - bounds.left}px ${event.clientY - bounds.top}px`);
     page.dataset.pointer = 'active';
   }
 

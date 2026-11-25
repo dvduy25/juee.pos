@@ -8,6 +8,7 @@ import { connectDatabase } from '../src/config/db';
 import { hotelNoon } from '../src/services/hotel-stays';
 import { facilityToday, shiftDays } from '../src/services/membership-plans';
 import { verificationDigest, tokenDigest } from '../src/services/account-email';
+import { beginGoogleSignup, googleSignupCookie } from '../src/services/google-auth';
 import { suggestMenuItems, suggestWarehouseItems } from '../src/services/inventory-ai-import';
 import { AccountToken, AdminAuditLog, AuditLog, Bill, Branch, BranchProductPrice, BuffetPackage, Category, DiningArea, DiningTable, FacilityMember, GuestSession, IdempotencyRecord, IncomingTransfer, KitchenTicket, MemberCredential, MemberPayment, MemberPlan, Membership, MemberVisit, Order, OutboxEvent, Payment, PaymentIntent, Plan, PlanVersion, PlatformGrant, Product, ProductVariant, Refund, SaaSInvoice, Subscription, TableSession, Tenant, UnavailableProduct, User, UserSession, WarehouseItem, WarehouseMovement } from '../src/models';
 import { AdmissionTicket, BusinessAiSettings, CashEntry, TaxDeclaration, DishRecipe, HotelBooking, HotelPackage, HotelRoom, MemberClass, PurchaseReceipt, StaffAttendance, StaffClockCredential, StaffClockDevice,
@@ -65,7 +66,8 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
   assert.match(new URL(databaseUrl).pathname, /^\/[a-z0-9_-]+_test$/i);
   const webhookKey = randomBytes(32).toString('hex');
   const env = { ...process.env, SEPAY_WEBHOOK_API_KEY: webhookKey, MONGODB_URI: databaseUrl, WEB_ORIGIN: origin, ADMIN_WEB_ORIGIN: adminOrigin, PUBLIC_ORDER_ORIGIN: '', PORT: port,
-    NODE_ENV: 'test', JWT_SECRET: randomBytes(32).toString('hex'), AI_KEY_ENCRYPTION_SECRET: randomBytes(32).toString('hex'), SMTP_URL: '', MAIL_FROM: '', BOOTSTRAP_ADMIN_EMAIL: '' };
+    NODE_ENV: 'test', JWT_SECRET: randomBytes(32).toString('hex'), AI_KEY_ENCRYPTION_SECRET: randomBytes(32).toString('hex'), SMTP_URL: '', MAIL_FROM: '', BOOTSTRAP_ADMIN_EMAIL: '',
+    GOOGLE_CLIENT_ID: 'integration-client', GOOGLE_CLIENT_SECRET: 'integration-secret' };
   process.env.MONGODB_URI = databaseUrl;
   process.env.JWT_SECRET = env.JWT_SECRET;
   const ownerEmail = `owner-${run}@example.com`;
@@ -77,6 +79,10 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
   const seed = spawnSync(process.execPath, ['--import', 'tsx', 'src/jobs/seed.ts'], { env, encoding: 'utf8', timeout: 15000 });
   assert.equal(seed.status, 0, `Seed failed: ${seed.stderr}`);
   await connectDatabase();
+  for (const phone of ['090 123 4503', '+84 901 234 503']) {
+    const legacy = await User.create({ email: `legacy-${randomUUID()}@example.com`, name: 'Tài khoản cũ', phone });
+    userIds.push(legacy.id);
+  }
   const server = spawn(process.execPath, ['--import', 'tsx', 'src/main.ts'], { env, stdio: 'ignore' });
   const exited = once(server, 'exit');
 
@@ -94,12 +100,45 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     const offers: { code: string; monthlyVnd: string }[] = await plans.json();
     assert.deepEqual(offers.map(({ code, monthlyVnd }) => [code, monthlyVnd]), [['FREE', '0']]);
 
-    for (const [email, name] of [[ownerEmail, 'Chủ cửa hàng'], [staffEmail, 'Quản lý']]) {
-      const response = await request('/auth/register', 'POST', { email, name, password });
+    const ownerRegistration = { email: ownerEmail, name: 'Chủ cửa hàng', password };
+    assert.equal((await request('/auth/register', 'POST', ownerRegistration)).status, 400);
+    const accountIds: string[] = [];
+    for (const [email, name, phone] of [[ownerEmail, 'Chủ cửa hàng', '0901234501'], [staffEmail, 'Quản lý', '0901234502']]) {
+      const response = await request('/auth/register', 'POST', { email, name, password, phone });
       assert.equal(response.status, 201);
-      userIds.push((await response.json()).id);
+      const { id } = await response.json();
+      accountIds.push(id);
+      userIds.push(id);
     }
-    const [ownerId, staffId] = userIds;
+    const [ownerId, staffId] = accountIds;
+    assert.equal((await request('/auth/register', 'POST', { ...ownerRegistration, email: ownerEmail.toUpperCase(), phone: '0901234504' })).status, 409);
+    const alternateEmail = `duplicate-${run}@example.com`;
+    for (const phone of ['+84 (901) 234-501', '84901234503']) {
+      assert.equal((await request('/auth/register', 'POST', { ...ownerRegistration, email: alternateEmail, phone })).status, 409);
+    }
+    const simultaneous = await Promise.all(['0901234504', '+84 901 234 504'].map(phone => request('/auth/register', 'POST', {
+      ...ownerRegistration, email: `concurrent-${randomUUID()}@example.com`, phone,
+    })));
+    assert.deepEqual(simultaneous.map(response => response.status).sort(), [201, 409]);
+    for (const response of simultaneous) if (response.ok) userIds.push((await response.json()).id);
+
+    const googleProfile = { subject: 'google-' + run, email: `google-${run}@gmail.com`, name: 'Google test', next: '/dashboard' };
+    const googlePending = beginGoogleSignup(googleProfile);
+    const googleHeaders = { Cookie: `${googleSignupCookie().name}=${googlePending.cookie}` };
+    assert.equal((await request('/auth/google/register', 'POST', { phone: '0901234506' })).status, 401);
+    assert.equal((await request('/auth/google/register', 'POST', {}, undefined, googleHeaders)).status, 400);
+    assert.equal((await request('/auth/google/register', 'POST', { phone: '+84901234501' }, undefined, googleHeaders)).status, 409);
+    assert.equal(await User.exists({ email: googleProfile.email }), null);
+    const googleRegistration = await request('/auth/google/register', 'POST', { phone: '0901234506' }, undefined, googleHeaders);
+    assert.equal(googleRegistration.status, 200);
+    assert.match(googleRegistration.headers.get('set-cookie') ?? '', /juee_refresh=/);
+    const googleAccount = await User.findOne({ email: googleProfile.email });
+    assert.ok(googleAccount);
+    userIds.push(googleAccount.id);
+    assert.equal(googleAccount.registrationPhone, '+84901234506');
+    assert.ok(googleAccount.emailVerifiedAt);
+    assert.equal((await request('/auth/google/register', 'POST', { phone: '0901234507' }, undefined, googleHeaders)).status, 409);
+
     await User.updateOne({ _id: ownerId }, { $set: { emailVerificationRequired: true } });
     assert.equal((await request('/auth/login', 'POST', { email: ownerEmail, password })).status, 403);
 
@@ -1484,7 +1523,7 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     assert.equal((await request(ticketSalesUrl, 'POST', { ...groupInput, quantity: 2 }, owner,
       { 'Idempotency-Key': randomUUID() })).status, 409);
 
-    const adminRegistration = await request('/auth/register', 'POST', { email: adminEmail, password, name: 'Kiểm thử quản trị' });
+    const adminRegistration = await request('/auth/register', 'POST', { email: adminEmail, password, name: 'Kiểm thử quản trị', phone: '0901234505' });
     assert.equal(adminRegistration.status, 201);
     const adminId = (await adminRegistration.json()).id;
     userIds.push(adminId);

@@ -65,6 +65,12 @@ function PasswordField({ name, label, registering, hint, invalid, onInput }: {
   </div>;
 }
 
+function PhoneField() {
+  return <label className="access-field">Số điện thoại
+    <input name="phone" type="tel" autoComplete="tel" maxLength={32} placeholder="09xx xxx xxx" required/>
+  </label>;
+}
+
 async function signIn(email: string, password: string) {
   const session = await api<{ accessToken: string }>('/auth/login', 'POST', { email, password });
   setToken(session.accessToken);
@@ -160,6 +166,7 @@ export function CustomerRegister() {
     const form = new FormData(element);
     const name = String(form.get('name')).trim();
     const email = String(form.get('email')).trim();
+    const phone = String(form.get('phone')).trim();
     const password = String(form.get('password'));
     if (form.get('confirm') !== password) {
       setConfirmationError(true);
@@ -168,7 +175,7 @@ export function CustomerRegister() {
     }
     void run(async () => {
       const result = await api<{ emailVerificationRequired: boolean; verificationSent: boolean }>(
-        '/auth/register', 'POST', { name, email, password },
+        '/auth/register', 'POST', { name, email, phone, password },
       );
       if (result.emailVerificationRequired) {
         const parameters = new URLSearchParams({ email, delivery: result.verificationSent ? 'sent' : 'retry' });
@@ -185,7 +192,7 @@ export function CustomerRegister() {
     });
   }
 
-  return <AuthScene interactive title="Tạo tài khoản" description="Dùng email bạn có thể truy cập để đăng ký JUEE POS.">
+  return <AuthScene interactive title="Tạo tài khoản" description="Dùng email và số điện thoại của bạn để đăng ký JUEE POS.">
     {created && <p className="success access-feedback" role="status">Đã tạo tài khoản.</p>}
     {error && <p className="error access-feedback" role="alert">{error}</p>}
     {created ? <Link className="button access-submit" href="/login">Đến trang đăng nhập <ArrowRight size={18} aria-hidden="true"/></Link> :
@@ -195,6 +202,7 @@ export function CustomerRegister() {
             pattern={'.*\\S.*'} title="Nhập họ và tên." required/></label>
           <label className="access-field">Email<input name="email" type="email" autoComplete="username" maxLength={254}
             placeholder="ban@cuahang.vn" required/></label>
+          <PhoneField/>
           <PasswordField name="password" label="Mật khẩu" registering hint="Ít nhất 12 ký tự."
             onInput={() => setConfirmationError(false)}/>
           <PasswordField name="confirm" label="Nhập lại mật khẩu" registering invalid={confirmationError}
@@ -204,5 +212,27 @@ export function CustomerRegister() {
       </form>}
     {!created && <GoogleAccess from="register"/>}
     {!created && <p className="access-footer">Đã có tài khoản? <Link href="/login">Đăng nhập</Link></p>}
+  </AuthScene>;
+}
+
+export function GoogleRegistration() {
+  const { run, pending, error, coolingDown } = useAuthSubmit();
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const phone = String(new FormData(event.currentTarget).get('phone')).trim();
+    void run(async () => {
+      const { destination } = await api<{ destination: string }>('/auth/google/register', 'POST', { phone });
+      window.location.replace(destination);
+    });
+  }
+
+  return <AuthScene interactive title="Hoàn tất đăng ký Google" description="Nhập số điện thoại của bạn để tạo tài khoản JUEE POS.">
+    {error && <p className="error access-feedback" role="alert">{error}</p>}
+    <form className="access-form" method="post" onSubmit={submit}>
+      <fieldset disabled={pending} aria-busy={pending}><PhoneField/></fieldset>
+      <AccessSubmit pending={pending} coolingDown={coolingDown} label="Tạo tài khoản" working="Đang tạo tài khoản…"/>
+    </form>
+    <p className="access-footer"><Link href="/register">Về đăng ký</Link></p>
   </AuthScene>;
 }

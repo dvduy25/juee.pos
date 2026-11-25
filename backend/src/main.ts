@@ -14,7 +14,7 @@ import { TenantsController } from './controllers/tenants';
 import { PlatformController } from './controllers/platform';
 import { publishedPlans } from './services/plans';
 import { syncServicePlans } from './services/service-plan-catalog';
-import { connectDatabase, verifyProductionIndexes } from './config/db';
+import { connectDatabase, ensureRegistrationPhones, verifyProductionIndexes } from './config/db';
 import { jsonTransform } from './utils/db';
 import { CatalogController, ProductImagesController } from './controllers/catalog';
 import { SalesController } from './controllers/sales';
@@ -116,6 +116,7 @@ async function main() {
   const proxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
   if (!Number.isInteger(proxyHops) || proxyHops < 0) throw new Error('Invalid TRUST_PROXY_HOPS');
   await connectDatabase();
+  await ensureRegistrationPhones();
   if (process.env.NODE_ENV === 'production') await verifyProductionIndexes();
   else if (googleConfig()) await verifyProductionIndexes(['User']);
   if (subscriptionPayments) await verifyProductionIndexes(['SaaSCheckout', 'SaaSInvoice', 'IncomingTransfer']);
