@@ -1,7 +1,7 @@
 'use client';
 
 import type { PointerEvent, ReactNode } from 'react';
-import { ArrowUpRight, Layers3 } from 'lucide-react';
+import { Layers3 } from 'lucide-react';
 import { FullscreenButton } from '@/components/fullscreen-button';
 
 export function AuthScene({ title, description, interactive = false, children }: {
@@ -10,7 +10,7 @@ export function AuthScene({ title, description, interactive = false, children }:
   interactive?: boolean;
   children: ReactNode;
 }) {
-  function moveSpotlight(event: PointerEvent<HTMLElement>) {
+  function moveCursorEffect(event: PointerEvent<HTMLElement>) {
     if (event.pointerType !== 'mouse') return;
     const page = event.currentTarget;
     const bounds = page.getBoundingClientRect();
@@ -19,26 +19,22 @@ export function AuthScene({ title, description, interactive = false, children }:
     page.dataset.pointer = 'active';
   }
 
-  const form = <section className="access-card" aria-labelledby="access-title">
-    <div className="access-title">
-      <h1 id="access-title">{title}</h1>
-      {description && <p>{description}</p>}
-    </div>
-    {children}
-  </section>;
-
   return <main className={interactive ? 'access-page access-page-interactive' : 'access-page'}
-    onPointerMove={interactive ? moveSpotlight : undefined}
+    onPointerMove={interactive ? moveCursorEffect : undefined}
     onPointerLeave={interactive ? event => { delete event.currentTarget.dataset.pointer; } : undefined}>
+    {interactive && <span className="access-cursor" aria-hidden="true"/>}
     <header className="access-header">
       <a href="/" className="access-brand" aria-label="JUEE POS, về trang giới thiệu">
         <span><Layers3 size={22} aria-hidden="true"/></span>JUEE POS
       </a>
       <FullscreenButton/>
     </header>
-    {interactive ? <div className="access-stage">
-      <aside className="access-preview"><a href="/#giai-phap">Khám phá các mô hình quản lý <ArrowUpRight size={17} aria-hidden="true"/></a></aside>
-      {form}
-    </div> : form}
+    <section className="access-card" aria-labelledby="access-title">
+      <div className="access-title">
+        <h1 id="access-title">{title}</h1>
+        {description && <p>{description}</p>}
+      </div>
+      {children}
+    </section>
   </main>;
 }
