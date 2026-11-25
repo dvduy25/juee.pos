@@ -177,6 +177,13 @@ demoButton.addEventListener('click', () => {
   complete = !complete;
 });
 
+document.querySelectorAll('.workflow-copy a').forEach(link => {
+  link.addEventListener('click', () => {
+    const guide = document.getElementById(link.hash.slice(1));
+    if (guide instanceof HTMLDetailsElement) guide.open = true;
+  });
+});
+
 const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
 if ('IntersectionObserver' in window && !motion.matches) {
   const observer = new IntersectionObserver(entries => {

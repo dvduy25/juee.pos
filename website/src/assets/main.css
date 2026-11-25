@@ -204,3 +204,15 @@ h2{font-size:clamp(2.12rem,3.6vw,3.35rem);font-weight:800;letter-spacing:-.054em
   .guide-topics { grid-template-columns: minmax(0, 1fr); }
   .guide .section-heading { grid-template-columns: minmax(0, 1fr); gap: 9px; }
 }
+
+.workflows { padding-block: clamp(45px, 6vw, 82px) clamp(25px, 4vw, 50px); border-bottom: 1px solid var(--line); }
+.workflow-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(12px, 1.8vw, 21px); }
+.workflow-card { display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+  background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 6px 23px #24133a09; }
+.workflow-card img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; background: #eee8ec; }
+.workflow-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 1;
+  padding: clamp(15px, 2vw, 25px); }
+.workflow-copy h3 { font-size: clamp(1.18rem, 1.65vw, 1.45rem); line-height: 1.2; letter-spacing: -.025em; }
+.workflow-copy p { margin-bottom: 5px; color: var(--muted); line-height: 1.6; font-size: .95rem; }
+.workflow-copy .guide-link { margin: auto 0 0; gap: 7px; }
+@media(max-width: 720px) { .workflow-grid { grid-template-columns: minmax(0, 1fr); } }
