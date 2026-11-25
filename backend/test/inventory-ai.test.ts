@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { test } from 'node:test';
+import { BadGatewayException, GatewayTimeoutException } from '@nestjs/common';
 import { decryptAiKey, encryptAiKey, extractInvoice, extractMenu } from '../src/services/inventory-ai';
 
 test('the inventory API key can only be read for the business it was saved under', () => {
@@ -108,4 +109,30 @@ test('Gemini reads text, invoice photos, menu photos and recordings as validated
   status = 429;
   output = { error: { status: 'RESOURCE_EXHAUSTED' } };
   await assert.rejects(extractInvoice(credentials, { text: 'test' }), /hết hạn mức/);
+
+  status = 400;
+  output = { error: { status: 'INVALID_ARGUMENT', message: 'private provider payload' } };
+  await assert.rejects(extractInvoice(credentials, { text: 'test' }), error => {
+    assert.ok(error instanceof BadGatewayException);
+    assert.deepEqual(error.getResponse(), { code: 'INVENTORY_AI_UPSTREAM',
+      message: 'Gemini không chấp nhận yêu cầu đọc chứng từ (HTTP 400). Hãy thử nhập nội dung ngắn để kiểm tra kết nối.' });
+    return true;
+  });
+});
+
+test('Gemini times out while reading a response without treating the document as unreadable', async t => {
+  const controller = new AbortController();
+  t.mock.method(AbortSignal, 'timeout', () => controller.signal);
+  const response = Response.json({});
+  t.mock.method(response, 'json', async () => {
+    controller.abort();
+    throw new Error('Aborted');
+  });
+  t.mock.method(globalThis, 'fetch', async () => response);
+  await assert.rejects(extractInvoice({ provider: 'gemini', key: 'fake-key' }, { text: 'test' }), error => {
+    assert.ok(error instanceof GatewayTimeoutException);
+    assert.deepEqual(error.getResponse(), { code: 'INVENTORY_AI_UPSTREAM',
+      message: 'Gemini phản hồi quá lâu. Hãy thử lại với ảnh nhỏ hơn hoặc nội dung ngắn hơn.' });
+    return true;
+  });
 });

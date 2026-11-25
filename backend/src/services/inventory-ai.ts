@@ -1,9 +1,15 @@
-import { BadGatewayException, BadRequestException, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, GatewayTimeoutException, Logger, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import type { InventoryAiProvider } from '../models';
 
 type Credentials = { key: string; provider: InventoryAiProvider };
+const logger = new Logger('InventoryAi');
+
+function upstreamError(message: string, timeout = false) {
+  const body = { code: 'INVENTORY_AI_UPSTREAM', message };
+  return timeout ? new GatewayTimeoutException(body) : new BadGatewayException(body);
+}
 function encryptionKey() {
   const secret = process.env.AI_KEY_ENCRYPTION_SECRET;
   if (!secret || secret.length < 32) throw new ServiceUnavailableException('Máy chủ chưa cấu hình mã hóa khóa AI.');
@@ -80,22 +86,27 @@ const photoInstructions = 'Đặt needsRetake=true nếu chữ hoặc số cần
 
 async function openAi(path: string, key: string, data: FormData | object): Promise<unknown> {
   const multipart = data instanceof FormData;
+  const signal = AbortSignal.timeout(35_000);
   let response: Response;
   try {
     response = await fetch('https://api.openai.com/v1/' + path, {
-      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(35_000),
+      method: 'POST', redirect: 'error', signal,
       headers: { Authorization: 'Bearer ' + key, ...(multipart ? {} : { 'Content-Type': 'application/json' }) },
       body: multipart ? data : JSON.stringify(data),
     });
   } catch {
-    throw new BadGatewayException('Không kết nối được OpenAI. Hãy thử lại.');
+    throw signal.aborted ? upstreamError('OpenAI phản hồi quá lâu. Hãy thử lại với nội dung ngắn hơn.', true)
+      : upstreamError('Không kết nối được OpenAI. Hãy thử lại.');
   }
   if (response.status === 401 || response.status === 403) {
     throw new ServiceUnavailableException('OpenAI từ chối khóa API hoặc quyền dùng mô hình. Hãy kiểm tra cấu hình của doanh nghiệp.');
   }
   if (response.status === 429) throw new ServiceUnavailableException('OpenAI đang giới hạn yêu cầu hoặc tài khoản đã hết hạn mức.');
-  if (!response.ok) throw new BadGatewayException('OpenAI chưa xử lý được chứng từ này.');
-  return response.json().catch(() => null);
+  if (!response.ok) throw upstreamError('OpenAI chưa xử lý được chứng từ này. Hãy thử lại.');
+  return response.json().catch(() => {
+    if (signal.aborted) throw upstreamError('OpenAI phản hồi quá lâu. Hãy thử lại với nội dung ngắn hơn.', true);
+    return null;
+  });
 }
 
 async function transcribeInvoice(key: string, audio: Audio) {
@@ -109,7 +120,7 @@ async function transcribeInvoice(key: string, audio: Audio) {
   form.append('model', 'gpt-transcribe');
   form.append('language', 'vi');
   const result = z.object({ text: z.string().trim().min(1).max(10_000) }).safeParse(await openAi('audio/transcriptions', key, form));
-  if (!result.success) throw new BadGatewayException('Chưa đọc được bản ghi âm.');
+  if (!result.success) throw new UnprocessableEntityException('Chưa đọc được bản ghi âm. Hãy thử ghi lại.');
   return result.data.text;
 }
 
@@ -125,10 +136,12 @@ const geminiError = z.object({ error: z.object({ status: z.string().optional(),
 async function geminiDocument(key: string, schema: object, instructions: string, text: string, media?: Media) {
   const parts: object[] = [{ text }];
   if (media) parts.push({ inlineData: { mimeType: media.contentType, data: media.bytes.toString('base64') } });
+  const signal = AbortSignal.timeout(35_000);
   let response: Response;
+  let data: unknown;
   try {
     response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent', {
-      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(35_000),
+      method: 'POST', redirect: 'error', signal,
       headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: instructions }] },
@@ -136,10 +149,15 @@ async function geminiDocument(key: string, schema: object, instructions: string,
         generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, maxOutputTokens: 4600 },
       }),
     });
+    data = await response.json().catch(error => {
+      if (signal.aborted) throw error;
+      return null;
+    });
   } catch {
-    throw new BadGatewayException('Không kết nối được Gemini. Hãy thử lại.');
+    logger.warn(signal.aborted ? 'Gemini request timed out' : 'Gemini connection failed');
+    throw signal.aborted ? upstreamError('Gemini phản hồi quá lâu. Hãy thử lại với ảnh nhỏ hơn hoặc nội dung ngắn hơn.', true)
+      : upstreamError('Máy chủ JUEE POS không kết nối được với Gemini. Hãy thử lại.');
   }
-  const data: unknown = await response.json().catch(() => null);
   const error = geminiError.safeParse(data);
   if (response.status === 401 || response.status === 403 ||
     (error.success && error.data.error.details?.some(item => item.reason === 'API_KEY_INVALID' || item.reason === 'API_KEY_EXPIRED'))) {
@@ -149,7 +167,14 @@ async function geminiDocument(key: string, schema: object, instructions: string,
   if (error.success && error.data.error.status === 'FAILED_PRECONDITION') {
     throw new ServiceUnavailableException('Dự án chưa đáp ứng điều kiện sử dụng Gemini. Hãy kiểm tra dự án trong Google AI Studio.');
   }
-  if (!response.ok) throw new BadGatewayException('Gemini chưa xử lý được chứng từ này.');
+  if (!response.ok) {
+    logger.warn(`Gemini request failed with HTTP ${response.status}`);
+    if (response.status === 404) throw upstreamError('Mô hình Gemini chưa khả dụng cho khóa API của doanh nghiệp. Hãy kiểm tra dự án trong Google AI Studio.');
+    if (response.status === 400 || response.status === 413) {
+      throw upstreamError(`Gemini không chấp nhận yêu cầu đọc chứng từ (HTTP ${response.status}). Hãy thử nhập nội dung ngắn để kiểm tra kết nối.`);
+    }
+    throw upstreamError(`Gemini chưa xử lý được chứng từ (HTTP ${response.status}). Hãy thử lại sau.`);
+  }
   const parsed = geminiEnvelope.safeParse(data);
   return parsed.success ? parsed.data.candidates[0].content.parts.filter(part => !part.thought).map(part => part.text ?? '').join('') : undefined;
 }
