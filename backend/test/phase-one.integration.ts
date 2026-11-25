@@ -91,8 +91,7 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     const plans = await request('/plans');
     assert.equal(plans.status, 200);
     const offers: { code: string; monthlyVnd: string }[] = await plans.json();
-    assert.ok(offers.some(plan => plan.code === 'FREE' && plan.monthlyVnd === '0'));
-    assert.deepEqual(offers.map(({ code, monthlyVnd }) => [code, monthlyVnd]), [['FREE', '0'], ['PLUS', '99000']]);
+    assert.deepEqual(offers.map(({ code, monthlyVnd }) => [code, monthlyVnd]), [['FREE', '0']]);
 
     for (const [email, name] of [[ownerEmail, 'Chủ cửa hàng'], [staffEmail, 'Quản lý']]) {
       const response = await request('/auth/register', 'POST', { email, name, password });
@@ -126,52 +125,54 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     const location = { latitude: 21.0278, longitude: 105.8342, radiusMeters: 100 };
     const position = () => ({ latitude: location.latitude, longitude: location.longitude, accuracy: 8, measuredAt: Date.now() });
     const branch = { name: 'Chi nhánh chính', mode: 'RETAIL', location };
-    const data = { name: 'Doanh nghiệp kiểm thử', branch, subscription: 'FREE' };
-    assert.equal((await request('/tenants', 'POST', { name: data.name, branch }, owner)).status, 400);
-    assert.equal((await (await request('/tenants/setup', 'GET', undefined, owner)).json()).freeAvailable, true);
-    const registrations = await Promise.all([1, 2].map(() => request('/tenants', 'POST', data, owner)));
-    assert.deepEqual(registrations.map(item => item.status).sort(), [201, 409]);
-    const ownerTenant = (await registrations.find(item => item.ok)!.json()).id;
+    const data = { name: 'Doanh nghiệp kiểm thử', branch };
+    const registration = await request('/tenants', 'POST', data, owner);
+    assert.equal(registration.status, 201);
+    const ownerTenant = (await registration.json()).id;
     tenantIds.push(ownerTenant);
-    assert.equal((await (await request('/tenants/setup', 'GET', undefined, owner)).json()).freeAvailable, false);
-    const paidRequest = await request('/tenants', 'POST', { ...data, subscription: 'PAID', planCode: 'PLUS' }, staff);
-    assert.equal(paidRequest.status, 201);
-    const staffTenant = (await paidRequest.json()).id;
+    const extraBusiness = await request('/tenants', 'POST',
+      { name: 'Nhà hàng thứ hai', branch: { ...branch, mode: 'RESTAURANT' } }, owner);
+    assert.equal(extraBusiness.status, 201);
+    tenantIds.push((await extraBusiness.json()).id);
+
+    const legacyRequest = await request('/tenants', 'POST', { ...data, subscription: 'PAID', planCode: 'PLUS' }, staff);
+    assert.equal(legacyRequest.status, 201);
+    const staffTenant = (await legacyRequest.json()).id;
     tenantIds.push(staffTenant);
     const root = `/tenants/${ownerTenant}`;
     assert.equal((await request(root, 'GET', undefined, staff)).status, 403);
-    const ownBranches = await request(`${root}/branches`, 'GET', undefined, owner);
-    assert.equal(ownBranches.status, 200);
-    const [primary] = await ownBranches.json();
+    const [primary] = await (await request(`${root}/branches`, 'GET', undefined, owner)).json();
     const [foreign] = await (await request(`/tenants/${staffTenant}/branches`, 'GET', undefined, staff)).json();
-    assert.equal((await request(`/tenants/${staffTenant}/branches/${foreign.id}/products`, 'GET', undefined, staff)).status, 409);
     assert.equal((await request(`${root}/branches/${foreign.id}`, 'PATCH', { name: 'Sai phạm vi' }, owner)).status, 404);
-    assert.equal((await request(`${root}/branches`, 'POST', branch, owner)).status, 409);
 
-    const free = await Subscription.findOne({ tenantId: ownerTenant }).orFail();
-    assert.equal(free.status, 'ACTIVE');
-    assert.equal(free.expiresAt, undefined);
+    const legacyPlan = await Plan.create({ code: `LEGACY_${run.slice(0, 8)}`, name: 'Gói cũ', published: false });
+    const legacyVersion = await PlanVersion.create({ planId: legacyPlan._id, version: 1, monthlyVnd: 99000n, yearlyVnd: 1188000n,
+      maxBranches: 1, maxStaff: 0, maxQrTables: 0, features: ['pos', 'basic-sales'] });
+    const contract = await Subscription.findOne({ tenantId: ownerTenant }).orFail();
+    assert.equal(contract.status, 'ACTIVE');
+    assert.equal(contract.expiresAt, undefined);
+    const previous = await Subscription.findOne({ tenantId: staffTenant }).orFail();
+    assert.equal(previous.status, 'ACTIVE');
+    assert.equal(previous.requestedPlanVersionId, undefined);
+    await Subscription.updateOne({ _id: previous._id }, { $set: { status: 'PENDING', planVersionId: legacyVersion._id,
+      requestedPlanVersionId: legacyVersion._id, requestedAt: new Date(), requestId: randomUUID() } });
+    const pendingCounter = `/tenants/${staffTenant}/branches/${foreign.id}/products`;
+    assert.equal((await request(pendingCounter, 'GET', undefined, staff)).status, 200);
+    await Subscription.updateOne({ _id: previous._id }, { $set: { status: 'SUSPENDED' } });
+    assert.equal((await request(pendingCounter, 'GET', undefined, staff)).status, 409);
+    await Subscription.updateOne({ _id: previous._id }, { $set: { status: 'PENDING' } });
+
+    await Subscription.updateOne({ _id: contract._id }, { $set: { planVersionId: legacyVersion._id, trial: true, expiresAt: new Date(0) } });
     const freeRoot = `${root}/branches/${primary.id}`;
     assert.equal((await request(`${freeRoot}/products`, 'GET', undefined, owner)).status, 200);
     assert.equal((await request(`${freeRoot}/purchases`, 'GET', undefined, owner)).status, 200);
-    assert.equal((await request(`${freeRoot}/accounting`, 'GET', undefined, owner)).status, 403);
-    assert.equal((await request(`${freeRoot}/tax-declarations`, 'GET', undefined, owner)).status, 403);
-    assert.equal((await request(`${freeRoot}/warehouse/ai/settings`, 'GET', undefined, owner)).status, 403);
-    assert.equal((await request(`${freeRoot}`, 'PATCH', { mode: 'GYM' }, owner)).status, 403);
-    assert.equal((await request(`${root}/subscription/request`, 'POST', { code: 'PLUS' }, owner)).status, 201);
-
-    const plan = await Plan.findOne({ code: 'PLUS' }).orFail();
-    const paid = await PlanVersion.findOne({ planId: plan._id }).sort('-version').orFail();
-    await PlanVersion.updateOne({ _id: paid.id }, { $set: { maxBranches: 2 } });
-    const contract = await Subscription.findOneAndUpdate({ tenantId: ownerTenant }, { $set: { planVersionId: paid._id, trial: false, expiresAt: null },
-      $unset: { requestedPlanVersionId: 1 } }, { returnDocument: 'after' }).orFail();
-    const parallel = await Promise.all([
-      request(`${root}/branches`, 'POST', { ...branch, name: 'Chi nhánh 2A' }, owner),
-      request(`${root}/branches`, 'POST', { ...branch, name: 'Chi nhánh 2B' }, owner),
-    ]);
-    assert.deepEqual(parallel.map(response => response.status).sort(), [201, 409]);
-    const added = await parallel.find(response => response.ok)!.json();
+    assert.equal((await request(`${freeRoot}/accounting`, 'GET', undefined, owner)).status, 200);
     assert.equal((await request(`${freeRoot}/tax-declarations`, 'GET', undefined, owner)).status, 200);
+    assert.equal((await request(`${root}/subscription/request`, 'POST', { code: 'PLUS' }, owner)).status, 409);
+    const branchResult = await request(`${root}/branches`, 'POST', { ...branch, name: 'Chi nhánh 2' }, owner);
+    assert.equal(branchResult.status, 201);
+    const added = await branchResult.json();
+    await Subscription.updateOne({ _id: contract._id }, { $unset: { trial: 1, expiresAt: 1 } });
     assert.deepEqual(await (await request(`${freeRoot}/warehouse/ai/settings`, 'GET', undefined, owner)).json(), { configured: false });
     const keyPath = `${freeRoot}/warehouse/ai/settings`;
     const sampleKey = 'sk-test-only-for-inventory-encryption';
@@ -1459,14 +1460,11 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
       planVersionId: pending.requestedPlanVersionId, requestId: pending.requestId, reason: 'Chưa thấy khoản thanh toán',
     }, admin);
     assert.equal(rejection.status, 201);
-    const rejected = await (await request(`/tenants/${staffTenant}/subscription`, 'GET', undefined, staff)).json();
-    assert.equal(rejected.requestedPlan, null);
-    assert.equal(rejected.rejectedRequest.reason, 'Chưa thấy khoản thanh toán');
-    const requestedVersion = await PlanVersion.findById(pending.requestedPlanVersionId).orFail();
-    const requestedPlan = await Plan.findById(requestedVersion.planId).orFail();
-    assert.equal((await request(`/tenants/${staffTenant}/subscription/request`, 'POST', { code: requestedPlan.code }, staff)).status, 201);
-    const retried = await Subscription.findById(pending.id).orFail();
-    assert.notEqual(retried.requestId, pending.requestId);
+    const rejected = await Subscription.findById(pending.id).orFail();
+    assert.equal(rejected.requestedPlanVersionId, undefined);
+    assert.equal(rejected.rejectedRequest?.reason, 'Chưa thấy khoản thanh toán');
+    const retried = await Subscription.findByIdAndUpdate(pending.id, { $set: { requestedPlanVersionId: legacyVersion._id,
+      requestedAt: new Date(), requestId: randomUUID() }, $unset: { rejectedRequest: 1 } }, { new: true }).orFail();
     const activation = { planVersionId: retried.requestedPlanVersionId, requestId: retried.requestId, reference: `SUB-${run}`, reason: 'Đã đối chiếu giao dịch' };
     assert.equal((await request(`/platform/subscriptions/${pending.id}/activate-request`, 'POST', { ...activation, requestId: pending.requestId }, admin)).status, 409);
     assert.equal((await request(`/platform/subscriptions/${pending.id}/activate-request`, 'POST', activation, admin)).status, 201);

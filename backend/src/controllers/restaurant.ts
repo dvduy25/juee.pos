@@ -3,7 +3,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { Request } from 'express';
 import type { ClientSession } from 'mongoose';
 import { z } from 'zod';
-import { access, logChange, recordEvent, requireModule, restaurant, type Scope } from '../middleware/business-access';
+import { access, assertRestaurantMode, logChange, recordEvent, type Scope } from '../middleware/business-access';
 import { catalog, productTypeFilter } from '../services/catalog';
 import { buffetMenuFilter } from '../services/buffet';
 import { scopedRoute } from '../routes/branch';
@@ -15,7 +15,7 @@ import { finishPaidTable, idempotent, makeBill, orderKitchen, placeOrder, releas
 import { amount, discountCode, lineSchema, pageSchema } from '../validators/sales';
 import { guestLocation, requireGuestLocation } from '../validators/order-location';
 import { requireReviewedTable, tableDiscountAmount, tableTotals, unservedQuantity } from '../services/table-checkout';
-import { activePlan } from '../services/tenants';
+import { requireBusinessAvailable } from '../services/tenants';
 import { qrImage } from '../utils/qr';
 
 type Route = { tenantId: string; branchId: string; id: string };
@@ -49,7 +49,8 @@ async function tableContext(tenantId: string, token: string) {
   const scope = { tenantId: table.tenantId, branchId: table.branchId };
   const tenant = found(await Tenant.findOne({ _id: table.tenantId, locked: { $ne: true } }).select('name').lean());
   const branch = found(await Branch.findOne({ _id: table.branchId, tenantId: table.tenantId }).select('name mode location').lean());
-  await restaurant(scope, branch.mode, 'qr');
+  await requireBusinessAvailable(scope.tenantId);
+  assertRestaurantMode(branch.mode);
   return { table, tenant, branch, scope };
 }
 
@@ -70,7 +71,8 @@ async function authorizedGuest(rawAuthorization: string | undefined, session?: C
     : await Tenant.findOne({ _id: scope.tenantId, locked: { $ne: true } }).lean();
   if (!tenant) throw new ForbiddenException();
   const branch = found(await Branch.findOne({ tenantId: scope.tenantId, _id: scope.branchId }).session(session ?? null).lean());
-  await restaurant(scope, branch.mode, 'qr', session);
+  await requireBusinessAvailable(scope.tenantId, session, !!session);
+  assertRestaurantMode(branch.mode);
   return { guest, tableSession, scope, branch };
 }
 
@@ -79,7 +81,7 @@ export class RestaurantController {
   @Get('tables')
   async tables(@Req() req: Request, @Param() route: Route) {
     const { scope, branch } = await access(req, route.tenantId, route.branchId, 'tables.serve');
-    await restaurant(scope, branch.mode, 'qr');
+    assertRestaurantMode(branch.mode);
     const [tables, areas, sessions, buffetPackages] = await Promise.all([
       DiningTable.find(scope).sort('name').lean(), DiningArea.find(scope).sort('name').lean(),
       TableSession.find({ ...scope, status: 'OPEN', takeaway: { $ne: true } }).select('tableIds paymentRequestedAt checkoutBillId guestCount buffet buffetProductIds createdAt').lean(),
@@ -91,7 +93,7 @@ export class RestaurantController {
   @Get('takeaway-sessions')
   async takeawaySessions(@Req() req: Request, @Param() route: Route) {
     const { scope, branch } = await access(req, route.tenantId, route.branchId, 'tables.serve');
-    await restaurant(scope, branch.mode, 'pos');
+    assertRestaurantMode(branch.mode);
     return TableSession.find({ ...scope, status: 'OPEN', takeaway: true })
       .select('tableIds checkoutBillId guestCount buffet buffetProductIds createdAt').sort('-createdAt -_id').lean();
   }
@@ -99,7 +101,7 @@ export class RestaurantController {
   @Get('buffet-packages')
   async buffetPackages(@Req() req: Request, @Param() route: Route) {
     const { scope, branch } = await access(req, route.tenantId, route.branchId, 'buffet.manage');
-    await restaurant(scope, branch.mode, 'qr');
+    assertRestaurantMode(branch.mode);
     const packages = await BuffetPackage.find(scope).sort('name _id').lean();
     const productIds = [...new Set(packages.flatMap(pack => pack.productIds.map(String)))];
     const products = await Product.find({ tenantId: scope.tenantId, _id: { $in: productIds } }).select('name status productType').lean();
@@ -120,7 +122,7 @@ export class RestaurantController {
     const input = read(buffetPackageInput, body);
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, route.tenantId, route.branchId, 'buffet.manage', session);
-      await restaurant(scope, branch.mode, 'qr', session);
+      assertRestaurantMode(branch.mode);
       if (await Product.countDocuments({ tenantId: scope.tenantId, status: 'ACTIVE', ...productTypeFilter('FOOD'),
         _id: { $in: input.productIds } }).session(session) !== input.productIds.length) {
         throw new ConflictException('Có món không còn trong thực đơn. Hãy bỏ món đó khỏi gói rồi lưu lại.');
@@ -140,7 +142,7 @@ export class RestaurantController {
     const { scope, branch } = await access(req, route.tenantId, route.branchId, 'tables.serve');
     const service = found(await TableSession.findOne({ ...scope, _id: identifier(route.id),
       $or: [{ status: 'OPEN' }, { status: 'CLOSED', checkoutBillId: { $ne: null } }] }).lean(), 'Không tìm thấy lượt phục vụ.');
-    await restaurant(scope, branch.mode, service.takeaway ? 'pos' : 'qr');
+    assertRestaurantMode(branch.mode);
     const { orders, bills, due, subtotal, revision, pending } = await tableCart(scope, service);
     const kitchen = await orderKitchen(scope, orders.map(order => order._id));
     return { orders: orders.map(order => ({ ...order, kitchen: kitchen.get(String(order._id)) ?? [] })), bills, due, subtotal, revision, pending,
@@ -151,7 +153,7 @@ export class RestaurantController {
   @Get('table-discounts')
   async discounts(@Req() req: Request, @Param() route: Route) {
     const { scope, branch } = await access(req, route.tenantId, route.branchId, 'table-discounts.manage');
-    await restaurant(scope, branch.mode, 'qr');
+    assertRestaurantMode(branch.mode);
     const settings = found(await Branch.findOne({ _id: scope.branchId, tenantId: scope.tenantId }).select('+tableDiscounts').lean());
     return settings.tableDiscounts ?? [];
   }
@@ -162,7 +164,7 @@ export class RestaurantController {
       .strict().refine(item => item.kind !== 'PERCENT' || item.value <= 100, 'Tỷ lệ giảm tối đa là 100%.'), body);
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, route.tenantId, route.branchId, 'table-discounts.manage', session);
-      await restaurant(scope, branch.mode, 'qr', session);
+      assertRestaurantMode(branch.mode);
       const settings = found(await Branch.findOne({ _id: scope.branchId, tenantId: scope.tenantId }).select('+tableDiscounts').session(session));
       const codes = (settings.tableDiscounts ?? []).filter(item => item.code !== input.code);
       if (codes.length >= 100) throw new ConflictException('Chi nhánh đã có tối đa 100 mã giảm giá.');
@@ -182,7 +184,7 @@ export class RestaurantController {
       // Guest orders and table checkout use the same session write lock.
       const service = found(await TableSession.findOneAndUpdate({ ...scope, _id: id, status: 'OPEN' },
         { $set: { writeToken: randomUUID() } }, { session }).lean(), 'Lượt phục vụ đã đóng.');
-      await restaurant(scope, branch.mode, service.takeaway ? 'pos' : 'qr', session);
+      assertRestaurantMode(branch.mode);
       if (service.checkoutBillId) throw new ConflictException('Lượt phục vụ đã có hóa đơn. Hãy mở hóa đơn để tiếp tục thanh toán.');
       const cart = await tableCart(scope, service, session);
       requireReviewedTable(cart.revision, input.revision);
@@ -211,7 +213,7 @@ export class RestaurantController {
     const { name } = read(z.object({ name: label }).strict(), body);
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, route.tenantId, route.branchId, 'tables.configure', session);
-      await restaurant(scope, branch.mode, 'qr', session);
+      assertRestaurantMode(branch.mode);
       const area = await DiningArea.insertOne({ ...scope, name }, { session });
       await logChange(scope, actorId, 'TABLE_AREA_CREATE', area._id, session);
       return area.toObject();
@@ -223,9 +225,7 @@ export class RestaurantController {
     const input = read(z.object({ name: label, areaId: objectId.optional() }).strict(), body);
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, route.tenantId, route.branchId, 'tables.configure', session);
-      await restaurant(scope, branch.mode, 'qr', session);
-      const plan = await activePlan(scope.tenantId, session, true);
-      if (await DiningTable.countDocuments({ tenantId: scope.tenantId }).session(session) >= (plan.maxQrTables ?? 0)) throw new ConflictException('Đã đạt giới hạn bàn QR của gói.');
+      assertRestaurantMode(branch.mode);
       if (input.areaId) found(await DiningArea.exists({ ...scope, _id: input.areaId }).session(session));
       const table = await DiningTable.insertOne({ ...scope, ...input, qrToken: randomBytes(20).toString('hex') }, { session });
       await logChange(scope, actorId, 'TABLE_CREATE', table._id, session);
@@ -237,7 +237,7 @@ export class RestaurantController {
   @Get('tables/:id/qr')
   async image(@Req() req: Request, @Param() route: Route) {
     const { scope, branch } = await access(req, route.tenantId, route.branchId, 'tables.serve');
-    await restaurant(scope, branch.mode, 'qr');
+    assertRestaurantMode(branch.mode);
     const table = found(await DiningTable.findOne({ ...scope, _id: identifier(route.id) }).lean());
     return tableQr(String(scope.tenantId), table.qrToken);
   }
@@ -248,7 +248,7 @@ export class RestaurantController {
     const { name, areaId } = read(z.object({ name: label, areaId: objectId.nullable() }).strict(), body);
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, route.tenantId, route.branchId, 'tables.configure', session);
-      await restaurant(scope, branch.mode, 'qr', session);
+      assertRestaurantMode(branch.mode);
       const table = found(await DiningTable.findOne({ ...scope, _id: id }).session(session));
       if (table.sessionId) throw new ConflictException('Hãy kết thúc lượt phục vụ trước khi sửa bàn.');
       const area = areaId && found(await DiningArea.exists({ ...scope, _id: areaId }).session(session));
@@ -266,7 +266,7 @@ export class RestaurantController {
     const id = identifier(route.id);
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, route.tenantId, route.branchId, 'tables.configure', session);
-      await restaurant(scope, branch.mode, 'qr', session);
+      assertRestaurantMode(branch.mode);
       const table = found(await DiningTable.findOne({ ...scope, _id: id }).session(session));
       if (table.sessionId || table.reserved) throw new ConflictException('Hãy kết thúc lượt phục vụ hoặc bỏ đặt trước rồi mới xóa bàn.');
       await table.deleteOne({ session });
@@ -283,7 +283,7 @@ export class RestaurantController {
         .refine(validateBuffetGuests, 'Buffet cần từ 1 đến 1000 khách.').optional() }).strict(), body);
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, route.tenantId, route.branchId, 'tables.serve', session);
-      await restaurant(scope, branch.mode, 'qr', session);
+      assertRestaurantMode(branch.mode);
       const table = found(await DiningTable.findOne({ ...scope, _id: tableId }).session(session));
       if (table.sessionId) throw new ConflictException('Bàn đang phục vụ.');
       const pack = guests && await BuffetPackage.findOne({ ...scope, _id: guests.packageId, enabled: true }).session(session).lean();
@@ -312,7 +312,7 @@ export class RestaurantController {
     const id = identifier(route.id);
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, route.tenantId, route.branchId, 'tables.manage', session);
-      await restaurant(scope, branch.mode, 'qr', session);
+      assertRestaurantMode(branch.mode);
       const table = found(await DiningTable.findOne({ ...scope, _id: id }).session(session));
       if (table.sessionId) throw new ConflictException('Bàn đang phục vụ.');
       table.reserved = reserved;
@@ -330,7 +330,7 @@ export class RestaurantController {
     const id = identifier(route.id);
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, route.tenantId, route.branchId, 'tables.serve', session);
-      await restaurant(scope, branch.mode, 'qr', session);
+      assertRestaurantMode(branch.mode);
       const service = found(await TableSession.findOne({ ...scope, _id: id, status: 'OPEN', takeaway: { $ne: true } }).session(session));
       if (service.checkoutBillId) throw new ConflictException('Bàn đã chốt hóa đơn. Hãy thanh toán trước.');
       if ('buffet' in input) {
@@ -355,7 +355,7 @@ export class RestaurantController {
     const { tableId } = read(z.object({ tableId: objectId, action: z.literal('MOVE') }).strict(), body);
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, route.tenantId, route.branchId, 'tables.manage', session);
-      await restaurant(scope, branch.mode, 'qr', session);
+      assertRestaurantMode(branch.mode);
       const service = found(await TableSession.findOne({ ...scope, _id: id, status: 'OPEN', takeaway: { $ne: true } }).session(session));
       if (service.checkoutBillId) throw new ConflictException('Bàn đã chốt hóa đơn. Hãy thanh toán trước.');
       const table = found(await DiningTable.findOne({ ...scope, _id: tableId }).session(session));
@@ -381,9 +381,8 @@ export class RestaurantController {
     const { scope, actorId } = await access(req, route.tenantId, route.branchId, 'tables.serve');
     return idempotent(scope, 'SERVICE_MODE_CHANGE', key, { actorId, input }, async session => {
       const { branch } = await access(req, route.tenantId, route.branchId, 'tables.serve', session);
-      await restaurant(scope, branch.mode, 'qr', session);
+      assertRestaurantMode(branch.mode);
       const takeaway = input.mode === 'TAKEAWAY';
-      if (takeaway) await requireModule(scope, 'pos', session);
       const table = found(await DiningTable.findOne({ ...scope, _id: input.tableId }).session(session));
       if (!takeaway && (table.sessionId || table.reserved)) throw new ConflictException('Hãy chọn bàn trống.');
 
@@ -436,7 +435,7 @@ export class RestaurantController {
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, route.tenantId, route.branchId, 'tables.serve', session);
       const service = found(await TableSession.findOne({ ...scope, _id: id, status: 'OPEN' }).session(session));
-      await restaurant(scope, branch.mode, service.takeaway ? 'pos' : 'qr', session);
+      assertRestaurantMode(branch.mode);
       if (service.checkoutBillId) throw new ConflictException('Hãy thanh toán hóa đơn trước khi đóng lượt.');
       if (await Order.exists({ ...scope, tableSessionId: service._id, status: { $in: ['PLACED', 'ACCEPTED'] } }).session(session)) {
         throw new ConflictException('Hãy xử lý và thanh toán các đơn của bàn trước khi đóng lượt.');
@@ -464,7 +463,7 @@ export class RestaurantController {
     const { page, view, queue } = read(z.object({ page: pageSchema, view: kitchenView,
       queue: z.enum(['active', 'history']).optional() }), query);
     const { scope, branch } = await access(req, route.tenantId, route.branchId, view === 'service' ? 'kitchen.serve' : 'kitchen.work');
-    await restaurant(scope, branch.mode, 'kitchen');
+    assertRestaurantMode(branch.mode);
     const recent = { createdAt: { $gt: new Date(Date.now() - 86400000) } };
     const active = { $or: [{ 'items.status': { $in: waitingKitchenStatuses } },
       { items: { $elemMatch: { status: 'CANCELED', cancelReason: { $ne: null }, cancelConfirmedAt: null } } }] };
@@ -489,7 +488,7 @@ export class RestaurantController {
   async preparationSummary(@Req() req: Request, @Param() route: Route, @Query('view') rawView?: string) {
     const view = read(kitchenView, rawView);
     const { scope, branch } = await access(req, route.tenantId, route.branchId, view === 'service' ? 'kitchen.serve' : 'kitchen.work');
-    await restaurant(scope, branch.mode, 'kitchen');
+    assertRestaurantMode(branch.mode);
     const waiting = { 'items.status': { $in: waitingKitchenStatuses } };
     const dishes = await KitchenTicket.aggregate<{ name: string; quantity: number }>([
       { $match: { ...scope, ...waiting } },
@@ -511,8 +510,7 @@ export class RestaurantController {
       const { scope, branch, actorId } = await access(req, route.tenantId, route.branchId,
         status === 'SERVED' ? 'kitchen.serve' : 'kitchen.work', session);
       const ticket = found(await KitchenTicket.findOne({ ...scope, 'items._id': itemId }).session(session));
-      if (ticket.takeaway && status === 'SERVED') await requireModule(scope, 'pos', session);
-      else await restaurant(scope, branch.mode, 'kitchen', session);
+      if (!ticket.takeaway || status !== 'SERVED') assertRestaurantMode(branch.mode);
       const item = found(ticket.items.id(itemId));
       if (!(previous[status] as readonly string[]).includes(item.status)) throw new ConflictException('Trạng thái món đã thay đổi.');
       item.status = status;
@@ -533,7 +531,7 @@ export class RestaurantController {
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, route.tenantId, route.branchId, 'kitchen.serve', session);
       const ticket = found(await KitchenTicket.findOne({ ...scope, 'items._id': itemId }).session(session));
-      await restaurant(scope, branch.mode, ticket.takeaway ? 'pos' : 'kitchen', session);
+      assertRestaurantMode(branch.mode);
       const item = found(ticket.items.id(itemId));
       if (item.status !== 'CANCELED' || !item.cancelReason) throw new ConflictException('Món chưa có yêu cầu hủy.');
       if (!item.cancelConfirmedAt) {
@@ -549,7 +547,7 @@ export class RestaurantController {
   @Get('events')
   async events(@Req() req: Request, @Param() route: Route, @Query() query: unknown) {
     const { scope, branch } = await access(req, route.tenantId, route.branchId, 'kitchen.work');
-    await restaurant(scope, branch.mode, 'kitchen');
+    assertRestaurantMode(branch.mode);
     const { after } = read(z.object({ after: objectId.optional() }), query);
     return OutboxEvent.find({ ...scope, ...(after ? { _id: { $gt: after } } : {}) }).select('type resourceId').sort('_id').limit(100).lean();
   }

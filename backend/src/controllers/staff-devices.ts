@@ -9,7 +9,7 @@ import { Branch, StaffAttendance, StaffClockCredential, StaffClockDevice, Tenant
 import { scopedRoute } from '../routes/branch';
 import { idempotent } from '../services/sales';
 import { clockIn, clockOut, findOpenAttendance, resolveStaffPunch, staffEmployee } from '../services/staff-attendance';
-import { activeSubscription } from '../services/tenants';
+import { requireBusinessAvailable } from '../services/tenants';
 import { found, isDuplicate, mongoId } from '../utils/db';
 import { label, objectId, read } from '../validators/common';
 
@@ -95,7 +95,7 @@ export class StaffDeviceController {
     if (!device) throw new UnauthorizedException('Khóa máy chấm công không hợp lệ.');
     const input = read(eventInput, body);
     return idempotent(scope, `STAFF_CLOCK_DEVICE:${device._id}`, key, input, async session => {
-      await activeSubscription(scope.tenantId, session, true);
+      await requireBusinessAvailable(scope.tenantId, session, true);
       const tenant = await Tenant.updateOne({ _id: scope.tenantId, locked: { $ne: true } },
         { $set: { branchWriteToken: randomUUID() } }, { session });
       const branch = await Branch.updateOne({ tenantId: scope.tenantId, _id: scope.branchId },

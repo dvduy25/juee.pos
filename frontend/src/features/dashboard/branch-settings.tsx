@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Store } from 'lucide-react';
@@ -40,7 +39,6 @@ function BranchManagement({ tenantId, membership, branches }: { tenantId: string
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const owner = membership.role === 'OWNER';
-  const basic = membership.subscription?.features?.includes('basic-sales');
   const canEdit = owner || membership.role === 'MANAGER';
   const root = `/tenants/${tenantId}`;
 
@@ -82,15 +80,14 @@ function BranchManagement({ tenantId, membership, branches }: { tenantId: string
         {canEdit && <button className="plain" disabled={pending} onClick={() => { setError(''); setAction({ type: 'edit', branch }); }}>Chỉnh sửa</button>}</div>
     </div>)}
     {owner && <div className="actions">
-      {basic && <Link className="plain" href="/dashboard/company?tab=subscription">Nâng cấp để thêm chi nhánh</Link>}
-      {!basic && !membership.subscription?.trial && <button className="plain" disabled={pending} onClick={() => { setError(''); setAction({ type: 'create' }); }}>Thêm chi nhánh</button>}
+      <button className="plain" disabled={pending} onClick={() => { setError(''); setAction({ type: 'create' }); }}>Thêm chi nhánh</button>
       <button className="plain" disabled={pending} onClick={() => { setError(''); setAction({ type: 'rename' }); }}>Đổi tên doanh nghiệp</button>
     </div>}
     {action && <form className="section-title" key={editing?.id ?? action.type} onSubmit={save}>
       <label>{action.type === 'rename' ? 'Tên doanh nghiệp' : 'Tên chi nhánh'}<input name="name" maxLength={120} required
         defaultValue={action.type === 'rename' ? membership.tenant.name : editing?.name}/></label>
       {action.type !== 'rename' && <label>Mô hình<select name="mode" defaultValue={editing?.mode ?? 'RETAIL'}>
-        {Object.entries(branchNames).filter(([mode]) => !basic || mode === 'RETAIL').map(([mode, name]) => <option key={mode} value={mode}>{name}</option>)}
+        {Object.entries(branchNames).map(([mode, name]) => <option key={mode} value={mode}>{name}</option>)}
       </select></label>}
       {owner && action.type !== 'rename' && <BranchLocationFields location={editing?.location} required={action.type === 'create'}/>}
       {owner && action.type !== 'rename' && <fieldset><legend>Thông tin nhận chuyển khoản</legend>

@@ -28,7 +28,7 @@ Cấu hình backend nằm trong `backend/.env`. Khi cài mới, tạo tệp này
 - **MongoDB Atlas.** Điền URI có tên database vào `MONGODB_URI`. Tài khoản database cần quyền truy cập database và IP của máy phải nằm trong Atlas IP Access List. Máy này đã cấu hình Atlas, API cổng `5001` và web cổng `3000`.
 - **MongoDB cục bộ.** Chọn URI tới replica set local trong `backend/.env`, sau đó chạy `npm run db:local`. Script dùng `mongod` trên PATH hoặc bản MongoDB 8.2.6 cho Apple Silicon tại `~/.cache/mongodb-binaries`. Các máy dùng vị trí khác có thể đặt `MONGOD_BIN`. Nếu dùng Docker Desktop, chạy `docker compose up -d --wait mongo` và dùng cổng `27017` trong URI.
 
-Chạy `npm run db:seed` để bổ sung các gói mặc định, gồm Miễn phí cho doanh nghiệp bán lẻ đầu tiên và Nâng cao 99.000 đồng/tháng cho mỗi doanh nghiệp.
+Chạy `npm run db:seed` để chuẩn bị các chỉ mục và cấu hình dịch vụ miễn phí.
 
 Mở hai terminal tại thư mục gốc.
 
@@ -110,11 +110,9 @@ Super Admin là ứng dụng Next.js trong thư mục `admin/`, với gói cài 
 
 ## Giao diện theo mô hình chi nhánh
 
-Sau khi đăng ký và xác minh email, chủ tài khoản chọn Bán lẻ, Nhà hàng, Quán nước, Hội viên, Nhà nghỉ / Khách sạn hoặc Thu vé. Mục Hội viên có Phòng gym và Bể bơi. Gói thử tính 7 ngày từ khi tạo cửa hàng đầu tiên, với một chi nhánh. Chủ doanh nghiệp mua và gia hạn gói tại **Quản lý doanh nghiệp → Gói dịch vụ**. Khi bật thanh toán thuê bao qua SePay, khách chuyển đúng nội dung và số tiền theo mã VietQR. Hệ thống tự kích hoạt gói và ghi khoản thu trong cùng giao dịch dữ liệu.
+Sau khi đăng ký và xác minh email, chủ tài khoản chọn mô hình hoạt động cho chi nhánh. Mọi doanh nghiệp và chi nhánh được dùng miễn phí đầy đủ tính năng. Trợ lý kho AI dùng khóa OpenAI riêng của doanh nghiệp.
 
-Quản trị viên có thể đối chiếu sao kê và duyệt yêu cầu tại **Super Admin → Thuê bao**. Các khoản chuyển cần đối soát xuất hiện trong hồ sơ thuê bao. Nếu từ chối, lý do hiển thị cho chủ doanh nghiệp để họ có thể gửi lại yêu cầu.
-
-Khi backend chạy với `NODE_ENV=development` và chưa bật thanh toán thuê bao qua SePay, chủ cửa hàng có thể **Kích hoạt gói mô phỏng** khi tạo cửa hàng hoặc tại **Gói dịch vụ**. Gói mô phỏng có hiệu lực 30 ngày trong môi trường phát triển và không tạo hóa đơn thuê bao.
+Các khoản thanh toán thuê bao trước đây vẫn xem được tại **Quản lý doanh nghiệp → Gói dịch vụ**. Khoản chuyển cũ cần đối soát có thể xem tại **Super Admin → Thuê bao**.
 
 Chọn doanh nghiệp và chi nhánh ở thanh đầu trang. Khi chuyển sang nơi khác, nhập lại mật khẩu của tài khoản chủ doanh nghiệp hoặc quản lý được giao ở đó. Phiên đăng nhập giữ chi nhánh đã xác nhận khi tải lại trang. Mở menu tài khoản và chọn **Đổi tài khoản** để đăng nhập bằng tài khoản được cấp quyền ở nơi khác.
 
@@ -250,10 +248,6 @@ Cấu hình webhook JSON **Có tiền vào** trong tài khoản SePay với phư
 
 [Tài liệu webhook SePay](https://docs.sepay.vn/tich-hop-webhooks.html)
 
-### Thu tiền gói JUEE POS qua VietQR
+### Đối soát thuê bao cũ
 
-1. Kết nối tài khoản ngân hàng nhận tiền thuê bao của JUEE POS với SePay. Tại backend, điền `SAAS_BANK_BIN` (BIN VietQR 6 số), `SAAS_BANK_ACCOUNT`, `SAAS_BANK_HOLDER` và `SAAS_BANK_GATEWAY` (đúng tên trong trường `gateway` của giao dịch SePay).
-2. Tạo khóa ngẫu nhiên bằng `openssl rand -hex 32` và lưu vào `SAAS_SEPAY_WEBHOOK_API_KEY`. Trong SePay, tạo webhook JSON **Có tiền vào** cho tài khoản nhận tiền thuê bao. Chọn **API Key** và nhập cùng khóa. URL là `https://<tên-miền-web-khách-hàng>/api/v1/webhooks/sepay/subscriptions`. Cho phép gửi lại khi server trả lỗi. Khóa này dùng riêng cho webhook thuê bao.
-3. Chạy `npm run db:indexes` rồi khởi động lại backend. Đăng nhập với tài khoản chủ doanh nghiệp, mở **Gói dịch vụ**, chọn gói và lấy mã VietQR. Khi xác nhận thanh toán thành công, khoản thu hiển thị cho chủ doanh nghiệp và tại **Super Admin → Thu tiền thuê bao**.
-
-Mỗi mã có hiệu lực 30 phút. Chuyển đúng tài khoản, số tiền và nội dung trên màn hình. Mua lại cùng gói cộng 30 ngày vào thời hạn còn lại. Đổi gói bắt đầu một chu kỳ 30 ngày mới. Khoản chuyển đúng mã nhưng sai số tiền, chuyển sau khi mã hết hạn hoặc thuộc yêu cầu cũ cần đối chiếu sao kê trong **Super Admin → Thuê bao → Chi tiết**. Kiểm tra qua môi trường thử nghiệm của SePay trước khi mở cho khách sử dụng.
+JUEE POS không phát hành yêu cầu thanh toán thuê bao mới. Webhook `/api/v1/webhooks/sepay/subscriptions` vẫn xử lý các giao dịch đã phát sinh nếu đã được cấu hình. Kiểm tra sao kê và các khoản đang chờ tại **Super Admin → Thuê bao**.

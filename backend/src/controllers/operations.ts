@@ -6,7 +6,7 @@ import { hash } from 'argon2';
 import { randomUUID } from 'node:crypto';
 import type { ClientSession, Types } from 'mongoose';
 import { z } from 'zod';
-import { access, logChange, requireModule } from '../middleware/business-access';
+import { access, logChange } from '../middleware/business-access';
 import { verifyOrigin } from '../middleware/auth';
 import { scopedRoute } from '../routes/branch';
 import { found, isDuplicate, localFilter, mongoId } from '../utils/db';
@@ -16,7 +16,6 @@ import { AccountToken, AuditLog, Branch, Customer, HotelBooking, MemberClass, Me
   Shift, StaffAttendance, StaffClockCredential, StaffDocument, StaffIdentity, StaffSchedule, TicketRefund, TicketSale, User, UserSession, roles } from '../models';
 import { pageSchema } from '../validators/sales';
 import { reportPeriodQuery, selectedReportRange } from '../validators/reports';
-import { activePlan } from '../services/tenants';
 import { reportPeriods, revenueRange } from '../services/revenue';
 import { branchReport } from '../services/branch-report';
 import { accountMailConfigured, requestAccountLink } from '../services/account-email';
@@ -186,10 +185,6 @@ export class OperationsController {
     const member = await transaction(async session => {
       const { scope, actorId, membership } = await access(req, route.tenantId, route.branchId, 'staff.profiles', session);
       requireStaffProfileRights(membership, branchIds, accountChange);
-      const plan = await activePlan(scope.tenantId, session, true);
-      if (await Membership.countDocuments({ tenantId: scope.tenantId, role: { $ne: 'OWNER' }, disabled: { $ne: true } }).session(session) >= (plan.maxStaff ?? 0)) {
-        throw new ConflictException('Đã đạt giới hạn nhân viên của gói.');
-      }
       if (await Branch.countDocuments({ tenantId: scope.tenantId, _id: { $in: branchIds } }).session(session) !== branchIds.length) throw new ForbiddenException();
       const userId = email ? await linkedAccount(email, prepared, scope.tenantId, session) : undefined;
       const previous = userId ? await Membership.findOne({ tenantId: scope.tenantId, userId }).session(session) : null;
@@ -245,12 +240,6 @@ export class OperationsController {
         throw new ConflictException('Tài khoản đã liên kết với hồ sơ khác trong doanh nghiệp.');
       }
       if (input.branchIds && await Branch.countDocuments({ tenantId: scope.tenantId, _id: { $in: input.branchIds } }).session(session) !== input.branchIds.length) throw new ForbiddenException();
-      if (input.disabled === false && member.disabled) {
-        const plan = await activePlan(scope.tenantId, session, true);
-        if (await Membership.countDocuments({ tenantId: scope.tenantId, role: { $ne: 'OWNER' }, disabled: { $ne: true } }).session(session) >= (plan.maxStaff ?? 0)) {
-          throw new ConflictException('Đã đạt giới hạn nhân viên của gói.');
-        }
-      }
       const branchIds = input.branchIds;
       const removedBranches = branchIds && member.branchIds.some(branchId => !branchIds.includes(String(branchId)));
       if (input.disabled || removedBranches) {
@@ -359,7 +348,6 @@ export class OperationsController {
   @Get('registers')
   async registers(@Req() req: Request, @Param() route: Route) {
     const { scope, actorId, membership } = await access(req, route.tenantId, route.branchId, 'registers.read');
-    await requireModule(scope, 'registers');
     const registers = await Register.find(scope).sort('name').lean();
     if (membership.role !== 'CASHIER') return registers;
     const owned = await Shift.find({ ...scope, openedBy: actorId, status: 'OPEN' }).select('_id').lean();
@@ -373,7 +361,6 @@ export class OperationsController {
     const input = read(z.object({ name: label }).strict(), body);
     return transaction(async session => {
       const { scope, actorId } = await access(req, route.tenantId, route.branchId, 'registers.manage', session);
-      await requireModule(scope, 'registers', session);
       const item = await Register.insertOne({ ...scope, ...input }, { session });
       await logChange(scope, actorId, 'REGISTER_CREATE', item._id, session);
       return item.toObject();
@@ -383,7 +370,6 @@ export class OperationsController {
   @Get('shifts')
   async shifts(@Req() req: Request, @Param() route: Route, @Query() query: unknown) {
     const { scope, membership, actorId } = await access(req, route.tenantId, route.branchId, 'shifts.manage');
-    await requireModule(scope, 'registers');
     const { page } = read(pageQuery, query);
     return Shift.find({ ...scope, ...(membership.role === 'CASHIER' ? { openedBy: actorId } : {}) }).sort('-createdAt').skip((page - 1) * 50).limit(50).lean();
   }
@@ -393,7 +379,6 @@ export class OperationsController {
     const input = read(z.object({ registerId: objectId, openingCash: vnd }).strict(), body);
     return transaction(async session => {
       const { scope, actorId } = await access(req, route.tenantId, route.branchId, 'shifts.manage', session);
-      await requireModule(scope, 'registers', session);
       const register = found(await Register.findOne({ ...scope, _id: input.registerId }).session(session));
       if (register.shiftId) throw new ConflictException('Quầy đã mở ca.');
       const shift = await Shift.insertOne({ ...scope, ...input, openedBy: actorId, status: 'OPEN' }, { session });
@@ -410,7 +395,6 @@ export class OperationsController {
     const { closingCash } = read(z.object({ closingCash: vnd }).strict(), body);
     return transaction(async session => {
       const { scope, actorId, membership } = await access(req, route.tenantId, route.branchId, 'shifts.manage', session);
-      await requireModule(scope, 'registers', session);
       const shift = found(await Shift.findOne({ ...scope, _id: id, status: 'OPEN' }).session(session));
       if (membership.role === 'CASHIER' && String(shift.openedBy) !== actorId) throw new ForbiddenException();
       const [total] = await Payment.aggregate<{ amount: number }>([

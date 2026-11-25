@@ -2,7 +2,7 @@ import { Body, ConflictException, Controller, ForbiddenException, Get, Header, H
 import { randomUUID } from 'node:crypto';
 import type { Request } from 'express';
 import { z } from 'zod';
-import { access, logChange, recordEvent, requireModule } from '../middleware/business-access';
+import { access, logChange, recordEvent } from '../middleware/business-access';
 import { scopedRoute } from '../routes/branch';
 import { found } from '../utils/db';
 import { label, objectId, read, vnd } from '../validators/common';
@@ -108,7 +108,6 @@ export class SalesController {
     if (input.discountAmount && !['OWNER', 'MANAGER'].includes(current.role)) throw new ForbiddenException('Cần quyền quản lý để giảm giá.');
     return idempotent(scope, 'POS_ORDER', key, { actorId, input }, async session => {
       const { membership, branch } = await access(req, route.tenantId, route.branchId, 'orders.create', session);
-      await requireModule(scope, 'pos', session);
       if (input.discountAmount && !['OWNER', 'MANAGER'].includes(membership.role)) throw new ForbiddenException('Cần quyền quản lý để giảm giá.');
       const productType = posProductType(branch.mode, input.productType);
       const takeaway = input.serviceMode === 'TAKEAWAY' || input.takeaway;
@@ -140,7 +139,6 @@ export class SalesController {
     if (input.discountAmount && !['OWNER', 'MANAGER'].includes(current.role)) throw new ForbiddenException('Cần quyền quản lý để giảm giá.');
     return idempotent(scope, 'POS_CHECKOUT', key, { actorId, input }, async session => {
       const { membership, branch } = await access(req, route.tenantId, route.branchId, 'payments.collect', session);
-      await requireModule(scope, 'pos', session);
       if (input.discountAmount && !['OWNER', 'MANAGER'].includes(membership.role)) throw new ForbiddenException('Cần quyền quản lý để giảm giá.');
       const productType = posProductType(branch.mode, input.productType);
       if (productType === 'FOOD') throw new ConflictException('Hãy thêm món vào bàn rồi mở bàn đó để tính tiền.');

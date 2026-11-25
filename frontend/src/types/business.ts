@@ -1,12 +1,10 @@
-export type SubscriptionStatus = { status: string; startsAt: string; expiresAt?: string | null; trial?: boolean; features?: string[] };
+export type SubscriptionStatus = { status: string };
 export type Membership = { role: string; tenant: { id: string; name: string }; subscription?: SubscriptionStatus; canEditSharedCatalog?: boolean };
-export type ServicePlan = { code: string; name: string; description: string; monthlyVnd: string; yearlyVnd: string;
-  maxBranches: number; maxStaff: number; maxQrTables: number; features: string[] };
 
-export function subscriptionActive(subscription?: SubscriptionStatus, now = Date.now()) {
-  return subscription?.status === 'ACTIVE' && Date.parse(subscription.startsAt) <= now &&
-    (!subscription.expiresAt || Date.parse(subscription.expiresAt) > now);
+export function subscriptionActive(subscription?: SubscriptionStatus) {
+  return subscription?.status === 'ACTIVE';
 }
+
 export type WorkspaceMode = 'RETAIL' | 'RESTAURANT' | 'CAFE' | 'GYM' | 'POOL' | 'HOTEL' | 'TICKETS';
 export type BranchLocation = { latitude: number; longitude: number; radiusMeters: number };
 export type Branch = { id: string; name: string; mode: WorkspaceMode | 'HYBRID'; location?: BranchLocation;

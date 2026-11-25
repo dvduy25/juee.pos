@@ -6,7 +6,7 @@ export async function revisions(planId: Types.ObjectId, session?: ClientSession)
 }
 
 export async function publishedPlans() {
-  const plans = await Plan.find({ published: true, code: { $ne: 'TRIAL' } }).lean();
+  const plans = await Plan.find({ published: true, code: 'FREE' }).lean();
   const items = await Promise.all(plans.map(async plan => {
     const [revision] = await revisions(plan._id);
     return revision && { code: plan.code, name: plan.name, description: plan.description,

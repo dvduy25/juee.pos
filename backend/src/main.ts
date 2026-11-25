@@ -119,7 +119,7 @@ async function main() {
   if (process.env.NODE_ENV === 'production') await verifyProductionIndexes();
   else if (googleConfig()) await verifyProductionIndexes(['User']);
   if (subscriptionPayments) await verifyProductionIndexes(['SaaSCheckout', 'SaaSInvoice', 'IncomingTransfer']);
-  if (process.env.APPLY_DEFAULT_SERVICE_PLANS === 'true') await syncServicePlans();
+  await syncServicePlans();
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: ['error', 'warn', 'log'] });
   if (proxyHops) app.set('trust proxy', proxyHops);
   app.useGlobalFilters(new DatabaseErrors());

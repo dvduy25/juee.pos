@@ -79,15 +79,7 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
   const directMode = supported.length === 1 ? supported[0] : undefined;
   const mode = branch?.mode === 'HYBRID' ? (directMode ?? preferred) : branch?.mode ?? 'RETAIL';
   const allowedSections = employeeSections(mode);
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    if (!member?.subscription?.expiresAt) return;
-    const expiry = Date.parse(member.subscription.expiresAt);
-    if (expiry <= now) return;
-    const timer = window.setTimeout(() => setNow(Date.now()), Math.min(expiry - now, 2147483647));
-    return () => window.clearTimeout(timer);
-  }, [member?.subscription?.expiresAt, now]);
-  const active = subscriptionActive(member?.subscription, Math.max(now, Date.now()));
+  const active = subscriptionActive(member?.subscription);
 
   function chooseHybridMode(hybridMode: WorkspaceMode, navigateHome = false) {
     setPreferred(hybridMode);
@@ -195,7 +187,7 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
   if (!staffMode && !loading && !error && ((!member && !selectedScope) || creating)) return <StoreSetup {...props}
     onBack={member && (() => setCreating(false))} onCreate={(tenantId, branchId) => { changeBranch({ tenantId, branchId }); setCreating(false); }}/>;
   return <Layout {...props} mode={mode} tenant={member?.tenant.name} branch={branch?.name} role={member?.role} picker={picker} modePicker={modePicker} navigation={nav}
-    branchMode={branch?.mode} active={active} features={member?.subscription?.features} onCreateBusiness={company && member?.role === 'OWNER' && active && branch ? () => setCreating(true) : undefined}
+    branchMode={branch?.mode} active={active} onCreateBusiness={company && member?.role === 'OWNER' && active && branch ? () => setCreating(true) : undefined}
     accountSecurityHref={accountSecurityHref}
     workMode={!company && canSwitch && <WorkModeControl key={String(staffMode)} staffMode={staffMode} tenantId={tenantId} branchId={branch?.id}
       description={employeeDescription(mode)} hasPassword={props.user.hasPassword !== false}
@@ -224,10 +216,10 @@ function BranchContext({ member, branch, branches, mode, children, active, staff
     if (!company) redirect(managementHref('subscription'));
     return <section>
       <div className="desk-page-title"><h1>Gói dịch vụ</h1></div>
-      <StoreSubscription key={member.tenant.id} member={member} branches={branches} active={active}/>
+      <StoreSubscription key={member.tenant.id} member={member}/>
     </section>;
   }
-  if (!active) return <p className="error" role="alert">Hãy liên hệ chủ cửa hàng để kích hoạt gói dịch vụ.</p>;
+  if (!active) return <p className="error" role="alert">Cửa hàng đang bị tạm ngừng truy cập. Hãy liên hệ quản trị viên JUEE POS.</p>;
   if (!staffMode && !branch) {
     return <BranchSettings key={member.tenant.id} member={member} branches={branches} onCreate={onCreate}/>;
   }

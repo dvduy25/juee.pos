@@ -4,7 +4,6 @@ import type { ClientSession, Types } from 'mongoose';
 import { Branch, DiningTable, Membership, PlanVersion, SaaSInvoice, Subscription, Tenant, tableBranchModes } from '../models';
 import { found } from '../utils/db';
 import { activeSubscriptionFilter, simulatedSubscriptionsEnabled, subscriptionStatus } from './tenants';
-import { basicSales } from './service-plan-catalog';
 
 export const subscriptionExpiringDays = 7;
 const oneDay = 86_400_000;
@@ -38,9 +37,6 @@ export async function validatePlanForTenant(tenantId: Types.ObjectId, revision: 
   if (!tenant) throw new ConflictException('Hãy mở khóa doanh nghiệp trước khi cấp gói.');
   const branches = await Branch.find({ tenantId }).select('mode').session(session).lean();
   if (branches.length > (revision.maxBranches ?? 0)) throw new ConflictException('Gói không đủ hạn mức chi nhánh.');
-  if (revision.features.includes(basicSales) && branches.some(branch => branch.mode !== 'RETAIL')) {
-    throw new ConflictException('Gói miễn phí chỉ hỗ trợ mô hình bán lẻ.');
-  }
   if (!revision.features.includes('pos') || (branches.some(branch => tableBranchModes.includes(branch.mode)) &&
     (!revision.features.includes('qr') || !revision.features.includes('kitchen')))) {
     throw new ConflictException('Gói chưa hỗ trợ mô hình đang sử dụng.');

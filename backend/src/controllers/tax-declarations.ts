@@ -3,7 +3,7 @@ import type { Request } from 'express';
 import { z } from 'zod';
 import { transaction } from '../config/db';
 import { verifyOrigin } from '../middleware/auth';
-import { access, logChange, requireModule } from '../middleware/business-access';
+import { access, logChange } from '../middleware/business-access';
 import { TaxDeclaration } from '../models';
 import { scopedRoute } from '../routes/branch';
 import { found } from '../utils/db';
@@ -23,7 +23,6 @@ export class TaxDeclarationsController {
   @Get('tax-declarations')
   async list(@Req() req: Request, @Param() route: Route, @Query() query: unknown) {
     const { scope } = await access(req, route.tenantId, route.branchId, 'tax.manage');
-    await requireModule(scope, 'tax-declarations');
     const { page } = read(z.object({ page: pageSchema }), query);
     return TaxDeclaration.find({ tenantId: scope.tenantId }).sort('-endsOn -createdAt -_id').skip((page - 1) * 50).limit(50).lean();
   }
@@ -34,7 +33,6 @@ export class TaxDeclarationsController {
     const input = read(draft, body);
     return transaction(async session => {
       const { scope, actorId } = await access(req, route.tenantId, route.branchId, 'tax.manage', session);
-      await requireModule(scope, 'tax-declarations', session);
       const declaration = await TaxDeclaration.insertOne({ tenantId: scope.tenantId, ...input }, { session });
       await logChange(scope, actorId, 'TAX_DRAFT_CREATE', declaration._id, session);
       return declaration.toObject();
@@ -48,7 +46,6 @@ export class TaxDeclarationsController {
     const id = read(objectId, route.id);
     return transaction(async session => {
       const { scope, actorId } = await access(req, route.tenantId, route.branchId, 'tax.manage', session);
-      await requireModule(scope, 'tax-declarations', session);
       const entry = found(await TaxDeclaration.findOneAndUpdate({ _id: id, tenantId: scope.tenantId, receipt: null },
         { $set: { ...input, note: input.note ?? '' } }, { session, returnDocument: 'after' }).lean(), 'Không tìm thấy bản nháp có thể sửa.');
       await logChange(scope, actorId, 'TAX_DRAFT_UPDATE', entry._id, session);
@@ -63,7 +60,6 @@ export class TaxDeclarationsController {
     const id = read(objectId, route.id);
     return transaction(async session => {
       const { scope, actorId } = await access(req, route.tenantId, route.branchId, 'tax.manage', session);
-      await requireModule(scope, 'tax-declarations', session);
       const entry = found(await TaxDeclaration.findOneAndUpdate({ _id: id, tenantId: scope.tenantId, receipt: null },
         { $set: input }, { session, returnDocument: 'after' }).lean(), 'Không tìm thấy bản nháp có thể ghi nhận đã nộp.');
       await logChange(scope, actorId, 'TAX_FILING_RECORDED', entry._id, session);

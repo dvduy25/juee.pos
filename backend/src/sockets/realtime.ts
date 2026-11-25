@@ -1,7 +1,7 @@
 import { Controller, Get, Headers, Param, Query, Req, Res } from '@nestjs/common';
 import { z } from 'zod';
 import type { Request, Response } from 'express';
-import { access, restaurant } from '../middleware/business-access';
+import { access, assertRestaurantMode } from '../middleware/business-access';
 import { mongoId } from '../utils/db';
 import { objectId, read } from '../validators/common';
 import { OutboxEvent } from '../models';
@@ -19,7 +19,7 @@ export class RealtimeController {
     const view = read(z.enum(['kitchen', 'service']).default('kitchen'), rawView);
     const authenticate = async () => {
       const { scope, branch } = await access(req, route.tenantId, route.branchId, view === 'service' ? 'kitchen.serve' : 'kitchen.work');
-      await restaurant(scope, branch.mode, 'kitchen');
+      assertRestaurantMode(branch.mode);
       return scope;
     };
     const scope = await authenticate();

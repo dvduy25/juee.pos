@@ -36,9 +36,9 @@ const InventoryAi = dynamic(() => import('./inventory-ai').then(module => module
 const TaxDeclarations = dynamic(() => import('./tax-declarations').then(module => module.TaxDeclarations), { loading: tabLoading });
 
 export function CompanyDashboard({ requested }: { requested?: string }) {
-  const { company, role, staffMode, branches, branch, membership } = useBusiness();
+  const { company, role, staffMode, branches, branch } = useBusiness();
   if (!company || staffMode) return <p className="error" role="alert">Hãy dùng tài khoản chủ doanh nghiệp hoặc quản lý được giao chi nhánh.</p>;
-  const { id: current, label } = companySection(requested, branch.mode, true, role, membership.subscription?.features);
+  const { id: current, label } = companySection(requested, branch.mode, true, role);
   return <div className="company-dashboard">
     <header className="company-title"><h1>{label}</h1></header>
     {current === 'overview' && <CompanyOverview/>}
@@ -73,18 +73,17 @@ export function CompanyDashboard({ requested }: { requested?: string }) {
 }
 
 function CompanyOverview() {
-  const { company, tenantId, branches, branch, membership } = useBusiness();
+  const { company, tenantId, branches, branch } = useBusiness();
   const [period, setPeriod] = useState('today');
-  const basic = membership.subscription?.features?.includes('basic-sales');
-  const query = useData<Revenue>(`/company/revenue?period=${period}`, 15000, !basic);
+  const query = useData<Revenue>(`/company/revenue?period=${period}`, 15000);
   return <>
-    {!basic && <Panel title="Doanh thu theo chi nhánh">
+    <Panel title="Doanh thu theo chi nhánh">
       <div className="actions business-filters"><label>Kỳ báo cáo<select value={period} onChange={event => setPeriod(event.target.value)}>
         <option value="today">Hôm nay</option><option value="month">Tháng này</option>
       </select></label></div>
       <State query={query}/>
       {query.data && <RevenueDetails report={query.data}/>}
-    </Panel>}
+    </Panel>
     <div className="columns">
       <Panel title="Doanh nghiệp của bạn">
         {company?.businesses.map(item => <div className="list-row" key={item.tenant.id}>

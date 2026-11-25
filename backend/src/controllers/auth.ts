@@ -15,7 +15,7 @@ import { AccountToken, Branch, PlatformGrant, User, UserSession } from '../model
 import { canAdmin, canManageBranches } from '../middleware/policy';
 import { authenticate, sessionIssuer, sessionSurfaceFilter, signingSecret, verifyAdminOrigin, verifyOrigin, type SessionSurface } from '../middleware/auth';
 import { requestAccountLink, requireAccountMail, signupNeedsVerification, tokenDigest, verificationDigest } from '../services/account-email';
-import { activeSubscription, canSignIntoBusinessAccount, tenantMembership } from '../services/tenants';
+import { requireBusinessAvailable, canSignIntoBusinessAccount, tenantMembership } from '../services/tenants';
 import { beginGoogle, exchangeGoogleCode, googleConfig, googleDestination, googleFlowCookie, readGoogleFlow } from '../services/google-auth';
 
 const accountToken = z.string().regex(/^[a-f0-9]{64}$/);
@@ -301,7 +301,7 @@ export class AuthController {
         const { membership } = await tenantMembership(current.userId, input.tenantId, session);
         if (!canManageBranches(membership.role, membership.branchIds.map(String), input.branchId)) throw new ForbiddenException();
         found(await Branch.exists({ _id: input.branchId, tenantId: input.tenantId }).session(session));
-        await activeSubscription(input.tenantId, session);
+        await requireBusinessAvailable(input.tenantId, session);
       } else {
         if (!current.staffMode) throw new ConflictException('Đang sử dụng chế độ Quản lý.');
         if (!(await verify(confirmedHash, input.password))) throw new ForbiddenException('Mật khẩu tài khoản chưa đúng.');

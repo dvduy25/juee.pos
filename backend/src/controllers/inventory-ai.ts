@@ -4,7 +4,7 @@ import type { Request } from 'express';
 import { z } from 'zod';
 import { transaction } from '../config/db';
 import { verifyOrigin } from '../middleware/auth';
-import { access, requireModule } from '../middleware/business-access';
+import { access } from '../middleware/business-access';
 import { BusinessAiSettings, WarehouseItem } from '../models';
 import { scopedRoute } from '../routes/branch';
 import { decryptAiKey, encryptAiKey, extractInvoice, transcribeInvoice } from '../services/inventory-ai';
@@ -21,7 +21,6 @@ export class InventoryAiController {
   @Get('warehouse/ai/settings')
   async settings(@Req() req: Request, @Param() route: Route) {
     const { scope } = await access(req, route.tenantId, route.branchId, 'warehouse.ai');
-    await requireModule(scope, 'ai-inventory');
     return { configured: !!await BusinessAiSettings.exists({ _id: scope.tenantId }) };
   }
 
@@ -31,7 +30,6 @@ export class InventoryAiController {
     const { apiKey } = read(z.object({ apiKey: z.string().trim().regex(/^sk-[A-Za-z0-9_-]{20,300}$/, 'Khóa API OpenAI không hợp lệ.') }).strict(), body);
     return transaction(async session => {
       const { scope } = await access(req, route.tenantId, route.branchId, 'warehouse.ai', session);
-      await requireModule(scope, 'ai-inventory', session);
       await BusinessAiSettings.updateOne({ _id: scope.tenantId }, { $set: { encryptedKey: encryptAiKey(String(scope.tenantId), apiKey) } }, { upsert: true, session });
       return { configured: true };
     });
@@ -52,7 +50,6 @@ export class InventoryAiController {
   async extract(@Req() req: Request, @Param() route: Route, @Body() body: unknown, @UploadedFile() file?: { buffer: Buffer; mimetype: string }) {
     verifyOrigin(req);
     const { scope } = await access(req, route.tenantId, route.branchId, 'warehouse.ai');
-    await requireModule(scope, 'ai-inventory');
     const input = read(z.object({ source: z.enum(['text', 'image', 'audio']), text: z.string().trim().max(10_000).optional() }).strict(), body);
     if (input.source === 'text' ? !input.text || !!file : !file?.buffer.length || !!input.text) {
       throw new BadRequestException('Chọn một nguồn chứng từ hợp lệ.');
@@ -71,10 +68,8 @@ export class InventoryAiController {
     const input = read(z.object({ note: label, lines: z.array(line).min(1).max(30)
       .refine(items => new Set(items.map(item => item.itemId)).size === items.length, 'Gộp các dòng trùng mặt hàng trước khi lưu.') }).strict(), body);
     const { scope, actorId } = await access(req, route.tenantId, route.branchId, 'warehouse.ai');
-    await requireModule(scope, 'ai-inventory');
     return idempotent(scope, 'AI_WAREHOUSE_ISSUE', key, { actorId, input }, async session => {
       await access(req, route.tenantId, route.branchId, 'warehouse.ai', session);
-      await requireModule(scope, 'ai-inventory', session);
       const items = await WarehouseItem.find({ ...scope, _id: { $in: input.lines.map(item => item.itemId) } }).session(session);
       const byId = new Map(items.map(item => [String(item._id), item]));
       for (const line of input.lines) {

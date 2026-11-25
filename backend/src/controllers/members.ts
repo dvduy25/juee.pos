@@ -17,7 +17,7 @@ import { amount, pageSchema } from '../validators/sales';
 import { facilityToday, memberAccessStates, memberAccessStatus, membershipStatusExpression, memberPlanDaysRemaining, nextMemberEnrollment, shiftDays } from '../services/membership-plans';
 import { isStayDate } from '../services/hotel-stays';
 import { idempotent } from '../services/sales';
-import { activeSubscription } from '../services/tenants';
+import { requireBusinessAvailable } from '../services/tenants';
 import { productImageLimits, readProductImage } from '../services/product-image';
 
 const memberInput = z.object({ name: label, phone: z.string().trim().regex(/^\+?\d{7,15}$/, 'Số điện thoại không hợp lệ.') }).strict();
@@ -132,7 +132,7 @@ async function authorizeAutomatedCheckIn(route: Pick<Route, 'tenantId' | 'branch
   const tenantFilter = { _id: scope.tenantId, locked: { $ne: true } };
   const branch = await Branch.findOne(branchFilter).select('name mode memberCheckInMethods').lean();
   if (!branch || !await Tenant.exists(tenantFilter)) throw new UnauthorizedException('Khóa check-in chưa được thiết lập hoặc đã hết hiệu lực.');
-  await activeSubscription(scope.tenantId);
+  await requireBusinessAvailable(scope.tenantId);
   return { scope, branch, branchFilter, tenantFilter, digest };
 }
 
@@ -140,7 +140,7 @@ async function automatedCheckIn(auth: Awaited<ReturnType<typeof authorizeAutomat
   requireMethod(auth.branch.memberCheckInMethods, input.method);
   const { scope, branchFilter, tenantFilter } = auth;
   return idempotent(scope, source === 'KIOSK' ? 'MEMBER_KIOSK_CHECK_IN' : 'MEMBER_DEVICE_CHECK_IN', key, input, async session => {
-    await activeSubscription(scope.tenantId, session, true);
+    await requireBusinessAvailable(scope.tenantId, session, true);
     const enabledTenant = await Tenant.updateOne(tenantFilter, { $set: { branchWriteToken: randomUUID() } }, { session });
     const branch = await Branch.findOneAndUpdate(branchFilter, { $set: { writeToken: randomUUID() } }, { session, returnDocument: 'after' })
       .select('memberCheckInMethods').lean();
