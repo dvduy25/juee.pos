@@ -11,6 +11,7 @@ export default function Pricing() {
         <h2>Miễn phí</h2>
         <p>Dùng toàn bộ tính năng JUEE POS cho mọi doanh nghiệp và chi nhánh.</p>
         <Link className="button" href="/register">Bắt đầu miễn phí</Link>
+        <a className="plain justify-self-start" href="/#quy-trinh">Xem các quy trình sử dụng</a>
       </section></div>
     </main>
   </div>;
