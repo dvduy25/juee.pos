@@ -11,6 +11,9 @@ import { ReviewIssue, ReviewMenu, ReviewReceipt, type IssueDraft, type MenuDraft
 type Source = 'text' | 'image' | 'audio';
 type Kind = 'receive' | 'issue' | 'menu';
 type Draft = { kind: 'receive'; data: ReceiptDraft } | { kind: 'issue'; data: IssueDraft } | { kind: 'menu'; data: MenuDraft };
+type AiProvider = 'openai' | 'gemini';
+type AiSettings = { configured: boolean; provider?: AiProvider; available?: Record<AiProvider, boolean> };
+const providerLabels = { openai: 'OpenAI', gemini: 'Gemini' };
 const photoLimit = 4 * 1024 * 1024;
 const photoTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -41,33 +44,57 @@ export function InventoryAi() {
   const { branch, role } = useBusiness();
   const query = useSearchParams();
   const initial = query.get('document') === 'menu' && usesTables(branch.mode) ? 'menu' : 'receive';
-  const settings = useData<{ configured: boolean }>('/warehouse/ai/settings');
-  const action = useAction();
+  const settings = useData<AiSettings>('/warehouse/ai/settings');
+  const provider = settings.data?.provider;
   return <>
-    {settings.data?.configured && <InvoiceAssistant key={branch.id + initial} initial={initial}/>}
+    {settings.data?.configured && <InvoiceAssistant key={branch.id + initial} initial={initial} provider={provider}/>}
     {role === 'OWNER' ? <Panel title="Khóa API của doanh nghiệp">
       <State query={settings}/>
-      <p className="muted">Dùng khóa OpenAI của doanh nghiệp. Khóa được mã hóa khi lưu. Ảnh, văn bản hoặc ghi âm được gửi đến OpenAI khi bạn yêu cầu đọc chứng từ.</p>
-      <form onSubmit={event => {
-        event.preventDefault();
-        const form = event.currentTarget;
-        void action.send('/warehouse/ai/settings', { apiKey: new FormData(form).get('apiKey') },
-          { method: 'PATCH', reset: form, message: 'Đã lưu khóa API.' });
-      }}>
-        <label>Khóa API OpenAI<input name="apiKey" type="password" autoComplete="off" spellCheck={false} maxLength={305} required/></label>
-        <div className="actions"><button type="submit" className="button" disabled={action.pending}>{settings.data?.configured ? 'Thay khóa' : 'Lưu khóa'}</button>
-          {settings.data?.configured && <button type="button" className="plain" disabled={action.pending}
-            onClick={() => void action.send('/warehouse/ai/settings', undefined, { method: 'DELETE', message: 'Đã xóa khóa API.' })}>Xóa khóa</button>}</div>
-      </form>
-      {action.feedback}
+      {settings.data && <ProviderSettings key={branch.id} settings={settings.data}/>}
     </Panel> : !settings.data?.configured && <Panel title="Trợ lý kho AI">
       <State query={settings} />
-      {settings.data && <p>Chủ doanh nghiệp cần cài khóa API OpenAI để bật tính năng này.</p>}
+      {settings.data && <p>Chủ doanh nghiệp cần cài khóa API và chọn nhà cung cấp để bật tính năng này.</p>}
     </Panel>}
   </>;
 }
 
-function InvoiceAssistant({ initial }: { initial: 'receive' | 'menu' }) {
+function ProviderSettings({ settings }: { settings: AiSettings }) {
+  const action = useAction();
+  const [provider, setProvider] = useState<AiProvider>(settings.provider ?? 'openai');
+  const saved = settings.available?.[provider] ?? settings.configured;
+  const active = settings.configured && (settings.provider ?? 'openai') === provider;
+  const name = providerLabels[provider];
+  const path = '/warehouse/ai/settings';
+
+  return <>
+    <p className="muted">Khóa API riêng của doanh nghiệp được mã hóa khi lưu.</p>
+    <form onSubmit={event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const apiKey = String(new FormData(form).get('apiKey') ?? '').trim() || undefined;
+      void action.send(path, { ...(settings.provider ? { provider } : {}), apiKey },
+        { method: 'PATCH', reset: form, message: `Đang dùng ${name} để đọc chứng từ.` });
+    }}>
+      <label>Nhà cung cấp AI<select value={provider} disabled={action.pending} onChange={event => setProvider(event.target.value as AiProvider)}>
+        <option value="openai">OpenAI{settings.provider === 'openai' && settings.configured ? ' · Đang dùng' : ''}</option>
+        {settings.available && <option value="gemini">Google Gemini{settings.provider === 'gemini' && settings.configured ? ' · Đang dùng' : ''}</option>}
+      </select></label>
+      {provider === 'gemini' && <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">Lấy khóa tại Google AI Studio</a>}
+      <label>Khóa API {name}<input key={provider} name="apiKey" type="password" autoComplete="off" spellCheck={false}
+        maxLength={305} placeholder={saved ? 'Đã lưu khóa' : undefined} required={!saved || active} disabled={action.pending}/></label>
+      <div className="actions">
+        <button type="submit" className="button" disabled={action.pending}>{active ? 'Thay khóa' : `Sử dụng ${name}`}</button>
+        {saved && <button type="button" className="plain" disabled={action.pending} onClick={() => {
+          void action.send(settings.provider ? `${path}?provider=${provider}` : path, undefined,
+            { method: 'DELETE', message: `Đã xóa khóa API ${name}.` });
+        }}>Xóa khóa</button>}
+      </div>
+    </form>
+    {action.feedback}
+  </>;
+}
+
+function InvoiceAssistant({ initial, provider }: { initial: 'receive' | 'menu'; provider?: AiProvider }) {
   const { branch, role } = useBusiness();
   const action = useAction();
   const [source, setSource] = useState<Source>('image');
@@ -132,6 +159,7 @@ function InvoiceAssistant({ initial }: { initial: 'receive' | 'menu' }) {
     setReadPhoto(undefined);
     data.set('source', source);
     data.set('kind', kind);
+    if (provider) data.set('provider', provider);
     if (source === 'image') {
       if (!photo) return;
       setPreparing(true);
@@ -175,6 +203,7 @@ function InvoiceAssistant({ initial }: { initial: 'receive' | 'menu' }) {
   return <Panel title="Đọc chứng từ bằng AI">
     {notice && <p className="success" role="status">{notice}</p>}
     {!draft && <form onSubmit={extract}>
+      <p className="muted">Chứng từ sẽ được gửi đến {providerLabels[provider ?? 'openai']} để đọc khi bạn bấm <strong>Đọc bằng AI</strong>.</p>
       <div className="columns">
         <label>Loại chứng từ<select value={kind} onChange={event => {
           const next = event.target.value as Kind;
@@ -212,7 +241,9 @@ function InvoiceAssistant({ initial }: { initial: 'receive' | 'menu' }) {
       {source === 'audio' && <>
         <button type="button" className="plain" disabled={busy} onClick={() => void toggleRecording()}>{recording ? 'Dừng ghi âm' : 'Ghi âm tối đa 1 phút'}</button>
         {audio ? <p>Đã có bản ghi âm. Bấm Đọc bằng AI để tiếp tục.</p> :
-          <label>Hoặc tải bản ghi (tối đa 4 MB)<input name="file" type="file" accept="audio/webm,audio/mp4,audio/mpeg,audio/wav,audio/ogg" required disabled={recording || busy}/></label>}
+          <label>Hoặc tải bản ghi (tối đa 4 MB)<input name="file" type="file"
+            accept={provider === 'gemini' ? '.webm,.m4a,.mp4,.mp3,.wav,.ogg,.aac,.flac' : 'audio/webm,audio/mp4,audio/mpeg,audio/wav,audio/ogg'}
+            required disabled={recording || busy}/></label>}
         {recordError && <p role="alert" className="error">{recordError}</p>}
       </>}
       <button className="button" disabled={recording || busy || (source === 'image' && !photo)}>

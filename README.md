@@ -110,7 +110,7 @@ Super Admin là ứng dụng Next.js trong thư mục `admin/`, với gói cài 
 
 ## Giao diện theo mô hình chi nhánh
 
-Sau khi đăng ký và xác minh email, chủ tài khoản chọn mô hình hoạt động cho chi nhánh. Mọi doanh nghiệp và chi nhánh được dùng miễn phí đầy đủ tính năng. Trợ lý kho AI dùng khóa OpenAI riêng của doanh nghiệp.
+Sau khi đăng ký và xác minh email, chủ tài khoản chọn mô hình hoạt động cho chi nhánh. Mọi doanh nghiệp và chi nhánh được dùng miễn phí đầy đủ tính năng. Trợ lý kho AI dùng khóa OpenAI hoặc Gemini riêng của doanh nghiệp.
 
 Các khoản thanh toán thuê bao trước đây vẫn xem được tại **Quản lý doanh nghiệp → Gói dịch vụ**. Khoản chuyển cũ cần đối soát có thể xem tại **Super Admin → Thuê bao**.
 

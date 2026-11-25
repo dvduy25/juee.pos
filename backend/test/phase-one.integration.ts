@@ -175,13 +175,34 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     assert.equal(branchResult.status, 201);
     const added = await branchResult.json();
     await Subscription.updateOne({ _id: contract._id }, { $unset: { trial: 1, expiresAt: 1 } });
-    assert.deepEqual(await (await request(`${freeRoot}/warehouse/ai/settings`, 'GET', undefined, owner)).json(), { configured: false });
     const keyPath = `${freeRoot}/warehouse/ai/settings`;
     const sampleKey = 'sk-test-only-for-inventory-encryption';
-    assert.deepEqual(await (await request(keyPath, 'PATCH', { apiKey: sampleKey }, owner)).json(), { configured: true });
+    const sampleGemini = 'test-Gemini-only-for-inventory-encryption';
+    const unconfigured = { configured: false, provider: 'openai', available: { openai: false, gemini: false } };
+    const openaiOnly = { configured: true, provider: 'openai', available: { openai: true, gemini: false } };
+    assert.deepEqual(await (await request(keyPath, 'GET', undefined, owner)).json(), unconfigured);
+    assert.deepEqual(await (await request(keyPath, 'PATCH', { apiKey: sampleKey }, owner)).json(), openaiOnly);
     const storedKey = await BusinessAiSettings.findById(ownerTenant).select('+encryptedKey').orFail();
-    assert.ok(!storedKey.encryptedKey.includes(sampleKey));
-    assert.deepEqual(await (await request(keyPath, 'DELETE', undefined, owner)).json(), { configured: false });
+    assert.ok(storedKey.encryptedKey && !storedKey.encryptedKey.includes(sampleKey));
+    await BusinessAiSettings.updateOne({ _id: storedKey._id }, { $unset: { provider: 1 } });
+    assert.deepEqual(await (await request(keyPath, 'GET', undefined, owner)).json(), openaiOnly);
+    assert.equal((await request(keyPath, 'PATCH', { provider: 'gemini' }, owner)).status, 400);
+    assert.equal((await request(keyPath, 'PATCH', { provider: 'gemini', apiKey: sampleKey }, owner)).status, 400);
+    const geminiActive = { configured: true, provider: 'gemini', available: { openai: true, gemini: true } };
+    assert.deepEqual(await (await request(keyPath, 'PATCH', { provider: 'gemini', apiKey: sampleGemini }, owner)).json(), geminiActive);
+    const afterGemini = await BusinessAiSettings.findById(ownerTenant).select('+encryptedKey +encryptedGeminiKey').lean().orFail();
+    assert.equal(afterGemini.encryptedKey, storedKey.encryptedKey);
+    assert.ok(afterGemini.encryptedGeminiKey && !afterGemini.encryptedGeminiKey.includes(sampleGemini));
+    assert.deepEqual(await (await request(keyPath, 'GET', undefined, owner)).json(), geminiActive);
+    const outdated = new FormData();
+    outdated.set('source', 'text');
+    outdated.set('text', 'Hai kg gạo');
+    outdated.set('provider', 'openai');
+    assert.equal((await request(`${freeRoot}/warehouse/ai/extract`, 'POST', outdated, owner)).status, 409);
+    assert.deepEqual(await (await request(keyPath, 'PATCH', { provider: 'openai' }, owner)).json(),
+      { ...geminiActive, provider: 'openai' });
+    assert.deepEqual(await (await request(`${keyPath}?provider=gemini`, 'DELETE', undefined, owner)).json(), openaiOnly);
+    assert.deepEqual(await (await request(keyPath, 'DELETE', undefined, owner)).json(), unconfigured);
 
     const [restaurant] = await (await request(`/tenants/${restaurantId}/branches`, 'GET', undefined, owner)).json();
     const restaurantBranch = `/tenants/${restaurantId}/branches/${restaurant.id}`;

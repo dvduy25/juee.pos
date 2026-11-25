@@ -1,13 +1,13 @@
-import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, Patch, Post, Req, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Headers, Param, Patch, Post, Query, Req, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { z } from 'zod';
 import { transaction } from '../config/db';
 import { verifyOrigin } from '../middleware/auth';
 import { access, assertRestaurantMode } from '../middleware/business-access';
-import { BusinessAiSettings, WarehouseItem } from '../models';
+import { BusinessAiSettings, WarehouseItem, inventoryAiProviders, type InventoryAiProvider } from '../models';
 import { scopedRoute } from '../routes/branch';
-import { decryptAiKey, encryptAiKey, extractInvoice, extractMenu, transcribeInvoice } from '../services/inventory-ai';
+import { decryptAiKey, encryptAiKey, extractInvoice, extractMenu } from '../services/inventory-ai';
 import { aiMenuInput, aiReceiptInput, receiveAiPurchase, saveAiMenu, suggestMenuItems, suggestWarehouseItems } from '../services/inventory-ai-import';
 import { readProductImage } from '../services/product-image';
 import { idempotent } from '../services/sales';
@@ -16,42 +16,62 @@ import { found } from '../utils/db';
 import { label, objectId, read } from '../validators/common';
 
 type Route = { tenantId: string; branchId: string };
+const aiProvider = z.enum(inventoryAiProviders);
+const keyFields = { openai: 'encryptedKey', gemini: 'encryptedGeminiKey' } as const;
+const keySelection = '+encryptedKey +encryptedGeminiKey';
+const keyPatterns = { openai: /^sk-[A-Za-z0-9_-]{20,300}$/, gemini: /^(?!sk-)[A-Za-z0-9_-]{20,300}$/ };
+
+function settingsStatus(settings?: { provider?: InventoryAiProvider | null; encryptedKey?: string | null; encryptedGeminiKey?: string | null } | null) {
+  const provider = settings?.provider ?? 'openai';
+  const available = { openai: !!settings?.encryptedKey, gemini: !!settings?.encryptedGeminiKey };
+  return { configured: available[provider], provider, available };
+}
 
 @Controller(scopedRoute)
 export class InventoryAiController {
   @Get('warehouse/ai/settings')
   async settings(@Req() req: Request, @Param() route: Route) {
     const { scope } = await access(req, route.tenantId, route.branchId, 'purchases.manage');
-    return { configured: !!await BusinessAiSettings.exists({ _id: scope.tenantId }) };
+    return settingsStatus(await BusinessAiSettings.findById(scope.tenantId).select(keySelection).lean());
   }
 
   @Patch('warehouse/ai/settings')
   async save(@Req() req: Request, @Param() route: Route, @Body() body: unknown) {
     verifyOrigin(req);
-    const { apiKey } = read(z.object({ apiKey: z.string().trim().regex(/^sk-[A-Za-z0-9_-]{20,300}$/, 'Khóa API OpenAI không hợp lệ.') }).strict(), body);
+    const { provider, apiKey } = read(z.object({ provider: aiProvider.default('openai'), apiKey: z.string().trim().max(305).optional() }).strict(), body);
+    if (apiKey !== undefined && !keyPatterns[provider].test(apiKey)) throw new BadRequestException('Khóa API không đúng định dạng.');
     return transaction(async session => {
       const { scope } = await access(req, route.tenantId, route.branchId, 'warehouse.ai', session);
-      await BusinessAiSettings.updateOne({ _id: scope.tenantId }, { $set: { encryptedKey: encryptAiKey(String(scope.tenantId), apiKey) } }, { upsert: true, session });
-      return { configured: true };
+      const field = keyFields[provider];
+      const filter = apiKey ? { _id: scope.tenantId } : { _id: scope.tenantId, [field]: { $type: 'string' } };
+      const update = apiKey ? { provider, [field]: encryptAiKey(String(scope.tenantId), apiKey, provider) } : { provider };
+      const settings = await BusinessAiSettings.findOneAndUpdate(filter, { $set: update },
+        { session, upsert: !!apiKey, returnDocument: 'after' }).select(keySelection).lean();
+      if (!settings) throw new BadRequestException('Hãy lưu khóa API của nhà cung cấp này trước.');
+      return settingsStatus(settings);
     });
   }
 
   @Delete('warehouse/ai/settings')
-  async remove(@Req() req: Request, @Param() route: Route) {
+  async remove(@Req() req: Request, @Param() route: Route, @Query('provider') rawProvider?: string) {
     verifyOrigin(req);
+    const provider = read(aiProvider.optional(), rawProvider);
     return transaction(async session => {
       const { scope } = await access(req, route.tenantId, route.branchId, 'warehouse.ai', session);
-      await BusinessAiSettings.deleteOne({ _id: scope.tenantId }, { session });
-      return { configured: false };
+      const current = await BusinessAiSettings.findById(scope.tenantId).select('provider').session(session).lean();
+      const field = keyFields[provider ?? current?.provider ?? 'openai'];
+      const settings = await BusinessAiSettings.findOneAndUpdate({ _id: scope.tenantId },
+        { $unset: { [field]: 1 } }, { session, returnDocument: 'after' }).select(keySelection).lean();
+      return settingsStatus(settings);
     });
   }
 
   @Post('warehouse/ai/extract')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 4 * 1024 * 1024, files: 1, fields: 3, fieldSize: 30_000 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 4 * 1024 * 1024, files: 1, fields: 4, fieldSize: 30_000 } }))
   async extract(@Req() req: Request, @Param() route: Route, @Body() body: unknown, @UploadedFile() file?: { buffer: Buffer; mimetype: string }) {
     verifyOrigin(req);
     const input = read(z.object({ source: z.enum(['text', 'image', 'audio']), kind: z.enum(['receive', 'issue', 'menu']).default('issue'),
-      text: z.string().trim().max(10_000).optional() }).strict(), body);
+      text: z.string().trim().max(10_000).optional(), provider: aiProvider.optional() }).strict(), body);
     const permission = input.kind === 'menu' ? 'catalog.branch-write' : input.kind === 'receive' ? 'purchases.manage' : 'warehouse.ai';
     const { scope, branch } = await access(req, route.tenantId, route.branchId, permission);
     if (input.kind === 'menu') {
@@ -61,15 +81,20 @@ export class InventoryAiController {
     if (input.source === 'text' ? !input.text || !!file : !file?.buffer.length || !!input.text) {
       throw new BadRequestException('Chọn một nguồn chứng từ hợp lệ.');
     }
-    const settings = await BusinessAiSettings.findById(scope.tenantId).select('+encryptedKey').lean();
-    if (!settings) throw new BadRequestException('Hãy cài khóa API OpenAI của doanh nghiệp trước.');
-    const key = decryptAiKey(String(scope.tenantId), settings.encryptedKey);
+    const settings = await BusinessAiSettings.findById(scope.tenantId).select(keySelection).lean();
+    const provider = settings?.provider ?? 'openai';
+    if ((input.provider ?? 'openai') !== provider) {
+      throw new ConflictException('Doanh nghiệp vừa đổi nhà cung cấp AI. Hãy tải lại trang để kiểm tra trước khi gửi chứng từ.');
+    }
+    const encryptedKey = settings?.[keyFields[provider]];
+    if (!encryptedKey) throw new BadRequestException('Hãy cài khóa API của doanh nghiệp trước.');
+    const credentials = { provider, key: decryptAiKey(String(scope.tenantId), encryptedKey, provider) };
     const image = input.source === 'image' ? readProductImage(file) : undefined;
     if (input.kind === 'menu' && image) {
-      return { lines: await suggestMenuItems(scope, await extractMenu(key, image)) };
+      return { lines: await suggestMenuItems(scope, await extractMenu(credentials, image)) };
     }
-    const transcript = input.source === 'audio' && file ? await transcribeInvoice(key, file) : input.text;
-    const invoice = await extractInvoice(key, transcript || '', image, input.kind === 'receive');
+    const audio = input.source === 'audio' ? file : undefined;
+    const invoice = await extractInvoice(credentials, { text: input.text, image, audio, purchasePhoto: input.kind === 'receive' });
     if (input.kind !== 'receive') return invoice;
     return { ...invoice, lines: await suggestWarehouseItems(scope, invoice.lines) };
   }

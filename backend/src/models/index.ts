@@ -575,8 +575,12 @@ incomingTransfers.index({ tenantId: 1, branchId: 1, status: 1, createdAt: -1 });
 incomingTransfers.index({ subscriptionId: 1, status: 1, createdAt: -1 }, { partialFilterExpression: { subscriptionId: { $type: 'objectId' } } });
 export const IncomingTransfer = model('IncomingTransfer', incomingTransfers);
 
+export const inventoryAiProviders = ['openai', 'gemini'] as const;
+export type InventoryAiProvider = typeof inventoryAiProviders[number];
 export const BusinessAiSettings = model('BusinessAiSettings', new Schema({
-  _id: Schema.Types.ObjectId, encryptedKey: { ...text, select: false },
+  _id: Schema.Types.ObjectId, provider: { type: String, enum: inventoryAiProviders, default: 'openai' },
+  encryptedKey: { type: String, select: false },
+  encryptedGeminiKey: { type: String, select: false },
 }, { timestamps: true }));
 
 const taxDeclarations = new Schema({

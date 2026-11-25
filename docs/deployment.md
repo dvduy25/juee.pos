@@ -82,7 +82,7 @@ docker run --rm -p 3001:80 juee-site
 
 API công bố cấu hình miễn phí khi khởi động và ẩn các gói cũ khỏi bảng giá. Lịch sử thanh toán cũ vẫn có thể tra cứu và đối soát.
 
-Đặt `AI_KEY_ENCRYPTION_SECRET` riêng cho API thông qua biến môi trường. Dùng giá trị ngẫu nhiên ổn định ít nhất 32 ký tự và sao lưu trong nơi quản lý bí mật. Nếu đổi giá trị, chủ doanh nghiệp cần lưu lại khóa OpenAI. Chủ doanh nghiệp nhập khóa OpenAI của mình trong **Quản lý doanh nghiệp → Trợ lý kho AI**. Dữ liệu chứng từ được gửi đến OpenAI khi chủ doanh nghiệp yêu cầu tạo nháp. Phiếu nhập hoặc xuất chỉ được ghi khi chủ doanh nghiệp chọn mặt hàng kho và xác nhận.
+Đặt `AI_KEY_ENCRYPTION_SECRET` riêng cho API thông qua biến môi trường. Dùng giá trị ngẫu nhiên ổn định ít nhất 32 ký tự và sao lưu trong nơi quản lý bí mật. Nếu đổi giá trị, chủ doanh nghiệp cần lưu lại khóa API. Trong **Quản lý doanh nghiệp → Trợ lý kho AI**, chủ doanh nghiệp có thể lưu khóa OpenAI và Gemini riêng rồi chọn nhà cung cấp muốn dùng. Dữ liệu chứng từ được gửi đến nhà cung cấp đang chọn khi người dùng yêu cầu tạo nháp. Phiếu kho và các thay đổi thực đơn chỉ được lưu sau khi người có quyền xác nhận.
 
 Trong **Quản lý doanh nghiệp → Kê khai thuế**, chủ doanh nghiệp có thể lưu số liệu đã đối chiếu, xuất CSV làm việc và ghi mã tiếp nhận sau khi nộp bên ngoài ứng dụng.
 
