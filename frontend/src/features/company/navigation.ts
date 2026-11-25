@@ -55,7 +55,7 @@ export function companyNavigation(mode?: Branch['mode'], active = true, role = '
     'hotel-settings': mode === 'HOTEL', 'ticket-types': mode === 'TICKETS',
     promotions: retail, customers: retail || food, warehouse: true, purchases: true, reports: true, cashbook: true,
     transactions: retail || food, cancellations: true, accounting: true, subscription: true, security: true,
-    'warehouse-ai': role === 'OWNER',
+    'warehouse-ai': role === 'OWNER' || role === 'MANAGER',
     'tax-declarations': role === 'OWNER',
   };
   return groups.map(group => ({ label: group.label, items: group.items.filter(({ id }) =>

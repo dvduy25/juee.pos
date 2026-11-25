@@ -5,16 +5,16 @@ import { z } from 'zod';
 import { transaction } from '../config/db';
 import { access, logChange, type Scope } from '../middleware/business-access';
 import { Bill, Branch, CashEntry, HotelBooking, MemberPayment, Product, PurchaseReceipt, RetailPromotion, StaffPayPayment, TicketRefund, TicketSale,
-  WarehouseItem, expenseKinds, recordedPaymentMethods, retailBranchModes, serviceCounterModes } from '../models';
+  expenseKinds, recordedPaymentMethods, retailBranchModes, serviceCounterModes } from '../models';
 import { scopedRoute } from '../routes/branch';
 import { productBranchFilter, productTypeFilter } from '../services/catalog';
-import { retailPricing, roundedMoney } from '../services/retail';
+import { retailPricing } from '../services/retail';
 import { reportPeriods } from '../services/revenue';
 import { cashJournal } from '../services/cash-journal';
 import { cashEntryRange, expenseGroup, expenseLabels, summarizeExpenses, type GroupedExpense } from '../services/operating-expenses';
 import { csvDate, csvFile } from '../services/csv';
 import { idempotent } from '../services/sales';
-import { recordWarehouseMovement, warehouseExpiry, warehouseQuantity } from '../services/warehouse';
+import { purchaseInput, savePurchase } from '../services/purchases';
 import { found, isDuplicate, mongoId } from '../utils/db';
 import { label, objectId, read, vnd } from '../validators/common';
 import { amount, discountCode, pageSchema } from '../validators/sales';
@@ -89,36 +89,11 @@ export class FinanceController {
 
   @Post('purchases')
   async purchase(@Req() req: Request, @Param() route: Route, @Body() body: unknown, @Headers('idempotency-key') key?: string) {
-    const line = z.object({ itemId: objectId, quantity: warehouseQuantity.refine(q => q > 0), unitCost: vnd,
-      taxBps: rate, expiresOn: warehouseExpiry }).strict();
-    const input = read(z.object({ supplier: label, reference: label.optional(), method: z.enum(recordedPaymentMethods),
-      lines: z.array(line).min(1).max(30).refine(lines => new Set(lines.map(item => `${item.itemId}:${item.expiresOn ?? ''}`)).size === lines.length,
-        'Mỗi mặt hàng và hạn sử dụng chỉ nhập một dòng.') }).strict(), body);
+    const input = read(purchaseInput, body);
     const { scope, actorId } = await access(req, route.tenantId, route.branchId, 'purchases.manage');
     return idempotent(scope, 'PURCHASE', key, { actorId, input }, async session => {
       await access(req, route.tenantId, route.branchId, 'purchases.manage', session);
-      const items = await WarehouseItem.find({ ...scope, _id: { $in: input.lines.map(item => item.itemId) } }).session(session);
-      const byId = new Map(items.map(item => [item.id, item]));
-      const lines = input.lines.map(line => {
-        const item = found(byId.get(line.itemId), 'Có mặt hàng không thuộc kho chi nhánh.');
-        const subtotal = roundedMoney(BigInt(line.quantity) * BigInt(line.unitCost), 1000n);
-        const taxAmount = roundedMoney(BigInt(subtotal) * BigInt(line.taxBps), 10000n);
-        return { ...line, itemId: item._id, name: item.name, code: item.code, unit: item.unit, subtotal, taxAmount };
-      });
-      const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0);
-      const taxAmount = lines.reduce((sum, line) => sum + line.taxAmount, 0);
-      const totalAmount = subtotal + taxAmount;
-      if (!Number.isSafeInteger(totalAmount)) throw new ConflictException('Tổng giá trị phiếu nhập vượt giới hạn.');
-      const receipt = await PurchaseReceipt.insertOne({ ...scope, actorId, ...input, lines, subtotal, taxAmount, totalAmount }, { session });
-      for (const line of lines) {
-        const item = byId.get(String(line.itemId))!;
-        item.unitCost = roundedMoney(BigInt(item.onHand) * BigInt(item.unitCost ?? line.unitCost) +
-          BigInt(line.quantity) * BigInt(line.unitCost), BigInt(item.onHand + line.quantity));
-        await recordWarehouseMovement(scope, item, { operation: 'RECEIPT', quantity: line.quantity,
-          actorId, note: `Nhập hàng · ${input.supplier}`, referenceId: receipt._id, expiresOn: line.expiresOn ?? null }, session);
-      }
-      await logChange(scope, actorId, 'PURCHASE_CREATE', receipt._id, session);
-      return receipt.toObject();
+      return savePurchase(scope, actorId, input, session);
     });
   }
 

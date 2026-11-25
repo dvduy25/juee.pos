@@ -8,8 +8,9 @@ import { connectDatabase } from '../src/config/db';
 import { hotelNoon } from '../src/services/hotel-stays';
 import { facilityToday, shiftDays } from '../src/services/membership-plans';
 import { verificationDigest, tokenDigest } from '../src/services/account-email';
+import { suggestMenuItems, suggestWarehouseItems } from '../src/services/inventory-ai-import';
 import { AccountToken, AdminAuditLog, AuditLog, Bill, Branch, BranchProductPrice, BuffetPackage, Category, DiningArea, DiningTable, FacilityMember, GuestSession, IdempotencyRecord, IncomingTransfer, KitchenTicket, MemberCredential, MemberPayment, MemberPlan, Membership, MemberVisit, Order, OutboxEvent, Payment, PaymentIntent, Plan, PlanVersion, PlatformGrant, Product, ProductVariant, Refund, SaaSInvoice, Subscription, TableSession, Tenant, UnavailableProduct, User, UserSession, WarehouseItem, WarehouseMovement } from '../src/models';
-import { AdmissionTicket, BusinessAiSettings, CashEntry, TaxDeclaration, DishRecipe, HotelBooking, HotelPackage, HotelRoom, MemberClass, StaffAttendance, StaffClockCredential, StaffClockDevice,
+import { AdmissionTicket, BusinessAiSettings, CashEntry, TaxDeclaration, DishRecipe, HotelBooking, HotelPackage, HotelRoom, MemberClass, PurchaseReceipt, StaffAttendance, StaffClockCredential, StaffClockDevice,
   StaffDocument, StaffIdentity, StaffPayPayment, StaffPayRate, StaffSchedule, TicketRefund, TicketSale, TicketType } from '../src/models';
 import { authenticator } from 'otplib';
 import { setTimeout } from 'node:timers/promises';
@@ -133,7 +134,8 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     const extraBusiness = await request('/tenants', 'POST',
       { name: 'Nhà hàng thứ hai', branch: { ...branch, mode: 'RESTAURANT' } }, owner);
     assert.equal(extraBusiness.status, 201);
-    tenantIds.push((await extraBusiness.json()).id);
+    const restaurantId = (await extraBusiness.json()).id;
+    tenantIds.push(restaurantId);
 
     const legacyRequest = await request('/tenants', 'POST', { ...data, subscription: 'PAID', planCode: 'PLUS' }, staff);
     assert.equal(legacyRequest.status, 201);
@@ -180,6 +182,55 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     const storedKey = await BusinessAiSettings.findById(ownerTenant).select('+encryptedKey').orFail();
     assert.ok(!storedKey.encryptedKey.includes(sampleKey));
     assert.deepEqual(await (await request(keyPath, 'DELETE', undefined, owner)).json(), { configured: false });
+
+    const [restaurant] = await (await request(`/tenants/${restaurantId}/branches`, 'GET', undefined, owner)).json();
+    const restaurantBranch = `/tenants/${restaurantId}/branches/${restaurant.id}`;
+    const aiScope = { tenantId: new mongoose.Types.ObjectId(restaurantId), branchId: new mongoose.Types.ObjectId(restaurant.id) };
+    const rice = await WarehouseItem.insertOne({ ...aiScope, code: 'TEST-RICE', name: 'Gạo thơm', unit: 'kg', onHand: 1000 });
+    const otherRice = await WarehouseItem.insertOne({ tenantId: ownerTenant, branchId: primary.id, code: 'TEST-OTHER-RICE',
+      name: 'Gạo thơm', unit: 'kg' });
+    const warehouseDraft = await suggestWarehouseItems(aiScope, [{ name: 'GẠO  thơm', unit: 'KG' },
+      { name: 'Gạo thơm', unit: 'bao' }, { name: 'Nước tương', unit: 'chai' }]);
+    assert.equal(warehouseDraft[0].item?.id, rice.id);
+    assert.equal(warehouseDraft[1].item, null);
+    assert.equal(warehouseDraft[1].needsMatch, true);
+    assert.equal(warehouseDraft[2].needsMatch, false);
+    const receive = `${restaurantBranch}/warehouse/ai/receive`;
+    const amount = { quantity: '2.5', unitCost: 18000, taxBps: 0 };
+    const purchase = { supplier: 'Nhà cung cấp thử', method: 'CASH',
+      lines: [{ itemId: rice.id, unit: 'kg', ...amount }, { name: 'Nước tương', unit: 'chai', ...amount, quantity: '3' }] };
+    const attempt = { ...purchase, lines: [...purchase.lines, { itemId: otherRice.id, unit: 'kg', ...amount }] };
+    assert.equal((await request(receive, 'POST', attempt, owner, { 'Idempotency-Key': randomUUID() })).status, 404);
+    assert.equal(await WarehouseItem.countDocuments({ ...aiScope, name: 'Nước tương' }), 0);
+    assert.equal((await WarehouseItem.findById(rice._id).orFail()).onHand, 1000);
+    const purchaseKey = { 'Idempotency-Key': randomUUID() };
+    const purchaseResponse = await request(receive, 'POST', purchase, owner, purchaseKey);
+    assert.equal(purchaseResponse.status, 201, await purchaseResponse.clone().text());
+    assert.equal((await (await request(receive, 'POST', purchase, owner, purchaseKey)).json()).id, (await purchaseResponse.json()).id);
+    assert.equal(await PurchaseReceipt.countDocuments(aiScope), 1);
+    assert.equal((await WarehouseItem.findById(rice._id).orFail()).onHand, 3500);
+    assert.equal((await WarehouseItem.findOne({ ...aiScope, name: 'Nước tương' }).orFail()).onHand, 3000);
+    assert.equal((await WarehouseItem.findById(otherRice._id).orFail()).onHand, 0);
+    await WarehouseItem.deleteOne({ _id: otherRice._id });
+
+    const dish = await Product.insertOne({ tenantId: aiScope.tenantId, name: 'Phở bò', productType: 'FOOD' });
+    const bowl = await ProductVariant.insertOne({ tenantId: aiScope.tenantId, productId: dish._id, sku: 'AI-PHO-BO',
+      attributes: { size: 'Tô thường' }, basePrice: 45000, costPrice: 21000 });
+    const menuDraft = await suggestMenuItems(aiScope, [{ name: 'PHỞ BÒ', price: 47000 }, { name: 'Bún bò', price: 51000 }]);
+    assert.equal(menuDraft[0].variantId, bowl.id);
+    assert.equal(menuDraft[0].choices[0].label, 'Tô thường');
+    assert.equal(menuDraft[1].variantId, null);
+    assert.equal(await BranchProductPrice.countDocuments(aiScope), 0);
+    const menuPath = `${restaurantBranch}/warehouse/ai/menu`;
+    const aiMenu = { lines: [{ variantId: bowl.id, name: 'Phở bò', price: 47000 }, { name: 'Bún bò', price: 51000 }] };
+    const menuKey = { 'Idempotency-Key': randomUUID() };
+    const menuResult = await request(menuPath, 'POST', aiMenu, owner, menuKey);
+    assert.equal(menuResult.status, 201, await menuResult.clone().text());
+    assert.deepEqual(await menuResult.json(), { count: 2 });
+    assert.equal((await request(menuPath, 'POST', aiMenu, owner, menuKey)).status, 201);
+    assert.equal((await BranchProductPrice.findOne({ ...aiScope, variantId: bowl._id }).orFail()).price, 47000);
+    assert.equal((await ProductVariant.findById(bowl._id).orFail()).basePrice, 45000);
+    assert.equal(await Product.countDocuments({ tenantId: aiScope.tenantId, name: 'Bún bò', recipeRequired: true }), 1);
     const taxPath = `${freeRoot}/tax-declarations`;
     const tax = { name: 'Kỳ kiểm thử', taxId: '0123456789', startsOn: '2026-10-01', endsOn: '2026-10-31',
       taxableRevenue: 100000, outputTax: 10000, inputTax: 2000, payableTax: 8000 };
@@ -251,6 +302,9 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     assert.equal((await request(`${secondRoot}/categories/${unlistedCategory}`, 'PATCH', { name: 'Kiểm tra danh mục' }, delegatedManager)).status, 403);
     assert.equal((await request(`${secondRoot}/accounting`, 'GET', undefined, delegatedManager)).status, 200);
     assert.equal((await request(`${branchRoot}/accounting`, 'GET', undefined, delegatedManager)).status, 403);
+    assert.equal((await request(`${secondRoot}/warehouse/ai/settings`, 'GET', undefined, delegatedManager)).status, 200);
+    assert.equal((await request(`${branchRoot}/warehouse/ai/settings`, 'GET', undefined, delegatedManager)).status, 403);
+    assert.equal((await request(`${secondRoot}/warehouse/ai/settings`, 'PATCH', { apiKey: sampleKey }, delegatedManager)).status, 403);
     assert.equal((await request(`${secondRoot}/staff/${managerMembership.id}`, 'PATCH', { branchIds: [added.id, primary.id] }, delegatedManager)).status, 403);
     assert.equal((await request(`${branchRoot}/warehouse/items`, 'GET', undefined, delegatedManager)).status, 403);
     const scope = { tenantId: ownerTenant, branchId: added.id };
@@ -1594,7 +1648,7 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
         AdminAuditLog.deleteMany({ actorId: { $in: userIds } }),
         SaaSInvoice.deleteMany({ reference: { $in: [run, `SUB-${run}`] } }),
         ...[AdmissionTicket, AuditLog, Bill, Branch, BranchProductPrice, BuffetPackage, CashEntry, Category, DiningArea, DiningTable, DishRecipe, FacilityMember, GuestSession, HotelBooking, HotelPackage, HotelRoom, IdempotencyRecord, IncomingTransfer,
-          KitchenTicket, MemberClass, MemberCredential, MemberPayment, MemberPlan, Membership, MemberVisit, Order, OutboxEvent, Payment, PaymentIntent, Product,
+          KitchenTicket, MemberClass, MemberCredential, MemberPayment, MemberPlan, Membership, MemberVisit, Order, OutboxEvent, Payment, PaymentIntent, Product, PurchaseReceipt,
           ProductVariant, Refund, StaffAttendance, StaffClockCredential, StaffClockDevice, StaffDocument, StaffIdentity, StaffPayPayment, StaffPayRate, StaffSchedule, Subscription, TableSession, TicketRefund, TicketSale, TicketType, UnavailableProduct, WarehouseItem, WarehouseMovement].map(model => model.collection.deleteMany({
             tenantId: { $in: tenantIds.map(id => new mongoose.Types.ObjectId(id)) },
           })),

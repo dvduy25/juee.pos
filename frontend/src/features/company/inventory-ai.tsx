@@ -1,24 +1,53 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { Camera, Images } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { Panel, State } from '@/components/business-ui';
 import { useAction, useBusiness, useData } from '@/hooks/use-business';
-import { ServicePaymentField } from '@/features/dashboard/service-payment';
-import { WarehousePicker } from './warehouse';
+import { usesTables } from '@/types/business';
+import { ReviewIssue, ReviewMenu, ReviewReceipt, type IssueDraft, type MenuDraft, type ReceiptDraft } from './inventory-ai-review';
 
 type Source = 'text' | 'image' | 'audio';
-type Draft = { supplier: string | null; reference: string | null; lines: {
-  name: string; unit: string | null; quantity: number | null; unitCost: number | null; taxPercent: number | null;
-}[] };
+type Kind = 'receive' | 'issue' | 'menu';
+type Draft = { kind: 'receive'; data: ReceiptDraft } | { kind: 'issue'; data: IssueDraft } | { kind: 'menu'; data: MenuDraft };
+const photoLimit = 4 * 1024 * 1024;
+const photoTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+async function photoForUpload(file: File) {
+  if (file.size <= photoLimit && photoTypes.includes(file.type)) return file;
+  const bitmap = await createImageBitmap(file);
+  try {
+    const ratio = Math.min(1, 2560 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * ratio));
+    canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) throw new Error('Canvas unavailable');
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    for (const quality of [0.9, 0.78]) {
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+      if (blob && blob.size <= photoLimit) return new File([blob], 'chung-tu.jpg', { type: 'image/jpeg' });
+    }
+    throw new Error('Photo is too large');
+  } finally {
+    bitmap.close();
+  }
+}
 
 export function InventoryAi() {
-  const { branch } = useBusiness();
+  const { branch, role } = useBusiness();
+  const query = useSearchParams();
+  const initial = query.get('document') === 'menu' && usesTables(branch.mode) ? 'menu' : 'receive';
   const settings = useData<{ configured: boolean }>('/warehouse/ai/settings');
   const action = useAction();
   return <>
-    <Panel title="Khóa API của doanh nghiệp">
+    {settings.data?.configured && <InvoiceAssistant key={branch.id + initial} initial={initial}/>}
+    {role === 'OWNER' ? <Panel title="Khóa API của doanh nghiệp">
       <State query={settings}/>
-      <p className="muted">Dùng khóa OpenAI của doanh nghiệp. Khóa được mã hóa khi lưu. Ảnh, văn bản hoặc ghi âm được gửi đến OpenAI khi bạn yêu cầu đọc hóa đơn.</p>
+      <p className="muted">Dùng khóa OpenAI của doanh nghiệp. Khóa được mã hóa khi lưu. Ảnh, văn bản hoặc ghi âm được gửi đến OpenAI khi bạn yêu cầu đọc chứng từ.</p>
       <form onSubmit={event => {
         event.preventDefault();
         const form = event.currentTarget;
@@ -31,17 +60,26 @@ export function InventoryAi() {
             onClick={() => void action.send('/warehouse/ai/settings', undefined, { method: 'DELETE', message: 'Đã xóa khóa API.' })}>Xóa khóa</button>}</div>
       </form>
       {action.feedback}
-    </Panel>
-    {settings.data?.configured && <InvoiceAssistant key={branch.id}/>}
+    </Panel> : !settings.data?.configured && <Panel title="Trợ lý kho AI">
+      <State query={settings} />
+      {settings.data && <p>Chủ doanh nghiệp cần cài khóa API OpenAI để bật tính năng này.</p>}
+    </Panel>}
   </>;
 }
 
-function InvoiceAssistant() {
+function InvoiceAssistant({ initial }: { initial: 'receive' | 'menu' }) {
+  const { branch, role } = useBusiness();
   const action = useAction();
   const [source, setSource] = useState<Source>('image');
-  const [direction, setDirection] = useState('in');
+  const [kind, setKind] = useState<Kind>(initial);
   const [draft, setDraft] = useState<Draft>();
-  const [draftVersion, setDraftVersion] = useState(0);
+  const [photo, setPhoto] = useState<File>();
+  const [readPhoto, setReadPhoto] = useState<File>();
+  const [photoError, setPhotoError] = useState('');
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [notice, setNotice] = useState('');
+  const photoId = useId();
   const [audio, setAudio] = useState<File>();
   const [recording, setRecording] = useState(false);
   const [recordError, setRecordError] = useState('');
@@ -88,91 +126,116 @@ function InvoiceAssistant() {
   async function extract(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
+    setNotice('');
+    setPhotoError('');
+    setShowFeedback(false);
+    setReadPhoto(undefined);
     data.set('source', source);
+    data.set('kind', kind);
+    if (source === 'image') {
+      if (!photo) return;
+      setPreparing(true);
+      try {
+        const attachment = await photoForUpload(photo);
+        data.set('file', attachment);
+        setReadPhoto(attachment);
+      } catch {
+        setPhotoError('Không mở được ảnh hoặc ảnh quá lớn. Hãy chụp lại hoặc chọn ảnh JPG, PNG hay WebP rõ nét.');
+        return;
+      } finally {
+        setPreparing(false);
+      }
+    }
     if (source === 'audio' && audio) data.set('file', audio);
-    const next = await action.send<Draft>('/warehouse/ai/extract', data, { message: 'Đã tạo phiếu nháp. Kiểm tra từng dòng trước khi ghi kho.' });
-    if (next) { setDraft(next); setDraftVersion(value => value + 1); }
+    const path = '/warehouse/ai/extract';
+    const options = { message: 'Đã đọc xong. Kiểm tra từng dòng trước khi xác nhận.' };
+    setShowFeedback(true);
+    if (kind === 'menu') {
+      const next = await action.send<MenuDraft>(path, data, options);
+      if (next) setDraft({ kind, data: next });
+    } else if (kind === 'receive') {
+      const next = await action.send<ReceiptDraft>(path, data, options);
+      if (next) setDraft({ kind, data: next });
+    } else {
+      const next = await action.send<IssueDraft>(path, data, options);
+      if (next) setDraft({ kind, data: next });
+    }
   }
 
-  return <Panel title="Tạo phiếu kho từ hóa đơn">
-    <form onSubmit={extract}>
+  function finish(message: string) {
+    setDraft(undefined);
+    setPhoto(undefined);
+    setReadPhoto(undefined);
+    setAudio(undefined);
+    setNotice(message);
+  }
+
+  const busy = preparing || action.pending;
+  const close = () => { setDraft(undefined); setReadPhoto(undefined); setShowFeedback(false); };
+  return <Panel title="Đọc chứng từ bằng AI">
+    {notice && <p className="success" role="status">{notice}</p>}
+    {!draft && <form onSubmit={extract}>
       <div className="columns">
-        <label>Loại phiếu<select value={direction} onChange={event => { setDirection(event.target.value); setDraft(undefined); }} disabled={action.pending}>
-          <option value="in">Nhập kho</option><option value="out">Xuất kho</option>
+        <label>Loại chứng từ<select value={kind} onChange={event => {
+          const next = event.target.value as Kind;
+          setKind(next); setNotice(''); setPhoto(undefined); setPhotoError(''); setShowFeedback(false);
+          if (next === 'menu') setSource('image');
+        }} disabled={recording || busy}>
+          <option value="receive">Hóa đơn nhập hàng</option>
+          {usesTables(branch.mode) && <option value="menu">Thực đơn</option>}
+          {role === 'OWNER' && <option value="issue">Phiếu xuất kho</option>}
         </select></label>
-        <label>Nguồn hóa đơn<select value={source} onChange={event => setSource(event.target.value as Source)} disabled={recording || action.pending}>
-          <option value="image">Chụp hoặc tải ảnh</option><option value="text">Nhập nội dung</option><option value="audio">Ghi âm</option>
-        </select></label>
+        {kind !== 'menu' && <label>Nguồn hóa đơn<select value={source} onChange={event => {
+          setSource(event.target.value as Source); setNotice(''); setPhotoError(''); setShowFeedback(false);
+        }} disabled={recording || busy}>
+          <option value="image">Ảnh</option><option value="text">Nhập nội dung</option><option value="audio">Ghi âm</option>
+        </select></label>}
       </div>
-      {source === 'image' && <label>Ảnh hóa đơn (tối đa 4 MB)<input name="file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required/></label>}
+      {source === 'image' && <>
+        <div className="actions ai-photo-actions">
+          {([{ id: 'camera', label: 'Chụp ảnh', Icon: Camera }, { id: 'gallery', label: 'Chọn từ thư viện', Icon: Images }]).map(({ id, label, Icon }) =>
+            <label className="plain ai-photo-button" key={id} htmlFor={photoId + id}>
+              <Icon size={17} aria-hidden="true"/>{label}
+              <input id={photoId + id} type="file" accept="image/*" capture={id === 'camera' ? 'environment' : undefined}
+                disabled={busy} onChange={event => {
+                  const selected = event.currentTarget.files?.[0];
+                  if (selected) { setPhoto(selected); setPhotoError(''); setNotice(''); setShowFeedback(false); }
+                  event.currentTarget.value = '';
+                }}/>
+            </label>)}
+        </div>
+        {photo ? <p>Ảnh đã chọn <strong>{photo.name}</strong></p>
+          : <p className="muted">Chụp đủ các cột, giữ ảnh thẳng và tránh bóng hoặc lóa.</p>}
+        {photoError && <p role="alert" className="error">{photoError}</p>}
+      </>}
       {source === 'text' && <label>Nội dung hóa đơn<textarea name="text" maxLength={10000} required rows={5}/></label>}
       {source === 'audio' && <>
-        <button type="button" className="plain" disabled={action.pending} onClick={() => void toggleRecording()}>{recording ? 'Dừng ghi âm' : 'Ghi âm tối đa 1 phút'}</button>
-        {audio ? <p>Đã có bản ghi âm. Bấm Đọc hóa đơn bằng AI để tiếp tục.</p> :
-          <label>Hoặc tải bản ghi (tối đa 4 MB)<input name="file" type="file" accept="audio/webm,audio/mp4,audio/mpeg,audio/wav,audio/ogg" required disabled={recording}/></label>}
+        <button type="button" className="plain" disabled={busy} onClick={() => void toggleRecording()}>{recording ? 'Dừng ghi âm' : 'Ghi âm tối đa 1 phút'}</button>
+        {audio ? <p>Đã có bản ghi âm. Bấm Đọc bằng AI để tiếp tục.</p> :
+          <label>Hoặc tải bản ghi (tối đa 4 MB)<input name="file" type="file" accept="audio/webm,audio/mp4,audio/mpeg,audio/wav,audio/ogg" required disabled={recording || busy}/></label>}
         {recordError && <p role="alert" className="error">{recordError}</p>}
       </>}
-      <button className="button" disabled={recording || action.pending}>{action.pending ? 'Đang đọc hóa đơn…' : 'Đọc hóa đơn bằng AI'}</button>
-    </form>
-    {action.feedback}
-    {draft && <ReviewInvoice key={draftVersion} draft={draft} inbound={direction === 'in'} close={() => setDraft(undefined)}/>}
+      <button className="button" disabled={recording || busy || (source === 'image' && !photo)}>
+        {preparing ? 'Đang chuẩn bị ảnh…' : action.pending ? 'Đang đọc…' : 'Đọc bằng AI'}
+      </button>
+    </form>}
+    {!notice && showFeedback && action.feedback}
+    {draft && readPhoto && <PhotoPreview file={readPhoto}/>}
+    {draft?.kind === 'receive' && <ReviewReceipt draft={draft.data} close={close} done={finish}/>}
+    {draft?.kind === 'menu' && <ReviewMenu draft={draft.data} close={close} done={finish}/>}
+    {draft?.kind === 'issue' && <ReviewIssue draft={draft.data} close={close} done={finish}/>}
   </Panel>;
 }
 
-function ReviewInvoice({ draft, inbound, close }: { draft: Draft; inbound: boolean; close: () => void }) {
-  const [lines, setLines] = useState(draft.lines.map((line, index) => ({ ...line, index })));
-  const action = useAction();
-
-  async function commit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const items = form.getAll('warehouseItemId');
-    const quantities = form.getAll('quantity');
-    const reference = String(form.get('reference') || '');
-    const base = items.map((itemId, index) => ({ itemId, quantity: String(quantities[index]) }));
-    const result = inbound
-      ? await action.send('/purchases', { supplier: form.get('supplier'), reference: reference || undefined, method: form.get('paymentMethod'),
-        lines: base.map((item, index) => ({ ...item, unitCost: Number(form.getAll('unitCost')[index]),
-          taxBps: Math.round(Number(form.getAll('tax')[index]) * 100), expiresOn: form.getAll('expiresOn')[index] || undefined })) }, { idempotent: true })
-      : await action.send('/warehouse/ai/issue', { note: form.get('note'),
-        lines: base.map((item, index) => ({ ...item, revision: Number(form.getAll('revision')[index]) })) }, { idempotent: true });
-    if (result) close();
-  }
-
-  return <form onSubmit={commit}>
-    <h3>{inbound ? 'Duyệt phiếu nhập kho' : 'Duyệt phiếu xuất kho'}</h3>
-    <p className="muted">Đối chiếu đơn vị, số lượng và giá trên chứng từ rồi chọn mặt hàng tương ứng trong kho.</p>
-    {inbound ? <>
-      <div className="columns">
-        <label>Nhà cung cấp<input name="supplier" defaultValue={draft.supplier ?? ''} maxLength={120} required/></label>
-        <label>Số chứng từ<input name="reference" defaultValue={draft.reference ?? ''} maxLength={120}/></label>
-      </div>
-      <ServicePaymentField neutral/>
-    </> : <label>Lý do xuất và số chứng từ<input name="note" defaultValue={draft.reference ? `Xuất theo chứng từ ${draft.reference}`.slice(0, 120) : ''} maxLength={120} required/></label>}
-    {lines.map(line => <InvoiceLine key={line.index} line={line} inbound={inbound}
-      remove={lines.length > 1 ? () => setLines(items => items.filter(item => item.index !== line.index)) : undefined}/>)}
-    <div className="actions">
-      <button type="submit" className="button" disabled={action.pending}>{inbound ? 'Xác nhận nhập kho và ghi chi' : 'Xác nhận xuất kho'}</button>
-      <button type="button" className="plain" onClick={close} disabled={action.pending}>Bỏ phiếu nháp</button>
-    </div>
-    {action.feedback}
-  </form>;
-}
-
-function InvoiceLine({ line, inbound, remove }: { line: Draft['lines'][number]; inbound: boolean; remove?: () => void }) {
-  const [selected, setSelected] = useState<{ revision: number; unit: string }>();
-  return <fieldset>
-    <legend>{line.name}{line.unit ? ` · ${line.unit}` : ''}</legend>
-    <WarehousePicker onSelect={setSelected}/>
-    <input type="hidden" name="revision" value={selected?.revision ?? ''}/>
-    <div className="form-grid form-grid-business">
-      <label>Số lượng{selected ? ` (${selected.unit})` : ''}<input type="number" name="quantity" min="0.001" max="999999999.999" step="0.001" defaultValue={line.quantity ?? ''} required/></label>
-      {inbound && <>
-        <label>Đơn giá trước thuế (đ)<input type="number" name="unitCost" min="0" max="1000000000000" step="1" defaultValue={line.unitCost ?? ''} required/></label>
-        <label>Thuế (%)<input type="number" name="tax" min="0" max="100" step="0.01" defaultValue={line.taxPercent ?? ''} required/></label>
-        <label>Hạn sử dụng<input type="date" name="expiresOn"/></label>
-      </>}
-    </div>
-    {remove && <button type="button" className="plain" onClick={remove}>Bỏ dòng</button>}
-  </fieldset>;
+function PhotoPreview({ file }: { file: File }) {
+  const [url, setUrl] = useState('');
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+  return <details className="business-details ai-photo-preview">
+    <summary>Xem ảnh để đối chiếu</summary>
+    {url && <img src={url} alt="Ảnh chứng từ dùng để đối chiếu bản nháp"/>}
+  </details>;
 }

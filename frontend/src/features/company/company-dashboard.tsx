@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
-import { Building2 } from 'lucide-react';
+import { Building2, Camera } from 'lucide-react';
 import { Panel, State } from '@/components/business-ui';
 import { useBusiness, useData } from '@/hooks/use-business';
 import { currency } from '@/lib/format';
@@ -39,8 +39,12 @@ export function CompanyDashboard({ requested }: { requested?: string }) {
   const { company, role, staffMode, branches, branch } = useBusiness();
   if (!company || staffMode) return <p className="error" role="alert">Hãy dùng tài khoản chủ doanh nghiệp hoặc quản lý được giao chi nhánh.</p>;
   const { id: current, label } = companySection(requested, branch.mode, true, role);
+  const photoAction = (role === 'OWNER' || role === 'MANAGER') && (current === 'menu' || current === 'purchases');
   return <div className="company-dashboard">
-    <header className="company-title"><h1>{label}</h1></header>
+    <header className="company-title"><h1>{label}</h1>{photoAction &&
+      <Link href={`/dashboard/company?tab=warehouse-ai&document=${current === 'menu' ? 'menu' : 'receive'}`} className="plain">
+        <Camera size={17} aria-hidden="true"/>{current === 'menu' ? 'Nhập thực đơn từ ảnh' : 'Nhập hàng từ ảnh'}
+      </Link>}</header>
     {current === 'overview' && <CompanyOverview/>}
     {current === 'branches' && <BranchSettings member={company.membership} branches={branches} onCreate={company.createBusiness} embedded/>}
     {current === 'products' && <RetailCatalog key={branch.id}/>}
