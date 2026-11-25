@@ -185,14 +185,14 @@ export class AdminAuthController {
 @Controller('auth')
 export class AuthController {
   @Get('providers')
-  providers() {
-    return { google: !!googleConfig() };
+  providers(@Query('origin') origin: unknown) {
+    return { google: !!googleConfig(process.env, origin) };
   }
 
   @Get('google/start')
-  startGoogle(@Query('from') from: unknown, @Query('next') next: unknown, @Res() res: Response) {
+  startGoogle(@Query('from') from: unknown, @Query('next') next: unknown, @Query('origin') origin: unknown, @Res() res: Response) {
     const entry = from === 'register' ? 'register' : 'login';
-    const config = googleConfig();
+    const config = googleConfig(process.env, origin);
     if (!config) return res.redirect(303, `/${entry}?google=unavailable`);
     const flow = beginGoogle(config, entry, typeof next === 'string' ? next : '');
     const cookie = googleFlowCookie();
@@ -208,7 +208,7 @@ export class AuthController {
     const cookie = googleFlowCookie();
     const flow = readGoogleFlow(namedCookie(req, cookie.name));
     const entry = flow?.from ?? 'login';
-    const config = googleConfig();
+    const config = googleConfig(process.env, flow?.origin);
     const failure = (status: string) => res.redirect(303, `/${entry}?google=${status}`);
     res.set('Referrer-Policy', 'no-referrer');
     if (!config) return failure('unavailable');
@@ -223,7 +223,7 @@ export class AuthController {
       const customer = await googleCustomer(profile);
       if (!customer) {
         const signup = googleSignupCookie();
-        const pending = beginGoogleSignup({ ...profile, next: flow.next });
+        const pending = beginGoogleSignup({ ...profile, next: flow.next, origin: config.origin });
         res.cookie(signup.name, pending.cookie, { ...signup.options, maxAge: pending.maxAge });
         return res.redirect(303, '/register/google');
       }
@@ -242,8 +242,10 @@ export class AuthController {
     verifyOrigin(req);
     const cookie = googleSignupCookie();
     const pending = readGoogleSignup(namedCookie(req, cookie.name));
-    const config = googleConfig();
-    if (!pending || !config) throw new UnauthorizedException('Phiên đăng ký Google đã hết hạn. Hãy chọn lại tài khoản Google.');
+    const config = googleConfig(process.env, req.get('origin'));
+    if (!pending || !config || (pending.origin && pending.origin !== config.origin)) {
+      throw new UnauthorizedException('Phiên đăng ký Google đã hết hạn. Hãy chọn lại tài khoản Google.');
+    }
     const { phone } = read(z.object({ phone: accountPhone }).strict(), body);
     const customer = await googleCustomer(pending, phone);
     if (!customer) throw new UnauthorizedException();

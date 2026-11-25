@@ -1,7 +1,7 @@
 import { createHash, createPublicKey, randomBytes, type KeyObject } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import { signingSecret } from '../middleware/auth';
+import { customerWebOrigins, signingSecret } from '../middleware/auth';
 import { accountEmail, label } from '../validators/common';
 
 const authorizeEndpoint = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -30,10 +30,12 @@ export function googleSignupCookie() {
 }
 
 const googleEntry = z.enum(['login', 'register']);
-const flowSchema = z.object({ state: challenge, nonce: challenge, verifier: challenge, from: googleEntry, next: z.string().max(1500) });
+const flowOrigin = z.string().max(512).optional();
+const flowSchema = z.object({ state: challenge, nonce: challenge, verifier: challenge, from: googleEntry,
+  next: z.string().max(1500), origin: flowOrigin });
 type Flow = z.infer<typeof flowSchema>;
 const googleSubject = z.string().regex(/^[!-~]{1,255}$/);
-const signupSchema = z.object({ subject: googleSubject, email: accountEmail, name: label, next: z.string().max(1500) });
+const signupSchema = z.object({ subject: googleSubject, email: accountEmail, name: label, next: z.string().max(1500), origin: flowOrigin });
 type Signup = z.infer<typeof signupSchema>;
 const googleClaims = z.object({
   sub: googleSubject, email: accountEmail, email_verified: z.union([z.literal(true), z.literal('true')]),
@@ -44,11 +46,10 @@ const publicKeys = z.object({ keys: z.array(z.object({
   kty: z.literal('RSA'), kid: z.string().min(1).max(128), n: z.string().min(1), e: z.string().min(1),
 })) });
 
-export function googleConfig(env = process.env) {
+export function googleConfig(env = process.env, origin: unknown = env.WEB_ORIGIN) {
   const clientId = env.GOOGLE_CLIENT_ID?.trim();
   const clientSecret = env.GOOGLE_CLIENT_SECRET?.trim();
-  const origin = env.WEB_ORIGIN;
-  if (!clientId || !clientSecret || !origin) return undefined;
+  if (!clientId || !clientSecret || typeof origin !== 'string' || !customerWebOrigins(env).includes(origin)) return undefined;
   return { clientId, clientSecret, callback: new URL('/api/v1/auth/google/callback', origin).href, origin };
 }
 
@@ -65,7 +66,8 @@ export function googleDestination(value: string, origin: string) {
 }
 
 export function beginGoogle(config: Config, from: Flow['from'], next: string) {
-  const flow: Flow = { state: random(), nonce: random(), verifier: random(), from, next: googleDestination(next, config.origin) };
+  const flow: Flow = { state: random(), nonce: random(), verifier: random(), from,
+    next: googleDestination(next, config.origin), origin: config.origin };
   const cookie = jwt.sign(flow, signingSecret(), { issuer: stateIssuer, expiresIn: transactionLifetime, algorithm: 'HS256' });
   const url = new URL(authorizeEndpoint);
   url.search = new URLSearchParams({
@@ -86,8 +88,8 @@ export function readGoogleFlow(raw: string | undefined): Flow | undefined {
   }
 }
 
-export function beginGoogleSignup({ subject, email, name, next }: Signup) {
-  const cookie = jwt.sign({ subject, email, name, next }, signingSecret(), { issuer: signupIssuer, expiresIn: transactionLifetime, algorithm: 'HS256' });
+export function beginGoogleSignup({ subject, email, name, next, origin }: Signup) {
+  const cookie = jwt.sign({ subject, email, name, next, origin }, signingSecret(), { issuer: signupIssuer, expiresIn: transactionLifetime, algorithm: 'HS256' });
   return { cookie, maxAge: transactionLifetime * 1000 };
 }
 

@@ -20,27 +20,34 @@ function GoogleAccess({ from }: { from: 'login' | 'register' }) {
   const [available, setAvailable] = useState(false);
   const [next, setNext] = useState('');
   const [status, setStatus] = useState('');
+  const [origin, setOrigin] = useState('');
 
   useEffect(() => {
     let mounted = true;
     const search = new URLSearchParams(window.location.search);
+    const currentOrigin = window.location.origin;
     setStatus(search.get('google') ?? '');
     setNext(search.get('next') ?? '');
-    api<{ google: boolean }>('/auth/providers').then(result => { if (mounted) setAvailable(result.google === true); })
+    setOrigin(currentOrigin);
+    api<{ google: boolean }>(`/auth/providers?${new URLSearchParams({ origin: currentOrigin })}`)
+      .then(result => { if (mounted) setAvailable(result.google === true); })
       .catch(() => {});
     return () => { mounted = false; };
   }, []);
 
   if (!available && !Object.hasOwn(googleMessages, status)) return null;
-  const params = new URLSearchParams({ from, ...(next && { next }) });
-  return <div className="access-provider">
+  const registering = from === 'register';
+  const params = new URLSearchParams({ from, origin, ...(next && { next }) });
+  const divider = <div className="access-divider"><span>{registering ? 'hoặc đăng ký bằng email' : 'hoặc'}</span></div>;
+  return <div className={registering ? 'access-provider access-provider-first' : 'access-provider'}>
     {Object.hasOwn(googleMessages, status) && <p className="error access-feedback" role="alert">{googleMessages[status]}</p>}
     {available && <>
-      <div className="access-divider"><span>hoặc</span></div>
+      {!registering && divider}
       <a className="access-google" href={'/api/v1/auth/google/start?' + params} referrerPolicy="no-referrer">
         <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" height="18" alt="" referrerPolicy="no-referrer"/>
-        Tiếp tục với Google
+        {registering ? 'Đăng ký bằng Google' : 'Tiếp tục với Google'}
       </a>
+      {registering && divider}
     </>}
   </div>;
 }
@@ -192,9 +199,10 @@ export function CustomerRegister() {
     });
   }
 
-  return <AuthScene interactive title="Tạo tài khoản" description="Dùng email và số điện thoại của bạn để đăng ký JUEE POS.">
+  return <AuthScene interactive title="Tạo tài khoản" description="Chuẩn bị số điện thoại để hoàn tất đăng ký.">
     {created && <p className="success access-feedback" role="status">Đã tạo tài khoản.</p>}
     {error && <p className="error access-feedback" role="alert">{error}</p>}
+    {!created && <GoogleAccess from="register"/>}
     {created ? <Link className="button access-submit" href="/login">Đến trang đăng nhập <ArrowRight size={18} aria-hidden="true"/></Link> :
       <form className="access-form" method="post" onSubmit={submit}>
         <fieldset disabled={pending} aria-busy={pending}>
@@ -210,7 +218,6 @@ export function CustomerRegister() {
         </fieldset>
         <AccessSubmit pending={pending} coolingDown={coolingDown} label="Đăng ký" working="Đang tạo tài khoản…"/>
       </form>}
-    {!created && <GoogleAccess from="register"/>}
     {!created && <p className="access-footer">Đã có tài khoản? <Link href="/login">Đăng nhập</Link></p>}
   </AuthScene>;
 }

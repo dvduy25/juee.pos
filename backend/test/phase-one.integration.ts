@@ -8,7 +8,7 @@ import { connectDatabase } from '../src/config/db';
 import { hotelNoon } from '../src/services/hotel-stays';
 import { facilityToday, shiftDays } from '../src/services/membership-plans';
 import { verificationDigest, tokenDigest } from '../src/services/account-email';
-import { beginGoogleSignup, googleSignupCookie } from '../src/services/google-auth';
+import { beginGoogleSignup, googleFlowCookie, googleSignupCookie, readGoogleFlow } from '../src/services/google-auth';
 import { suggestMenuItems, suggestWarehouseItems } from '../src/services/inventory-ai-import';
 import { AccountToken, AdminAuditLog, AuditLog, Bill, Branch, BranchProductPrice, BuffetPackage, Category, DiningArea, DiningTable, FacilityMember, GuestSession, IdempotencyRecord, IncomingTransfer, KitchenTicket, MemberCredential, MemberPayment, MemberPlan, Membership, MemberVisit, Order, OutboxEvent, Payment, PaymentIntent, Plan, PlanVersion, PlatformGrant, Product, ProductVariant, Refund, SaaSInvoice, Subscription, TableSession, Tenant, UnavailableProduct, User, UserSession, WarehouseItem, WarehouseMovement } from '../src/models';
 import { AdmissionTicket, BusinessAiSettings, CashEntry, TaxDeclaration, DishRecipe, HotelBooking, HotelPackage, HotelRoom, MemberClass, PurchaseReceipt, StaffAttendance, StaffClockCredential, StaffClockDevice,
@@ -133,12 +133,21 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     assert.deepEqual(simultaneous.map(response => response.status).sort(), [201, 409]);
     for (const response of simultaneous) if (response.ok) userIds.push((await response.json()).id);
 
-    const googleProfile = { subject: 'google-' + run, email: `google-${run}@gmail.com`, name: 'Google test', next: '/dashboard' };
+    const startGoogle = await fetch(`${base}/auth/google/start?${new URLSearchParams({ from: 'register', origin: secondaryOrigin })}`, { redirect: 'manual' });
+    assert.equal(startGoogle.status, 303);
+    const googleLocation = new URL(startGoogle.headers.get('location')!);
+    assert.equal(googleLocation.origin, 'https://accounts.google.com');
+    assert.equal(googleLocation.searchParams.get('redirect_uri'), `${secondaryOrigin}/api/v1/auth/google/callback`);
+    const flowCookie = startGoogle.headers.getSetCookie().find(item => item.startsWith(`${googleFlowCookie().name}=`));
+    assert.equal(readGoogleFlow(flowCookie?.split(';', 1)[0].split('=')[1])?.origin, secondaryOrigin);
+
+    const googleProfile = { subject: 'google-' + run, email: `google-${run}@gmail.com`, name: 'Google test', next: '/dashboard', origin: secondaryOrigin };
     const googlePending = beginGoogleSignup(googleProfile);
-    const googleHeaders = { Cookie: `${googleSignupCookie().name}=${googlePending.cookie}` };
+    const googleHeaders = { Origin: secondaryOrigin, Cookie: `${googleSignupCookie().name}=${googlePending.cookie}` };
     assert.equal((await request('/auth/google/register', 'POST', { phone: '0901234506' })).status, 401);
     assert.equal((await request('/auth/google/register', 'POST', {}, undefined, googleHeaders)).status, 400);
     assert.equal((await request('/auth/google/register', 'POST', { phone: '+84901234501' }, undefined, googleHeaders)).status, 409);
+    assert.equal((await request('/auth/google/register', 'POST', { phone: '0901234506' }, undefined, { ...googleHeaders, Origin: origin })).status, 401);
     assert.equal(await User.exists({ email: googleProfile.email }), null);
     const googleRegistration = await request('/auth/google/register', 'POST', { phone: '0901234506' }, undefined, googleHeaders);
     assert.equal(googleRegistration.status, 200);
@@ -148,6 +157,7 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     userIds.push(googleAccount.id);
     assert.equal(googleAccount.registrationPhone, '+84901234506');
     assert.ok(googleAccount.emailVerifiedAt);
+    assert.equal(googleAccount.passwordHash, undefined);
     assert.equal((await request('/auth/google/register', 'POST', { phone: '0901234507' }, undefined, googleHeaders)).status, 409);
 
     await User.updateOne({ _id: ownerId }, { $set: { emailVerificationRequired: true } });

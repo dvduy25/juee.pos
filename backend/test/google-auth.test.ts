@@ -5,11 +5,18 @@ import jwt from 'jsonwebtoken';
 import { beginGoogle, exchangeGoogleCode, googleConfig, googleDestination, readGoogleFlow } from '../src/services/google-auth';
 
 const origin = 'http://localhost:3000';
-const config = googleConfig({ WEB_ORIGIN: origin, GOOGLE_CLIENT_ID: 'test-client', GOOGLE_CLIENT_SECRET: 'test-secret' })!;
+const render = 'https://juee-pos-web.onrender.com';
+const web = 'https://juee-pos-web.netlify.app';
+const credentials = { GOOGLE_CLIENT_ID: 'test-client', GOOGLE_CLIENT_SECRET: 'test-secret' };
 
 test('Google authorization requires provider settings and returns only to the customer dashboard', () => {
   assert.equal(googleConfig({ WEB_ORIGIN: origin, GOOGLE_CLIENT_ID: 'test-client' }), undefined);
-  assert.equal(config.callback, origin + '/api/v1/auth/google/callback');
+  assert.equal(googleConfig({ WEB_ORIGIN: origin, ...credentials })?.callback, origin + '/api/v1/auth/google/callback');
+  const hosted = { WEB_ORIGIN: web, ...credentials };
+  assert.equal(googleConfig(hosted)?.callback, web + '/api/v1/auth/google/callback');
+  assert.equal(googleConfig(hosted, render)?.callback, render + '/api/v1/auth/google/callback');
+  assert.equal(googleConfig(hosted, render + '.example'), undefined);
+  assert.equal(googleConfig(hosted, [web, render]), undefined);
   assert.equal(googleDestination('/dashboard/security?view=account#password', origin), '/dashboard/security?view=account#password');
   for (const url of ['/dashboard/../login', '/admin', '//other.example/dashboard', 'https://other.example/dashboard']) {
     assert.equal(googleDestination(url, origin), '/dashboard');
@@ -24,11 +31,14 @@ test('Google sign-in binds the verified identity to the browser flow', async t =
     else process.env.JWT_SECRET = previous;
   });
 
+  const config = googleConfig({ WEB_ORIGIN: web, ...credentials }, render)!;
   const request = beginGoogle(config, 'register', '/dashboard/security');
   const flow = readGoogleFlow(request.cookie);
   assert.ok(flow);
+  assert.equal(flow.origin, render);
   const url = new URL(request.url);
   assert.equal(url.origin, 'https://accounts.google.com');
+  assert.equal(url.searchParams.get('redirect_uri'), render + '/api/v1/auth/google/callback');
   assert.equal(url.searchParams.get('state'), flow.state);
   assert.equal(url.searchParams.get('nonce'), flow.nonce);
   assert.equal(url.searchParams.get('code_challenge'), createHash('sha256').update(flow.verifier).digest('base64url'));

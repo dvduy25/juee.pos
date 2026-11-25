@@ -81,10 +81,10 @@ Khi thử riêng trên máy, có thể đặt `ALLOW_UNVERIFIED_LOCAL_SIGNUP=tru
 ### Đăng nhập và đăng ký bằng Google
 
 1. Thiết lập màn hình đồng ý và tạo OAuth Client loại **Web application** trong [Google Auth Platform](https://console.cloud.google.com/auth/clients).
-2. Trong **Authorized redirect URIs**, thêm `http://localhost:3000/api/v1/auth/google/callback` nếu `WEB_ORIGIN=http://localhost:3000`. Khi triển khai, dùng `https://<tên-miền-web-khách-hàng>/api/v1/auth/google/callback`. Mở web bằng đúng địa chỉ `WEB_ORIGIN` đã cấu hình.
-3. Điền `GOOGLE_CLIENT_ID` và `GOOGLE_CLIENT_SECRET` vào `backend/.env` hoặc cấu hình biến môi trường của API khi triển khai. Chạy `npm run db:indexes` rồi khởi động lại API để bật nút **Tiếp tục với Google**.
+2. Trong **Authorized redirect URIs**, thêm đường dẫn `/api/v1/auth/google/callback` cho từng địa chỉ web dùng Google. Ví dụ `http://localhost:3000/api/v1/auth/google/callback` khi chạy trên máy hoặc `https://juee-pos-web.onrender.com/api/v1/auth/google/callback` trên Render. Nếu mở Google trên Netlify, thêm `https://juee-pos-web.netlify.app/api/v1/auth/google/callback`.
+3. Điền `GOOGLE_CLIENT_ID` và `GOOGLE_CLIENT_SECRET` vào `backend/.env` hoặc cấu hình biến môi trường của dịch vụ API khi triển khai. Chạy `npm run db:indexes` nếu cơ sở dữ liệu chưa có các chỉ mục tài khoản, rồi khởi động lại API để bật đăng nhập và đăng ký bằng Google.
 
-Lần đầu đăng nhập với Gmail hoặc Google Workspace sẽ tạo tài khoản khách hàng. Email đã dùng cho tài khoản JUEE POS cần đăng nhập bằng phương thức hiện có. Có thể đặt mật khẩu trong **Bảo mật tài khoản** trong vòng 5 phút sau khi đăng nhập bằng Google để sử dụng những thao tác yêu cầu xác nhận mật khẩu.
+Người dùng mới chọn Gmail hoặc Google Workspace, sau đó nhập số điện thoại để tạo tài khoản khách hàng. JUEE POS dùng thông tin đã được Google xác minh. Email đã dùng cho tài khoản JUEE POS cần đăng nhập bằng phương thức hiện có. Có thể đặt mật khẩu trong **Bảo mật tài khoản** trong vòng 5 phút sau khi đăng nhập bằng Google để sử dụng những thao tác yêu cầu xác nhận mật khẩu.
 
 ### Super Admin
 

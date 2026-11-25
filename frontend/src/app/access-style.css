@@ -133,6 +133,8 @@
 .access-card .access-submit svg { flex: none; }
 .access-card .access-spinner { animation: access-spin 750ms linear infinite; }
 .access-provider { margin-top: 14px; }
+.access-provider-first { margin: 0 0 14px; }
+.access-card .access-provider-first a.access-google { margin: 0 0 13px; }
 .access-divider {
   display: flex;
   align-items: center;
