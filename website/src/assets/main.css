@@ -172,3 +172,35 @@ h2{font-size:clamp(2.12rem,3.6vw,3.35rem);font-weight:800;letter-spacing:-.054em
   .nav-account { font-size: .84rem; }
   .nav-account .button { padding-inline: 10px; font-size: .84rem; }
 }
+
+.mobile-topics { display: none; }
+.guide { padding-block: clamp(46px, 7vw, 82px); border-bottom: 1px solid var(--line); }
+.guide-topics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.guide-topics details { min-width: 0; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.guide-topics details[open] { border-color: #d4c4f1; }
+.guide-topics summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center;
+  gap: 12px; padding: 16px; cursor: pointer; list-style: none; }
+.guide-topics summary::-webkit-details-marker { display: none; }
+.guide-topics summary:hover { color: var(--violet); }
+.guide-topics summary::after { content: '+'; color: var(--violet); font-size: 1.25rem; }
+.guide-topics details[open] summary::after { content: '−'; }
+.guide-topics summary .feature-icon { margin: 0; }
+.guide-topics summary small { display: block; margin-top: 4px; color: var(--muted); line-height: 1.4; }
+.guide-topics ol { margin: 0 16px; padding: 14px 4px 3px 22px; border-top: 1px solid var(--line); }
+.guide-topics li { margin-bottom: 9px; color: var(--muted); font-size: .94rem; line-height: 1.55; }
+.guide-topics li strong { color: var(--ink); }
+.guide-topics li::marker { color: var(--violet); font-weight: 750; }
+.guide-links { display: flex; flex-wrap: wrap; }
+.guide-link { display: inline-flex; align-items: center; min-height: 44px; margin: 0 0 10px 16px;
+  color: var(--violet); font-size: .91rem; font-weight: 700; }
+.guide-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+@media(max-width:950px) {
+  .mobile-topics { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .mobile-topics a { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 12px;
+    border: 1px solid var(--line); border-radius: 8px; background: #fff; font-size: .9rem; font-weight: 650; }
+  .mobile-topics a:hover { color: var(--violet); }
+}
+@media(max-width:690px) {
+  .guide-topics { grid-template-columns: minmax(0, 1fr); }
+  .guide .section-heading { grid-template-columns: minmax(0, 1fr); gap: 9px; }
+}

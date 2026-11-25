@@ -7,6 +7,15 @@ import { objectId } from '../validators/common';
 import { PlatformGrant, User, UserSession } from '../models';
 import { canAdmin } from './policy';
 
+const jueeWeb = ['https://juee-pos-web.netlify.app', 'https://juee-pos-web.onrender.com'];
+
+export function customerWebOrigins(env = process.env) {
+  const primary = env.WEB_ORIGIN;
+  if (!primary) return [];
+  const secondary = env.SECONDARY_WEB_ORIGIN?.trim() ?? (jueeWeb.includes(primary) ? jueeWeb.find(site => site !== primary) : undefined);
+  return secondary && secondary !== primary ? [primary, secondary] : [primary];
+}
+
 export function signingSecret() {
   const secret = process.env.JWT_SECRET;
   if (!secret || secret.length < 32 || secret.startsWith('replace-with')) {
@@ -16,7 +25,8 @@ export function signingSecret() {
 }
 
 export function verifyOrigin(req: Request) {
-  if (req.get('origin') !== process.env.WEB_ORIGIN) throw new ForbiddenException();
+  const origin = req.get('origin');
+  if (!origin || !customerWebOrigins().includes(origin)) throw new ForbiddenException();
 }
 
 export type SessionSurface = 'customer' | 'admin';

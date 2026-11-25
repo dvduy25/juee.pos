@@ -8,7 +8,7 @@ import mongoose from 'mongoose';
 import type { ExceptionFilter } from '@nestjs/common';
 import type { Response } from 'express';
 import { AdminAuthController, AuthController } from './controllers/auth';
-import { adminWebOrigin, signingSecret } from './middleware/auth';
+import { adminWebOrigin, customerWebOrigins, signingSecret } from './middleware/auth';
 import { apiRateLimit, authLimitWindow } from './middleware/rate-limits';
 import { TenantsController } from './controllers/tenants';
 import { PlatformController } from './controllers/platform';
@@ -84,13 +84,20 @@ async function main() {
   const web = origin && URL.canParse(origin) ? new URL(origin) : null;
   if (!web || web.origin !== origin || !['http:', 'https:'].includes(web.protocol)) throw new Error('Invalid WEB_ORIGIN');
   if (process.env.NODE_ENV === 'production' && web.protocol !== 'https:') throw new Error('WEB_ORIGIN must use HTTPS in production');
+  const customerOrigins = customerWebOrigins();
+  const customerHostnames = customerOrigins.map(site => {
+    const url = URL.canParse(site) ? new URL(site) : null;
+    if (!url || url.origin !== site || !['http:', 'https:'].includes(url.protocol) ||
+      (process.env.NODE_ENV === 'production' && url.protocol !== 'https:')) throw new Error('Invalid SECONDARY_WEB_ORIGIN');
+    return url.hostname;
+  });
   const adminOrigin = adminWebOrigin();
   if (adminOrigin) {
     const admin = URL.canParse(adminOrigin) ? new URL(adminOrigin) : null;
-    if (!admin || admin.origin !== adminOrigin || !['http:', 'https:'].includes(admin.protocol) || adminOrigin === origin) {
-      throw new Error('ADMIN_WEB_ORIGIN must be a valid origin separate from WEB_ORIGIN');
+    if (!admin || admin.origin !== adminOrigin || !['http:', 'https:'].includes(admin.protocol) || customerOrigins.includes(adminOrigin)) {
+      throw new Error('ADMIN_WEB_ORIGIN must be a valid origin separate from customer origins');
     }
-    if (process.env.NODE_ENV === 'production' && (admin.protocol !== 'https:' || admin.hostname === web.hostname)) {
+    if (process.env.NODE_ENV === 'production' && (admin.protocol !== 'https:' || customerHostnames.includes(admin.hostname))) {
       throw new Error('ADMIN_WEB_ORIGIN must use HTTPS on a separate hostname in production');
     }
   }
@@ -126,7 +133,8 @@ async function main() {
   app.useGlobalFilters(new DatabaseErrors());
   app.setGlobalPrefix('api/v1');
   app.set('json replacer', jsonTransform);
-  app.enableCors({ origin: adminOrigin ? [web.origin, adminOrigin] : web.origin, credentials: true, methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] });
+  app.enableCors({ origin: adminOrigin ? [...customerOrigins, adminOrigin] : customerOrigins, credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] });
   app.use(helmet());
   app.use('/api/v1', (_request: unknown, response: Response, next: () => void) => {
     response.setHeader('Cache-Control', 'private, no-store');

@@ -18,6 +18,7 @@ import { setTimeout } from 'node:timers/promises';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const origin = 'http://localhost:3000';
+const secondaryOrigin = 'http://localhost:3001';
 const adminOrigin = 'http://127.0.0.1:3002';
 const port = process.env.TEST_API_PORT ?? '14000';
 const base = `http://127.0.0.1:${port}/api/v1`;
@@ -40,11 +41,20 @@ function staffForm(profile: object, documents = false) {
 
 let requestCount = 0;
 let firstRequestAt = 0;
+let nextWindow: Promise<void> | undefined;
 
 async function request(path: string, method = 'GET', data?: unknown, accessToken?: string, extra?: Record<string, string>) {
   // Keep the long integration scenario below the API's shared per-minute limit.
+  if (requestCount >= 294) {
+    nextWindow ??= setTimeout(Math.max(0, firstRequestAt + 63_000 - Date.now())).then(() => {
+      firstRequestAt = Date.now();
+      requestCount = 0;
+      nextWindow = undefined;
+    });
+    await nextWindow;
+  }
   if (!firstRequestAt) firstRequestAt = Date.now();
-  if (++requestCount === 285) await setTimeout(Math.max(0, firstRequestAt + 63_000 - Date.now()));
+  requestCount++;
   return fetch(base + path, {
     method,
     signal: AbortSignal.timeout(5000),
@@ -66,6 +76,7 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
   assert.match(new URL(databaseUrl).pathname, /^\/[a-z0-9_-]+_test$/i);
   const webhookKey = randomBytes(32).toString('hex');
   const env = { ...process.env, SEPAY_WEBHOOK_API_KEY: webhookKey, MONGODB_URI: databaseUrl, WEB_ORIGIN: origin, ADMIN_WEB_ORIGIN: adminOrigin, PUBLIC_ORDER_ORIGIN: '', PORT: port,
+    SECONDARY_WEB_ORIGIN: secondaryOrigin,
     NODE_ENV: 'test', JWT_SECRET: randomBytes(32).toString('hex'), AI_KEY_ENCRYPTION_SECRET: randomBytes(32).toString('hex'), SMTP_URL: '', MAIL_FROM: '', BOOTSTRAP_ADMIN_EMAIL: '',
     GOOGLE_CLIENT_ID: 'integration-client', GOOGLE_CLIENT_SECRET: 'integration-secret' };
   process.env.MONGODB_URI = databaseUrl;
@@ -158,6 +169,17 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     const verification = await issue('VERIFY_EMAIL');
     assert.equal((await request('/auth/verify-email', 'POST', { email: ownerEmail, code: verification })).status, 200);
     assert.equal((await request('/auth/verify-email', 'POST', { email: ownerEmail, code: verification })).status, 400);
+    const credentialsAcrossSites = { email: ownerEmail, password };
+    assert.equal((await request('/auth/login', 'POST', credentialsAcrossSites, undefined, { Origin: 'https://juee-pos-web.onrender.com.example' })).status, 403);
+    const secondWeb = await request('/auth/login', 'POST', credentialsAcrossSites, undefined, { Origin: secondaryOrigin });
+    assert.equal(secondWeb.status, 201);
+    assert.equal(secondWeb.headers.get('access-control-allow-origin'), secondaryOrigin);
+    const secondCookie = secondWeb.headers.get('set-cookie')?.split(';', 1)[0];
+    assert.match(secondCookie ?? '', /^juee_refresh=/);
+    const refreshedWeb = await request('/auth/refresh', 'POST', undefined, undefined, { Origin: secondaryOrigin, Cookie: secondCookie! });
+    assert.equal(refreshedWeb.status, 201);
+    const { accessToken: secondaryToken } = await refreshedWeb.json();
+    assert.equal((await request('/auth/logout', 'POST', undefined, secondaryToken, { Origin: secondaryOrigin })).status, 201);
     let owner = await login(ownerEmail);
     const staff = await login(staffEmail);
     assert.equal((await request('/platform/dashboard', 'GET', undefined, owner)).status, 401);

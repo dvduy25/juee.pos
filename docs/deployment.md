@@ -31,7 +31,7 @@ Nếu nền tảng triển khai trực tiếp từ mã nguồn, đặt thư mụ
 
 Đặt `API_ORIGIN` tại **bước build**. Next.js dùng địa chỉ này để chuyển tiếp các yêu cầu từ `/api/v1` đến API. Với cùng một máy chạy Docker, dùng địa chỉ API mà container web app truy cập được.
 
-Trên Netlify, trình duyệt gửi yêu cầu đọc chứng từ AI trực tiếp đến API khi `API_ORIGIN` là địa chỉ HTTPS. Đặt `WEB_ORIGIN` tại API đúng bằng địa chỉ website Netlify để cho phép yêu cầu từ website.
+Trên Netlify, trình duyệt gửi yêu cầu đọc chứng từ AI trực tiếp đến API khi `API_ORIGIN` là địa chỉ HTTPS. Đặt `WEB_ORIGIN` tại API bằng địa chỉ khách hàng chính. Cặp `https://juee-pos-web.netlify.app` và `https://juee-pos-web.onrender.com` được chấp nhận cùng nhau khi một trong hai là địa chỉ chính. Với địa chỉ khác, đặt `SECONDARY_WEB_ORIGIN` bằng tên miền web thứ hai, gồm giao thức và không có dấu gạch chéo ở cuối. Email tài khoản và đường về từ Google dùng `WEB_ORIGIN`.
 
 ```sh
 docker build -f frontend/Dockerfile \
