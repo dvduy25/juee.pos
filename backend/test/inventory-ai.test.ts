@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { test } from 'node:test';
-import { BadGatewayException, GatewayTimeoutException } from '@nestjs/common';
+import { BadGatewayException, GatewayTimeoutException, ServiceUnavailableException } from '@nestjs/common';
 import { decryptAiKey, encryptAiKey, extractInvoice, extractMenu } from '../src/services/inventory-ai';
 
 test('the inventory API key can only be read for the business it was saved under', () => {
@@ -135,4 +135,41 @@ test('Gemini times out while reading a response without treating the document as
       message: 'Gemini phản hồi quá lâu. Hãy thử lại với ảnh nhỏ hơn hoặc nội dung ngắn hơn.' });
     return true;
   });
+});
+
+test('Gemini retries a temporary 503 with the same photo and within one deadline', async t => {
+  const credentials = { provider: 'gemini', key: 'fake-key' } as const;
+  const image = { bytes: Buffer.from('photo'), contentType: 'image/jpeg' };
+  const menu = [{ name: 'Trà đào', price: 30000 }];
+  const attempts: RequestInit[] = [];
+  t.mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
+    attempts.push(init);
+    if (attempts.length < 3) return Response.json({}, { status: 503 });
+    return Response.json({ candidates: [{ finishReason: 'STOP', content: {
+      parts: [{ text: JSON.stringify({ needsRetake: false, lines: menu }) }],
+    } }] });
+  });
+  assert.deepEqual(await extractMenu(credentials, image), menu);
+  assert.equal(attempts.length, 3);
+  for (const attempt of attempts) {
+    assert.equal(attempt.body, attempts[0].body);
+    assert.equal(attempt.signal, attempts[0].signal);
+  }
+});
+
+test('Gemini stops after two retries or when the upstream explicitly asks for a long delay', async t => {
+  const credentials = { provider: 'gemini', key: 'fake-key' } as const;
+  let calls = 0;
+  let retryAfter = '120';
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++;
+    return Response.json({}, { status: 503, headers: { 'Retry-After': retryAfter } });
+  });
+  const error = (cause: unknown) => cause instanceof ServiceUnavailableException && /Gemini đang bận/.test(cause.message);
+  await assert.rejects(extractInvoice(credentials, { text: 'test' }), error);
+  assert.equal(calls, 1);
+  retryAfter = '0';
+  calls = 0;
+  await assert.rejects(extractInvoice(credentials, { text: 'test' }), error);
+  assert.equal(calls, 3);
 });

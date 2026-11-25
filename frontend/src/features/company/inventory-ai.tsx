@@ -64,6 +64,7 @@ function ProviderSettings({ settings }: { settings: AiSettings }) {
   const saved = settings.available?.[provider] ?? settings.configured;
   const active = settings.configured && (settings.provider ?? 'openai') === provider;
   const name = providerLabels[provider];
+  const submitLabel = active ? 'Thay khóa' : `Sử dụng ${name}`;
   const path = '/warehouse/ai/settings';
 
   return <>
@@ -79,11 +80,23 @@ function ProviderSettings({ settings }: { settings: AiSettings }) {
         <option value="openai">OpenAI{settings.provider === 'openai' && settings.configured ? ' · Đang dùng' : ''}</option>
         {settings.available && <option value="gemini">Google Gemini{settings.provider === 'gemini' && settings.configured ? ' · Đang dùng' : ''}</option>}
       </select></label>
-      {provider === 'gemini' && <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">Lấy khóa tại Google AI Studio</a>}
+      <details className="ai-key-guide" open={!saved}>
+        <summary>Cách lấy khóa API {name}</summary>
+        <ol>
+          {provider === 'gemini' ? <>
+            <li>Mở <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">trang API Keys của Google AI Studio</a> và đăng nhập Google.</li>
+            <li>Bấm <strong>Create API key</strong>, chọn dự án rồi sao chép toàn bộ khóa bằng <strong>Copy key</strong>.</li>
+          </> : <>
+            <li>Mở <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">trang API Keys của OpenAI</a> và đăng nhập.</li>
+            <li>Bấm <strong>Create new secret key</strong>, chọn dự án rồi sao chép khóa ngay khi được hiển thị.</li>
+          </>}
+          <li>Quay lại JUEE POS, dán khóa vào ô <strong>Khóa API {name}</strong> và bấm <strong>{submitLabel}</strong>.</li>
+        </ol>
+      </details>
       <label>Khóa API {name}<input key={provider} name="apiKey" type="password" autoComplete="off" spellCheck={false}
         maxLength={305} placeholder={saved ? 'Đã lưu khóa' : undefined} required={!saved || active} disabled={action.pending}/></label>
       <div className="actions">
-        <button type="submit" className="button" disabled={action.pending}>{active ? 'Thay khóa' : `Sử dụng ${name}`}</button>
+        <button type="submit" className="button" disabled={action.pending}>{submitLabel}</button>
         {saved && <button type="button" className="plain" disabled={action.pending} onClick={() => {
           void action.send(settings.provider ? `${path}?provider=${provider}` : path, undefined,
             { method: 'DELETE', message: `Đã xóa khóa API ${name}.` });

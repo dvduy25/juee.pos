@@ -1,5 +1,6 @@
 import { BadGatewayException, BadRequestException, GatewayTimeoutException, Logger, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 import type { InventoryAiProvider } from '../models';
 
@@ -133,30 +134,56 @@ const geminiError = z.object({ error: z.object({ status: z.string().optional(),
   details: z.array(z.object({ reason: z.string().optional() })).optional(),
 }) });
 
+function geminiRetryDelay(response: Response, backoff: number) {
+  const header = response.headers.get('retry-after')?.trim();
+  const requested = !header ? 0 : /^\d+$/.test(header) ? Number(header) * 1000 : Date.parse(header) - Date.now();
+  return Math.max(backoff + Math.floor(Math.random() * 200), requested || 0);
+}
+
 async function geminiDocument(key: string, schema: object, instructions: string, text: string, media?: Media) {
   const parts: object[] = [{ text }];
   if (media) parts.push({ inlineData: { mimeType: media.contentType, data: media.bytes.toString('base64') } });
-  const signal = AbortSignal.timeout(35_000);
+  const timeout = 35_000;
+  const deadline = performance.now() + timeout;
+  const signal = AbortSignal.timeout(timeout);
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: instructions }] },
+    contents: [{ role: 'user', parts }],
+    generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, maxOutputTokens: 4600 },
+  });
+  const request = () => fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent', {
+    method: 'POST', redirect: 'error', signal,
+    headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
+    body,
+  });
   let response: Response;
   let data: unknown;
   try {
-    response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent', {
-      method: 'POST', redirect: 'error', signal,
-      headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: instructions }] },
-        contents: [{ role: 'user', parts }],
-        generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, maxOutputTokens: 4600 },
-      }),
-    });
-    data = await response.json().catch(error => {
-      if (signal.aborted) throw error;
-      return null;
-    });
+    response = await request();
+    for (const backoff of [800, 1600]) {
+      if (response.status !== 503) break;
+      const wait = geminiRetryDelay(response, backoff);
+      if (wait > 4000 || performance.now() + wait >= deadline) break;
+      void response.body?.cancel().catch(() => undefined);
+      await delay(wait, undefined, { signal });
+      response = await request();
+    }
+    if (response.status === 503) {
+      void response.body?.cancel().catch(() => undefined);
+    } else {
+      data = await response.json().catch(error => {
+        if (signal.aborted) throw error;
+        return null;
+      });
+    }
   } catch {
     logger.warn(signal.aborted ? 'Gemini request timed out' : 'Gemini connection failed');
     throw signal.aborted ? upstreamError('Gemini phản hồi quá lâu. Hãy thử lại với ảnh nhỏ hơn hoặc nội dung ngắn hơn.', true)
       : upstreamError('Máy chủ JUEE POS không kết nối được với Gemini. Hãy thử lại.');
+  }
+  if (response.status === 503) {
+    logger.warn('Gemini is still unavailable (HTTP 503)');
+    throw new ServiceUnavailableException('Gemini đang bận (HTTP 503). Hãy đợi vài phút rồi bấm Đọc bằng AI lại.');
   }
   const error = geminiError.safeParse(data);
   if (response.status === 401 || response.status === 403 ||
