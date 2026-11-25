@@ -60,7 +60,7 @@ test('the invoice parser requests a bounded draft and ignores invalid model resp
 });
 
 test('Gemini reads text, invoice photos, menu photos and recordings as validated drafts', async t => {
-  const credentials = { provider: 'gemini', key: 'test-gemini-key' } as const;
+  const credentials = { provider: 'gemini', key: 'AQ.fake_test_key_for_inventory_request_123456789012' } as const;
   type RequestData = { contents: { parts: { text?: string; inlineData?: { mimeType: string; data: string } }[] }[];
     generationConfig: { responseMimeType: string; responseJsonSchema: { required: string[] } } };
   let request: RequestData | undefined;

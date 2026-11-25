@@ -177,7 +177,7 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     await Subscription.updateOne({ _id: contract._id }, { $unset: { trial: 1, expiresAt: 1 } });
     const keyPath = `${freeRoot}/warehouse/ai/settings`;
     const sampleKey = 'sk-test-only-for-inventory-encryption';
-    const sampleGemini = 'test-Gemini-only-for-inventory-encryption';
+    const sampleGemini = 'AQ.fake_test_key_for_inventory_encryption_1234567890';
     const unconfigured = { configured: false, provider: 'openai', available: { openai: false, gemini: false } };
     const openaiOnly = { configured: true, provider: 'openai', available: { openai: true, gemini: false } };
     assert.deepEqual(await (await request(keyPath, 'GET', undefined, owner)).json(), unconfigured);
@@ -188,6 +188,7 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     assert.deepEqual(await (await request(keyPath, 'GET', undefined, owner)).json(), openaiOnly);
     assert.equal((await request(keyPath, 'PATCH', { provider: 'gemini' }, owner)).status, 400);
     assert.equal((await request(keyPath, 'PATCH', { provider: 'gemini', apiKey: sampleKey }, owner)).status, 400);
+    assert.equal((await request(keyPath, 'PATCH', { provider: 'gemini', apiKey: 'AQ.' }, owner)).status, 400);
     const geminiActive = { configured: true, provider: 'gemini', available: { openai: true, gemini: true } };
     assert.deepEqual(await (await request(keyPath, 'PATCH', { provider: 'gemini', apiKey: sampleGemini }, owner)).json(), geminiActive);
     const afterGemini = await BusinessAiSettings.findById(ownerTenant).select('+encryptedKey +encryptedGeminiKey').lean().orFail();

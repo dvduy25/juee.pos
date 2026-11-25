@@ -19,7 +19,7 @@ type Route = { tenantId: string; branchId: string };
 const aiProvider = z.enum(inventoryAiProviders);
 const keyFields = { openai: 'encryptedKey', gemini: 'encryptedGeminiKey' } as const;
 const keySelection = '+encryptedKey +encryptedGeminiKey';
-const keyPatterns = { openai: /^sk-[A-Za-z0-9_-]{20,300}$/, gemini: /^(?!sk-)[A-Za-z0-9_-]{20,300}$/ };
+const keyPatterns = { openai: /^sk-[A-Za-z0-9_-]{20,300}$/, gemini: /^(?!sk-)(?:AQ\.)?[A-Za-z0-9_-]{20,300}$/ };
 
 function settingsStatus(settings?: { provider?: InventoryAiProvider | null; encryptedKey?: string | null; encryptedGeminiKey?: string | null } | null) {
   const provider = settings?.provider ?? 'openai';
@@ -39,7 +39,11 @@ export class InventoryAiController {
   async save(@Req() req: Request, @Param() route: Route, @Body() body: unknown) {
     verifyOrigin(req);
     const { provider, apiKey } = read(z.object({ provider: aiProvider.default('openai'), apiKey: z.string().trim().max(305).optional() }).strict(), body);
-    if (apiKey !== undefined && !keyPatterns[provider].test(apiKey)) throw new BadRequestException('Khóa API không đúng định dạng.');
+    if (apiKey !== undefined && !keyPatterns[provider].test(apiKey)) {
+      throw new BadRequestException(provider === 'gemini'
+        ? 'Khóa Gemini không đúng định dạng. Hãy sao chép toàn bộ khóa từ Google AI Studio.'
+        : 'Khóa API OpenAI không đúng định dạng.');
+    }
     return transaction(async session => {
       const { scope } = await access(req, route.tenantId, route.branchId, 'warehouse.ai', session);
       const field = keyFields[provider];
