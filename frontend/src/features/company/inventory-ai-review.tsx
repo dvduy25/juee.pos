@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
+import { Check, ClipboardCheck, Trash2 } from 'lucide-react';
 import { Pager, State } from '@/components/business-ui';
 import { ServicePaymentField } from '@/features/dashboard/service-payment';
 import { useAction, useBusiness, useData } from '@/hooks/use-business';
@@ -16,17 +17,34 @@ type MenuChoice = { id: string; name: string; label: string };
 type MenuLine = { name: string; price: number; variantId: string | null; needsMatch: boolean; choices: MenuChoice[] };
 export type MenuDraft = { lines: MenuLine[] };
 
-type ReviewCallbacks = { close: () => void; done: (message: string) => void };
+type ReviewProps = { close: () => void; done: (message: string) => void; photo?: ReactNode };
 type RowMode = '' | 'existing' | 'new';
 
 function ReviewActions({ pending, confirm, close }: { pending: boolean; confirm: string; close: () => void }) {
-  return <div className="actions">
-    <button type="submit" className="button" disabled={pending}>{pending ? 'Đang lưu…' : confirm}</button>
-    <button type="button" className="plain" onClick={close} disabled={pending}>Bỏ bản nháp</button>
+  return <div className="ai-review-actions">
+    <button type="button" className="plain ai-secondary" onClick={close} disabled={pending}>Bỏ bản nháp</button>
+    <button type="submit" className="button ai-main-action" disabled={pending}><Check size={18} aria-hidden="true"/>{pending ? 'Đang lưu…' : confirm}</button>
   </div>;
 }
 
-export function ReviewReceipt({ draft, close, done }: { draft: ReceiptDraft } & ReviewCallbacks) {
+function ReviewHeader({ title, children }: { title: string; children: ReactNode }) {
+  return <header className="ai-workspace-head">
+    <span className="ai-icon"><ClipboardCheck size={24} aria-hidden="true"/></span>
+    <div><h2>{title}</h2><p>{children}</p></div>
+  </header>;
+}
+
+function ReviewLineHeader({ name, unit, status, attention, remove }: {
+  name: string; unit?: string | null; status?: string; attention?: boolean; remove?: () => void;
+}) {
+  return <header className="ai-review-line-head">
+    <div><h4>{name}</h4>{(unit || status) && <p data-attention={!!attention}>{[unit, status].filter(Boolean).join(' · ')}</p>}</div>
+    {remove && <button type="button" className="icon" aria-label={`Bỏ dòng ${name}`} title="Bỏ dòng"
+      onClick={remove}><Trash2 size={17} aria-hidden="true"/></button>}
+  </header>;
+}
+
+export function ReviewReceipt({ draft, close, done, photo }: { draft: ReceiptDraft } & ReviewProps) {
   const action = useAction();
   const [rows, setRows] = useState(() => draft.lines.map((line, index) => ({ line, index })));
 
@@ -50,19 +68,18 @@ export function ReviewReceipt({ draft, close, done }: { draft: ReceiptDraft } & 
   }
 
   return <form onSubmit={commit} className="ai-review">
-    <h3>Duyệt phiếu nhập kho</h3>
-    <p className="muted">Kiểm tra mặt hàng, đơn vị và số lượng trước khi xác nhận. Điền thuế suất nếu hóa đơn không ghi rõ.</p>
+    <ReviewHeader title="Duyệt phiếu nhập kho">Kiểm tra mặt hàng, đơn vị và số lượng. Điền thuế suất nếu hóa đơn không ghi rõ.</ReviewHeader>
+    {photo}
     <fieldset disabled={action.pending} className="ai-review-fields">
-      <div className="columns">
+      <div className="ai-review-meta">
         <label>Nhà cung cấp<input name="supplier" defaultValue={draft.supplier ?? ''} maxLength={120} required/></label>
         <label>Số chứng từ<input name="reference" defaultValue={draft.reference ?? ''} maxLength={120}/></label>
+        <ServicePaymentField neutral/>
       </div>
-      <ServicePaymentField neutral/>
-      <div className="table-wrap" tabIndex={0} aria-label="Bảng duyệt phiếu nhập kho">
-        <table><thead><tr><th>Đọc từ hóa đơn</th><th>Mặt hàng kho</th><th>Số lượng</th>
-          <th>Đơn giá trước thuế (đ)</th><th>Thuế (%)</th><th>Hạn dùng</th><th>Thao tác</th></tr></thead>
-        <tbody>{rows.map(({ line, index }) => <ReceiptRow key={index} line={line} index={index}
-          remove={rows.length > 1 ? () => setRows(rows.filter(row => row.index !== index)) : undefined}/>)}</tbody></table>
+      <div className="ai-review-list">
+        <h3>{rows.length} mặt hàng đề xuất</h3>
+        {rows.map(({ line, index }) => <ReceiptRow key={index} line={line} index={index}
+          remove={rows.length > 1 ? () => setRows(rows.filter(row => row.index !== index)) : undefined}/>)}
       </div>
     </fieldset>
     <ReviewActions pending={action.pending} confirm="Xác nhận nhập kho" close={close}/>
@@ -75,9 +92,10 @@ function ReceiptRow({ line, index, remove }: { line: ReceiptLine; index: number;
   const [item, setItem] = useState(line.item);
   const [search, setSearch] = useState(false);
 
-  return <tr>
-    <th scope="row">{line.name}{line.unit && <small>{line.unit}</small>}</th>
-    <td className="ai-review-target">
+  return <article className="ai-review-line">
+    <ReviewLineHeader name={line.name} unit={line.unit} status={mode === 'new' ? 'Tạo mặt hàng mới'
+      : mode === 'existing' && item ? 'Cộng vào tồn kho' : 'Cần chọn mặt hàng'} attention={!mode || mode === 'existing' && !item} remove={remove}/>
+    <div className="ai-review-target">
       <label>Xử lý<select name={`mode-${index}`} value={mode} required
         onChange={event => setMode(event.target.value as RowMode)}>
         <option value="">Chọn cách xử lý</option>
@@ -86,29 +104,29 @@ function ReceiptRow({ line, index, remove }: { line: ReceiptLine; index: number;
       </select></label>
       {mode === 'existing' && <>
         {!item || search ? <WarehousePicker initial={item ?? undefined} fieldName={`item-${index}`} onSelect={setItem}/>
-          : <div className="actions"><input type="hidden" name={`item-${index}`} value={item.id}/>
-            <span>{item.name} · {item.code}</span><button type="button" className="plain" onClick={() => setSearch(true)}>Đổi</button>
+          : <div className="ai-matched-item"><input type="hidden" name={`item-${index}`} value={item.id}/>
+            <span>{item.name}{item.code && ` · ${item.code}`}</span><button type="button" className="plain" onClick={() => setSearch(true)}>Đổi</button>
           </div>}
         <input type="hidden" name={`unit-${index}`} value={item?.unit ?? ''}/>
         {item && line.unit && item.unit.trim().toLocaleLowerCase('vi') !== line.unit.trim().toLocaleLowerCase('vi') &&
-          <small>Kiểm tra lại số lượng theo đơn vị trong kho ({item.unit}).</small>}
+          <p className="ai-line-warning">Kiểm tra lại số lượng theo đơn vị trong kho ({item.unit}).</p>}
       </>}
-      {mode === 'new' && <div className="columns">
+      {mode === 'new' && <div className="ai-new-item">
         <label>Tên hàng<input name={`name-${index}`} defaultValue={line.name} maxLength={120} required/></label>
         <label>Đơn vị<input name={`unit-${index}`} defaultValue={line.unit ?? ''} maxLength={32} required/></label>
       </div>}
-    </td>
-    <td><input aria-label={`Số lượng ${line.name}${item && mode === 'existing' ? ` (${item.unit})` : ''}`} name={`quantity-${index}`}
-      type="number" min="0.001" max="999999999.999" step="0.001" defaultValue={line.quantity ?? ''} required/>
-      {mode === 'existing' && item && <small>{item.unit}</small>}</td>
-    <td><input aria-label={`Đơn giá ${line.name}`} name={`cost-${index}`} type="number" min="0" max="1000000000000" step="1" defaultValue={line.unitCost ?? ''} required/></td>
-    <td><input aria-label={`Thuế ${line.name}`} name={`tax-${index}`} type="number" min="0" max="100" step="0.01" defaultValue={line.taxPercent ?? ''} required/></td>
-    <td><input aria-label={`Hạn dùng ${line.name}`} name={`expires-${index}`} type="date"/></td>
-    <td>{remove && <button type="button" className="plain" aria-label={`Bỏ dòng ${line.name}`} onClick={remove}>Bỏ dòng</button>}</td>
-  </tr>;
+    </div>
+    <div className="ai-receipt-values">
+      <label>Số lượng{item && mode === 'existing' ? ` (${item.unit})` : ''}<input name={`quantity-${index}`}
+        type="number" min="0.001" max="999999999.999" step="0.001" defaultValue={line.quantity ?? ''} required/></label>
+      <label>Đơn giá trước thuế (đ)<input name={`cost-${index}`} type="number" min="0" max="1000000000000" step="1" defaultValue={line.unitCost ?? ''} required/></label>
+      <label>Thuế (%)<input name={`tax-${index}`} type="number" min="0" max="100" step="0.01" defaultValue={line.taxPercent ?? ''} required/></label>
+      <label>Hạn dùng<input name={`expires-${index}`} type="date"/></label>
+    </div>
+  </article>;
 }
 
-export function ReviewMenu({ draft, close, done }: { draft: MenuDraft } & ReviewCallbacks) {
+export function ReviewMenu({ draft, close, done, photo }: { draft: MenuDraft } & ReviewProps) {
   const { role, membership, branch } = useBusiness();
   const shared = role === 'OWNER' || membership.canEditSharedCatalog;
   const action = useAction();
@@ -127,15 +145,15 @@ export function ReviewMenu({ draft, close, done }: { draft: MenuDraft } & Review
   }
 
   return <form onSubmit={commit} className="ai-review">
-    <h3>Duyệt thực đơn</h3>
-    <p className="muted">Giá sửa áp dụng tại {branch.name}.
+    <ReviewHeader title="Duyệt thực đơn">Giá sửa áp dụng tại {branch.name}.
       {shared ? ' Món mới cần bổ sung định lượng nguyên liệu trong mục Thực đơn trước khi bán.' :
-        ' Quyền hiện tại cho phép sửa giá món có sẵn tại chi nhánh.'}</p>
+        ' Quyền hiện tại cho phép sửa giá món có sẵn tại chi nhánh.'}</ReviewHeader>
+    {photo}
     <fieldset disabled={action.pending} className="ai-review-fields">
-      <div className="table-wrap" tabIndex={0} aria-label="Bảng duyệt thực đơn">
-        <table><thead><tr><th>Đọc từ ảnh</th><th>Món trong thực đơn</th><th>Tên sau khi lưu</th><th>Giá bán (đ)</th><th>Thao tác</th></tr></thead>
-          <tbody>{rows.map(({ line, index }) => <MenuRow key={index} line={line} index={index} shared={!!shared}
-            remove={rows.length > 1 ? () => setRows(rows.filter(row => row.index !== index)) : undefined}/>)}</tbody></table>
+      <div className="ai-review-list">
+        <h3>{rows.length} món đề xuất</h3>
+        {rows.map(({ line, index }) => <MenuRow key={index} line={line} index={index} shared={!!shared}
+          remove={rows.length > 1 ? () => setRows(rows.filter(row => row.index !== index)) : undefined}/>)}
       </div>
     </fieldset>
     <ReviewActions pending={action.pending} confirm="Xác nhận lưu thực đơn" close={close}/>
@@ -148,9 +166,10 @@ function MenuRow({ line, index, shared, remove }: { line: MenuLine; index: numbe
   const [target, setTarget] = useState(line.choices.find(choice => choice.id === line.variantId));
   const [name, setName] = useState(target?.name ?? line.name);
 
-  return <tr>
-    <th scope="row">{line.name}</th>
-    <td className="ai-review-target">
+  return <article className="ai-review-line">
+    <ReviewLineHeader name={line.name} status={mode === 'new' ? 'Thêm món mới'
+      : mode === 'existing' && target ? 'Sửa món có sẵn' : 'Cần chọn món'} attention={!mode || mode === 'existing' && !target} remove={remove}/>
+    <div className="ai-review-target">
       <label>Xử lý<select value={mode} required onChange={event => {
         const next = event.target.value as RowMode;
         setMode(next);
@@ -162,13 +181,14 @@ function MenuRow({ line, index, shared, remove }: { line: MenuLine; index: numbe
       {mode === 'existing' && <MenuPicker line={line} value={target} fieldName={`variant-${index}`} select={choice => {
         setTarget(choice); setName(choice.name);
       }}/>}
-    </td>
-    <td><input aria-label={`Tên sau khi lưu ${line.name}`} name={`name-${index}`} value={name} onChange={event => setName(event.target.value)}
-      maxLength={120} required readOnly={!shared}/></td>
-    <td><input aria-label={`Giá bán ${line.name}`} name={`price-${index}`} type="number" min="0" max="1000000000000" step="1"
-      defaultValue={line.price} required/></td>
-    <td>{remove && <button type="button" className="plain" aria-label={`Bỏ dòng ${line.name}`} onClick={remove}>Bỏ dòng</button>}</td>
-  </tr>;
+    </div>
+    <div className="ai-menu-values">
+      <label>Tên sau khi lưu<input name={`name-${index}`} value={name} onChange={event => setName(event.target.value)}
+        maxLength={120} required readOnly={!shared}/></label>
+      <label>Giá bán (đ)<input name={`price-${index}`} type="number" min="0" max="1000000000000" step="1"
+        defaultValue={line.price} required/></label>
+    </div>
+  </article>;
 }
 
 function MenuPicker({ line, value, fieldName, select }: {
@@ -200,7 +220,7 @@ function MenuPicker({ line, value, fieldName, select }: {
   </>;
 }
 
-export function ReviewIssue({ draft, close, done }: { draft: IssueDraft } & ReviewCallbacks) {
+export function ReviewIssue({ draft, close, done, photo }: { draft: IssueDraft } & ReviewProps) {
   const action = useAction();
   const [rows, setRows] = useState(() => draft.lines.map((line, index) => ({ line, index })));
 
@@ -216,25 +236,30 @@ export function ReviewIssue({ draft, close, done }: { draft: IssueDraft } & Revi
     if (result) done('Đã lưu phiếu xuất kho.');
   }
 
-  return <form onSubmit={commit}>
-    <h3>Duyệt phiếu xuất kho</h3>
-    <label>Lý do xuất và số chứng từ<input name="note" defaultValue={draft.reference ? `Xuất theo chứng từ ${draft.reference}`.slice(0, 120) : ''}
-      maxLength={120} required/></label>
-    {rows.map(({ line, index }) => <IssueRow key={index} line={line} pending={action.pending}
-      remove={rows.length > 1 ? () => setRows(rows.filter(row => row.index !== index)) : undefined}/>)}
+  return <form onSubmit={commit} className="ai-review">
+    <ReviewHeader title="Duyệt phiếu xuất kho">Chọn mặt hàng trong kho và kiểm tra số lượng trước khi xác nhận.</ReviewHeader>
+    {photo}
+    <fieldset disabled={action.pending} className="ai-review-fields">
+      <label>Lý do xuất và số chứng từ<input name="note" defaultValue={draft.reference ? `Xuất theo chứng từ ${draft.reference}`.slice(0, 120) : ''}
+        maxLength={120} required/></label>
+      <div className="ai-review-list">
+        <h3>{rows.length} mặt hàng đề xuất</h3>
+        {rows.map(({ line, index }) => <IssueRow key={index} line={line}
+          remove={rows.length > 1 ? () => setRows(rows.filter(row => row.index !== index)) : undefined}/>)}
+      </div>
+    </fieldset>
     <ReviewActions pending={action.pending} confirm="Xác nhận xuất kho" close={close}/>
     {action.feedback}
   </form>;
 }
 
-function IssueRow({ line, pending, remove }: { line: InvoiceLine; pending: boolean; remove?: () => void }) {
+function IssueRow({ line, remove }: { line: InvoiceLine; remove?: () => void }) {
   const [item, setItem] = useState<{ unit: string; revision: number }>();
-  return <fieldset disabled={pending}>
-    <legend>{line.name}{line.unit ? ` · ${line.unit}` : ''}</legend>
+  return <article className="ai-review-line">
+    <ReviewLineHeader name={line.name} unit={line.unit} status={item ? 'Xuất từ kho' : 'Cần chọn mặt hàng'} attention={!item} remove={remove}/>
     <WarehousePicker onSelect={setItem}/>
     <input type="hidden" name="revision" value={item?.revision ?? ''}/>
     <label>Số lượng{item ? ` (${item.unit})` : ''}<input type="number" name="quantity" min="0.001" max="999999999.999" step="0.001"
       defaultValue={line.quantity ?? ''} required/></label>
-    {remove && <button type="button" className="plain" onClick={remove}>Bỏ dòng</button>}
-  </fieldset>;
+  </article>;
 }
