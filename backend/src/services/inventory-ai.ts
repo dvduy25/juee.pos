@@ -1,4 +1,4 @@
-import { BadGatewayException, BadRequestException, GatewayTimeoutException, Logger, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
+import { BadGatewayException, GatewayTimeoutException, Logger, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
@@ -81,19 +81,17 @@ const menuSchema = {
   },
 };
 type Media = { bytes: Buffer; contentType: string };
-type Audio = { buffer: Buffer; mimetype: string };
 type OutputFormat = { name: string; schema: object; instructions: string };
 const photoInstructions = 'Đặt needsRetake=true nếu chữ hoặc số cần thiết bị mờ, lóa, che khuất, bị cắt hoặc còn dòng không đọc được. Nếu có hơn 30 dòng, đặt needsRetake=true. Báo thiếu bằng null, tuyệt đối không đoán hay bỏ qua dòng bị thiếu.';
 
-async function openAi(path: string, key: string, data: FormData | object): Promise<unknown> {
-  const multipart = data instanceof FormData;
+async function openAi(path: string, key: string, data: object): Promise<unknown> {
   const signal = AbortSignal.timeout(35_000);
   let response: Response;
   try {
     response = await fetch('https://api.openai.com/v1/' + path, {
       method: 'POST', redirect: 'error', signal,
-      headers: { Authorization: 'Bearer ' + key, ...(multipart ? {} : { 'Content-Type': 'application/json' }) },
-      body: multipart ? data : JSON.stringify(data),
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     });
   } catch {
     throw signal.aborted ? upstreamError('OpenAI phản hồi quá lâu. Hãy thử lại với nội dung ngắn hơn.', true)
@@ -108,21 +106,6 @@ async function openAi(path: string, key: string, data: FormData | object): Promi
     if (signal.aborted) throw upstreamError('OpenAI phản hồi quá lâu. Hãy thử lại với nội dung ngắn hơn.', true);
     return null;
   });
-}
-
-async function transcribeInvoice(key: string, audio: Audio) {
-  const extensions: Record<string, string> = { 'audio/webm': 'webm', 'video/webm': 'webm', 'audio/mp4': 'mp4',
-    'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/ogg': 'ogg' };
-  const type = audio.mimetype.split(';')[0];
-  const extension = extensions[type];
-  if (!extension) throw new ServiceUnavailableException('Định dạng ghi âm chưa được hỗ trợ.');
-  const form = new FormData();
-  form.append('file', new Blob([Uint8Array.from(audio.buffer)], { type }), `voice.${extension}`);
-  form.append('model', 'gpt-transcribe');
-  form.append('language', 'vi');
-  const result = z.object({ text: z.string().trim().min(1).max(10_000) }).safeParse(await openAi('audio/transcriptions', key, form));
-  if (!result.success) throw new UnprocessableEntityException('Chưa đọc được bản ghi âm. Hãy thử ghi lại.');
-  return result.data.text;
 }
 
 const geminiEnvelope = z.object({
@@ -228,29 +211,16 @@ async function readDocument(credentials: Credentials, format: OutputFormat, text
   try { return JSON.parse(json) as unknown; } catch { return null; }
 }
 
-function geminiAudio(audio: Audio): Media {
-  const audioTypes = new Map([
-    ['audio/webm', 'audio/webm'], ['video/webm', 'audio/webm'], ['audio/mp4', 'audio/m4a'], ['audio/m4a', 'audio/m4a'],
-    ['audio/x-m4a', 'audio/m4a'], ['audio/mpeg', 'audio/mp3'], ['audio/mp3', 'audio/mp3'], ['audio/wav', 'audio/wav'],
-    ['audio/x-wav', 'audio/wav'], ['audio/ogg', 'audio/ogg'], ['audio/aac', 'audio/aac'], ['audio/flac', 'audio/flac'],
-  ]);
-  const contentType = audioTypes.get(audio.mimetype.split(';')[0]);
-  if (!contentType) throw new BadRequestException('Chọn bản ghi WebM, M4A, MP3, WAV, OGG, AAC hoặc FLAC.');
-  return { bytes: audio.buffer, contentType };
-}
-
-export async function extractInvoice(credentials: Credentials, input: { text?: string; image?: Media; purchasePhoto?: boolean; audio?: Audio }) {
-  const { image, purchasePhoto, audio } = input;
+export async function extractInvoice(credentials: Credentials, input: { text?: string; image?: Media; purchasePhoto?: boolean }) {
+  const { image, purchasePhoto } = input;
   const strictPhoto = !!image && purchasePhoto;
-  const directAudio = audio && credentials.provider === 'gemini' ? geminiAudio(audio) : undefined;
-  const text = directAudio ? 'Nghe bản ghi âm tiếng Việt đính kèm và đọc thông tin hàng hóa trong bản ghi.'
-    : audio ? await transcribeInvoice(credentials.key, audio) : input.text || 'Đọc chứng từ trong ảnh đính kèm.';
+  const text = input.text || 'Đọc chứng từ trong ảnh đính kèm.';
   const instructions = 'Trích xuất các dòng hàng cho phiếu kho. Chép tên, số lượng, đơn vị, đơn giá trước thuế bằng VND và thuế suất phần trăm. Không đoán giá, số lượng hay thuế suất. Điền null cho trường thiếu; bỏ dòng tổng cộng, chiết khấu và các dòng không phải hàng hóa. Trả tối đa 30 dòng.';
   const decoded = await readDocument(credentials, {
     name: 'warehouse_invoice',
     schema: strictPhoto ? photoInvoiceSchema : invoiceSchema,
     instructions: strictPhoto ? instructions + ' Đọc tên nhà cung cấp và mã chứng từ nếu có. Tên nhà cung cấp, tên từng mặt hàng, đơn vị, số lượng và đơn giá trước thuế là bắt buộc. Mã chứng từ và thuế suất được để trống nếu tài liệu không ghi. ' + photoInstructions : instructions,
-  }, text, image ?? directAudio);
+  }, text, image);
   if (strictPhoto) {
     const photo = draftSchema.extend({ needsRetake: z.boolean() }).safeParse(decoded);
     if (!photo.success || photo.data.needsRetake || !photo.data.supplier || !photo.data.lines.length ||
@@ -262,7 +232,6 @@ export async function extractInvoice(credentials: Credentials, input: { text?: s
   }
   const parsed = draftSchema.safeParse(decoded);
   if (parsed.success && parsed.data.lines.length) return parsed.data;
-  if (audio) throw new UnprocessableEntityException('Chưa đọc được bản ghi âm. Hãy ghi lại rõ tên hàng, số lượng và đơn vị.');
   throw new UnprocessableEntityException('AI chưa nhận diện được dòng hàng. Thử ảnh rõ hơn hoặc nhập nội dung hóa đơn.');
 }
 
@@ -275,6 +244,46 @@ export async function extractMenu(credentials: Credentials, image: Media) {
   const parsed = menuDraft.safeParse(decoded);
   if (!parsed.success || parsed.data.needsRetake) {
     throw new UnprocessableEntityException('Chưa đọc đủ thực đơn. Chụp lại rõ tên và giá của từng món. Nếu quá 30 món, chụp từng phần.');
+  }
+  return parsed.data.lines;
+}
+
+const retailDraft = z.object({
+  needsRetake: z.boolean(),
+  lines: z.array(z.object({
+    name: z.string().trim().min(1).max(120),
+    code: z.string().trim().min(1).max(60).nullable(),
+    barcode: z.string().trim().min(1).max(80).nullable(),
+    unit: z.string().trim().min(1).max(32).nullable(),
+    price: z.number().int().nonnegative().max(1_000_000_000_000).nullable(),
+  })).min(1).max(30),
+});
+
+const retailSchema = {
+  type: 'object', additionalProperties: false, required: ['needsRetake', 'lines'],
+  properties: {
+    needsRetake: { type: 'boolean' },
+    lines: { type: 'array', maxItems: 30, items: {
+      type: 'object', additionalProperties: false, required: ['name', 'code', 'barcode', 'unit', 'price'],
+      properties: { name: nullableString, code: nullableString, barcode: nullableString, unit: nullableString, price: nullableNumber },
+    } },
+  },
+};
+
+export async function extractRetailProducts(credentials: Credentials, input: { text?: string; image?: Media }) {
+  const decoded = await readDocument(credentials, {
+    name: 'retail_products',
+    schema: retailSchema,
+    instructions: 'Chép từng sản phẩm bán lẻ, tên, mã hàng SKU, mã vạch, đơn vị tính và giá bán bằng VND nếu có. ' +
+      'Mã vạch là chuỗi ký tự, giữ nguyên số 0 đầu mã. Không sinh mã, tên, đơn vị hoặc giá. ' +
+      'Chỉ dùng giá bán được ghi rõ, tuyệt đối không lấy đơn giá nhập hàng làm giá bán. Ví dụ 35k là 35000. ' +
+      'Điền null cho mã, đơn vị hoặc giá không có trên nguồn. Không thêm số lượng tồn. ' + photoInstructions,
+  }, input.text || 'Đọc danh sách sản phẩm trong ảnh đính kèm.', input.image);
+  const parsed = retailDraft.safeParse(decoded);
+  if (!parsed.success || parsed.data.needsRetake) {
+    throw new UnprocessableEntityException(input.image
+      ? 'Chưa đọc đủ danh sách sản phẩm. Hãy chụp lại ảnh rõ và đủ tên hàng hoặc chụp từng phần tối đa 30 dòng.'
+      : 'Chưa đọc được danh sách sản phẩm. Hãy nhập rõ từng tên hàng, tối đa 30 dòng.');
   }
   return parsed.data.lines;
 }

@@ -9,7 +9,7 @@ import { hotelNoon } from '../src/services/hotel-stays';
 import { facilityToday, shiftDays } from '../src/services/membership-plans';
 import { verificationDigest, tokenDigest } from '../src/services/account-email';
 import { beginGoogleSignup, googleFlowCookie, googleSignupCookie, readGoogleFlow } from '../src/services/google-auth';
-import { suggestMenuItems, suggestWarehouseItems } from '../src/services/inventory-ai-import';
+import { suggestMenuItems, suggestRetailItems, suggestWarehouseItems } from '../src/services/inventory-ai-import';
 import { AccountToken, AdminAuditLog, AuditLog, Bill, Branch, BranchProductPrice, BuffetPackage, Category, DiningArea, DiningTable, FacilityMember, GuestSession, IdempotencyRecord, IncomingTransfer, KitchenTicket, MemberCredential, MemberPayment, MemberPlan, Membership, MemberVisit, Order, OutboxEvent, Payment, PaymentIntent, Plan, PlanVersion, PlatformGrant, Product, ProductVariant, Refund, SaaSInvoice, Subscription, TableSession, Tenant, UnavailableProduct, User, UserSession, WarehouseItem, WarehouseMovement } from '../src/models';
 import { AdmissionTicket, BusinessAiSettings, CashEntry, TaxDeclaration, DishRecipe, HotelBooking, HotelPackage, HotelRoom, MemberClass, PurchaseReceipt, StaffAttendance, StaffClockCredential, StaffClockDevice,
   StaffDocument, StaffIdentity, StaffPayPayment, StaffPayRate, StaffSchedule, TicketRefund, TicketSale, TicketType } from '../src/models';
@@ -324,6 +324,51 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     assert.equal((await BranchProductPrice.findOne({ ...aiScope, variantId: bowl._id }).orFail()).price, 47000);
     assert.equal((await ProductVariant.findById(bowl._id).orFail()).basePrice, 45000);
     assert.equal(await Product.countDocuments({ tenantId: aiScope.tenantId, name: 'Bún bò', recipeRequired: true }), 1);
+    const retailScope = { tenantId: new mongoose.Types.ObjectId(ownerTenant), branchId: new mongoose.Types.ObjectId(added.id) };
+    const retailBranch = `${root}/branches/${added.id}`;
+    const retailPath = `${retailBranch}/warehouse/ai/retail`;
+    const testBarcode = '0059123412345';
+    const retailStock = await WarehouseItem.insertOne({ ...retailScope, code: 'AI-TEA-01', barcode: testBarcode,
+      name: 'Trà chai thử', unit: 'chai', onHand: 3000 });
+    const alternate = await WarehouseItem.insertOne({ ...retailScope, code: 'AI-TEA-02', barcode: testBarcode + '9',
+      name: 'Trà chai khác', unit: 'chai' });
+    const stockLookup = await request(`${retailBranch}/warehouse/items?code=${testBarcode}`, 'GET', undefined, owner);
+    assert.equal(stockLookup.status, 200, await stockLookup.clone().text());
+    assert.deepEqual((await stockLookup.json()).items.map((item: { id: string }) => item.id), [retailStock.id]);
+    const retailDraft = await suggestRetailItems(retailScope, [
+      { name: 'Trà chai thử', code: null, barcode: testBarcode, unit: 'chai', price: 24000 },
+      { name: 'Trà chai thử', code: alternate.code, barcode: testBarcode, unit: 'chai', price: 24000 },
+    ]);
+    assert.equal(retailDraft[0].item?.id, retailStock.id);
+    assert.equal(retailDraft[1].item, null);
+    assert.equal(retailDraft[1].needsMatch, true);
+    const fresh = { mode: 'new', name: 'Bánh AI thử', code: 'AI-CAKE-01', unit: 'hộp', price: 75000 };
+    const existing = { mode: 'existing', warehouseItemId: retailStock.id, price: 24000 };
+    const rejectedRetail = await request(retailPath, 'POST', { lines: [fresh, { ...existing, warehouseItemId: rice.id }] }, owner,
+      { 'Idempotency-Key': randomUUID() });
+    assert.equal(rejectedRetail.status, 404, await rejectedRetail.clone().text());
+    assert.equal(await WarehouseItem.countDocuments({ ...retailScope, code: fresh.code }), 0);
+    const confirmed = { lines: [fresh, existing] };
+    const retailKey = { 'Idempotency-Key': randomUUID() };
+    const retailResult = await request(retailPath, 'POST', confirmed, owner, retailKey);
+    assert.equal(retailResult.status, 201, await retailResult.clone().text());
+    assert.deepEqual(await retailResult.json(), { count: 2 });
+    assert.equal((await request(retailPath, 'POST', confirmed, owner, retailKey)).status, 201);
+    assert.equal((await request(retailPath, 'POST', { lines: [existing] }, owner, { 'Idempotency-Key': randomUUID() })).status, 409);
+    const newStock = await WarehouseItem.findOne({ ...retailScope, code: fresh.code }).orFail();
+    assert.equal(newStock.onHand, 0);
+    assert.equal((await WarehouseItem.findById(retailStock.id).orFail()).onHand, 3000);
+    const newListings = await Product.find({ retailBranchId: added.id, warehouseItemId: { $in: [newStock.id, retailStock.id] } });
+    assert.equal(newListings.length, 2);
+    for (const product of newListings) {
+      const variant = await ProductVariant.findOne({ productId: product.id }).orFail();
+      assert.equal(variant.basePrice, String(product.warehouseItemId) === retailStock.id ? 24000 : 75000);
+    }
+    await ProductVariant.deleteMany({ productId: { $in: newListings.map(item => item.id) } });
+    await Product.deleteMany({ _id: { $in: newListings.map(item => item.id) } });
+    await WarehouseItem.deleteMany({ _id: { $in: [newStock.id, retailStock.id, alternate.id] } });
+    assert.equal((await request(`${freeRoot}/warehouse/ai/extract`, 'POST', { source: 'audio' }, owner)).status, 400);
+
     const taxPath = `${freeRoot}/tax-declarations`;
     const tax = { name: 'Kỳ kiểm thử', taxId: '0123456789', startsOn: '2026-10-01', endsOn: '2026-10-31',
       taxableRevenue: 100000, outputTax: 10000, inputTax: 2000, payableTax: 8000 };

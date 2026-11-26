@@ -10,6 +10,7 @@ import { Plus, Search, ShoppingBasket } from 'lucide-react';
 import { api } from '@/services/api-client';
 import { amount, currency, printReceipt, submit } from '@/lib/format';
 import { Pager, Panel, State } from '@/components/business-ui';
+import { BarcodeCamera } from '@/components/barcode-camera';
 import { BusinessDialog } from '@/components/business-dialog';
 import { useAction, useBusiness, useData } from '@/hooks/use-business';
 
@@ -50,7 +51,7 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
   const food = productType === 'FOOD';
   const atTable = food && !takeaway;
   const [q, setQ] = useState('');
-  const [scanMessage, setScanMessage] = useState<{ text: string; error: boolean }>();
+  const [scanMessage, setScanMessage] = useState<{ text: string; values?: string[]; error: boolean }>();
   const scanning = useRef(0);
   const scanQueue = useRef(Promise.resolve());
   const [scanPending, setScanPending] = useState(false);
@@ -195,6 +196,10 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
     const code = field.value.trim();
     if (!code || code.length > 80) return;
     event.currentTarget.reset();
+    queueScan(code);
+  }
+  function queueScan(code: string) {
+    if (!canSelectItems) return;
     setScanMessage(undefined);
     scanning.current++;
     setScanPending(true);
@@ -203,11 +208,11 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
         const [product] = await api<Product[]>(`${root}/products?productType=${productType}&code=${encodeURIComponent(code)}`);
         const variant = product?.variants.find(item => item.barcode === code) ?? product?.variants.find(item => item.sku === code.toUpperCase());
         if (product && variant && variant.paused) {
-          setScanMessage({ text: `${product.name} · ${variant.sku} đang tạm ngừng bán.`, error: true });
+          setScanMessage({ text: "{0} · {1} đang tạm ngừng bán.", values: [product.name, variant.sku], error: true });
         } else if (product && variant) {
           choose(product, variant);
-          setScanMessage({ text: `Đã thêm ${product.name} · ${variant.sku}.`, error: false });
-        } else setScanMessage({ text: `Không tìm thấy sản phẩm đang bán có mã ${code}.`, error: true });
+          setScanMessage({ text: "Đã thêm {0} · {1}.", values: [product.name, variant.sku], error: false });
+        } else setScanMessage({ text: "Không tìm thấy sản phẩm đang bán có mã {0}.", values: [code], error: true });
       } catch (cause) {
         setScanMessage({ text: cause instanceof Error ? cause.message : 'Không thể tra mã vạch.', error: true });
       } finally {
@@ -264,8 +269,9 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
     {atTable && !initialTable && !table && <p className="muted">{t("Chọn bàn hoặc Mang về để bắt đầu gọi món.")}</p>}
     {productType === 'RETAIL' && <form onSubmit={scan}><div className="actions scan-controls"><label>{t("Quét mã vạch hoặc SKU")}<input name="scan" maxLength={80} autoComplete="off"
       disabled={!canSelectItems} placeholder={t("Đặt con trỏ ở đây rồi quét")} required/></label>
-      <button className="button" disabled={!canSelectItems}>{t("Thêm vào giỏ")}</button></div></form>}
-    {scanMessage && <p className={scanMessage.error ? 'error' : 'success'} role={scanMessage.error ? 'alert' : 'status'}>{t(scanMessage.text)}</p>}
+      <button className="button" disabled={!canSelectItems}>{t("Thêm vào giỏ")}</button>
+      <BarcodeCamera onRead={queueScan} disabled={!canSelectItems}/></div></form>}
+    {scanMessage && <p className={scanMessage.error ? 'error' : 'success'} role={scanMessage.error ? 'alert' : 'status'}>{t(scanMessage.text, ...scanMessage.values ?? [])}</p>}
     <State query={food && isFetchNextPageError ? { isLoading: false, error: null } : productQuery} empty={products?.length === 0}/>
     {serviceCounter && productQuery.isSuccess && products?.length === 0 && !q && !category && (role === 'OWNER' || role === 'MANAGER') &&
       <Link className="plain" href="/dashboard/company?tab=products">{t("Đăng bán hàng từ kho")}</Link>}

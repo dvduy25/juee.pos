@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { test } from 'node:test';
 import { BadGatewayException, GatewayTimeoutException, ServiceUnavailableException } from '@nestjs/common';
-import { decryptAiKey, encryptAiKey, extractInvoice, extractMenu } from '../src/services/inventory-ai';
+import { decryptAiKey, encryptAiKey, extractInvoice, extractMenu, extractRetailProducts } from '../src/services/inventory-ai';
 
 test('the inventory API key can only be read for the business it was saved under', () => {
   process.env.AI_KEY_ENCRYPTION_SECRET = randomBytes(32).toString('hex');
@@ -60,7 +60,7 @@ test('the invoice parser requests a bounded draft and ignores invalid model resp
   await assert.rejects(extractInvoice({ provider: 'openai', key: 'sk-test-key' }, { text: 'không đọc được' }), /chưa nhận diện được/);
 });
 
-test('Gemini reads text, invoice photos, menu photos and recordings as validated drafts', async t => {
+test('Gemini reads text and photo documents as validated drafts', async t => {
   const credentials = { provider: 'gemini', key: 'AQ.fake_test_key_for_inventory_request_123456789012' } as const;
   type RequestData = { contents: { parts: { text?: string; inlineData?: { mimeType: string; data: string } }[] }[];
     generationConfig: { responseMimeType: string; responseJsonSchema: { required: string[] } } };
@@ -98,10 +98,12 @@ test('Gemini reads text, invoice photos, menu photos and recordings as validated
   await assert.rejects(extractMenu(credentials, photo), /Chụp lại rõ/);
 
   finishReason = 'STOP';
-  output = invoice;
-  const audio = { buffer: Buffer.from('audio'), mimetype: 'audio/mp4;codecs=mp4a' };
-  assert.deepEqual(await extractInvoice(credentials, { audio }), invoice);
-  assert.deepEqual(request?.contents[0].parts[1].inlineData, { mimeType: 'audio/m4a', data: audio.buffer.toString('base64') });
+  const retail = [{ name: 'Trà đóng chai', code: null, barcode: '012345678905', unit: 'chai', price: null }];
+  output = { lines: retail, needsRetake: false };
+  assert.deepEqual(await extractRetailProducts(credentials, { image: photo }), retail);
+  assert.deepEqual(await extractRetailProducts(credentials, { text: 'Trà đóng chai, mã 012345678905' }), retail);
+  output = { lines: retail, needsRetake: true };
+  await assert.rejects(extractRetailProducts(credentials, { image: photo }), /chụp lại ảnh rõ/);
 
   status = 400;
   output = { error: { details: [{ reason: 'API_KEY_INVALID' }] } };

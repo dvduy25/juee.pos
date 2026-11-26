@@ -3,6 +3,7 @@
 import { useLanguage } from '@/i18n/language';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Plus } from 'lucide-react';
+import { BarcodeCamera } from '@/components/barcode-camera';
 import { BusinessDialog } from '@/components/business-dialog';
 import { Pager, Panel, State } from '@/components/business-ui';
 import { CsvExport } from '@/components/report-period';
@@ -117,13 +118,14 @@ function WarehouseWorkspace({ purpose }: { purpose: 'count' | 'catalog' | 'gener
   const ingredient = usesTables(branch.mode) && branch.mode !== 'HYBRID';
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
+  const [scanCode, setScanCode] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Selection>();
   const [historyItem, setHistoryItem] = useState<Pick<Item, 'id' | 'name'>>();
   const [viewingHistory, setViewingHistory] = useState(false);
   const [creating, setCreating] = useState(false);
   const params = new URLSearchParams({ page: String(page), ...(!catalogOnly ? { alerts: 'yes' } : {}),
-    ...(q.trim() ? { q: q.trim() } : {}), ...(status ? { stock: status } : {}) });
+    ...(scanCode ? { code: scanCode } : q.trim() ? { q: q.trim() } : {}), ...(status ? { stock: status } : {}) });
   const query = useData<WarehouseList>(`/warehouse/items?${params}`, !catalogOnly ? 30000 : undefined, !countOnly || !viewingHistory);
 
   function select(item: Item, kind: Selection['kind'], operation?: Operation) {
@@ -150,20 +152,22 @@ function WarehouseWorkspace({ purpose }: { purpose: 'count' | 'catalog' | 'gener
       {([['LOW', 'Sắp hết hàng', query.data.low], ['EMPTY', 'Hết hàng còn hạn', query.data.empty],
         ['SOON', 'Sắp hết hạn · 7 ngày', query.data.soon], ['EXPIRED', 'Đã hết hạn', query.data.expired]] as const).map(([filter, label, total]) =>
         <button type="button" key={filter} aria-pressed={status === filter} onClick={() => {
-          setStatus(previous => previous === filter ? '' : filter); setPage(1); setQ('');
+          setStatus(previous => previous === filter ? '' : filter); setPage(1); setQ(''); setScanCode('');
         }}><small>{t(label)}</small><strong>{total}</strong></button>)}
     </div>}
     <div className="company-split">
       <Panel title={countOnly ? (ingredient ? t("Nguyên liệu kiểm kê") : t("Mặt hàng kiểm kê")) : t("Tồn kho")}
         action={!catalogOnly && <CsvExport path="/warehouse/export-stock" filename="juee-ton-kho" label={t("Xuất tồn kho CSV")} snapshot/>}>
         <div className="company-filters">
-          <label>{t("Tìm mặt hàng")}<input value={q} maxLength={120} placeholder={t("Tên hoặc mã hàng kho")} onChange={event => { setQ(event.target.value); setPage(1); }}/></label>
+          <label>{t("Tìm mặt hàng")}<input value={q} maxLength={120} placeholder={t("Tên, mã hàng hoặc mã vạch")} onChange={event => { setQ(event.target.value); setPage(1); setScanCode(''); }}/></label>
           <label>{t("Lọc tồn kho")}<select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}>
             <option value="">{t("Tất cả")}</option><option value="LOW">{t("Sắp hết")}</option><option value="EMPTY">{t("Hết hàng")}</option>
             <option value="SOON">{t("Sắp hết hạn")}</option><option value="EXPIRED">{t("Đã hết hạn")}</option>
           </select></label>
+          <BarcodeCamera onRead={code => { setQ(code); setScanCode(code); setStatus(''); setPage(1); }}/>
         </div>
-        <State query={query} empty={query.data?.items.length === 0}/>
+        <State query={query} empty={!scanCode && query.data?.items.length === 0}/>
+        {scanCode && query.data?.items.length === 0 && <p className="muted" role="status">{t("Không tìm thấy mặt hàng có mã này.")}</p>}
         {query.data?.items.map(item => {
           const available = item.available ?? item.onHand;
           const stock = available === 0 ? 'EMPTY' : available <= item.minimum ? 'LOW' : 'AVAILABLE';
@@ -239,6 +243,7 @@ function ItemForm({ item, save, close, dialog = false }: { item?: Item; save?: (
   const retail = usesRetail(branch.mode);
   const ingredient = !retail && usesTables(branch.mode);
   const categories = useData<Category[]>('/categories', undefined, retail);
+  const barcode = useRef<HTMLInputElement>(null);
   const title = item ? `Sửa · ${item.name}` : ingredient ? t("Thêm nguyên liệu") : t("Thêm mặt hàng kho");
   const fields = <>
     <form onSubmit={event => submit(event, (form, element) => {
@@ -255,7 +260,10 @@ function ItemForm({ item, save, close, dialog = false }: { item?: Item; save?: (
       <label>{ingredient ? t("Tên nguyên liệu") : t("Tên mặt hàng")}<input name="name" defaultValue={item?.name} maxLength={120} required/></label>
       <label>{ingredient ? t("Mã nguyên liệu") : t("Mã hàng kho")}<input name="code" defaultValue={item?.code} maxLength={60} required/></label>
       <label>{t("Đơn vị tính")}<input name="unit" defaultValue={item?.unit} maxLength={32} placeholder={t("Ví dụ: kg, lít, hộp")} required/></label>
-      {retail && <><label>{t("Mã vạch")}<input name="barcode" defaultValue={item?.barcode} maxLength={80} autoComplete="off"/></label>
+      {retail && <><div className="actions scan-controls">
+        <label>{t("Mã vạch")}<input ref={barcode} name="barcode" defaultValue={item?.barcode} maxLength={80} autoComplete="off"/></label>
+        <BarcodeCamera disabled={action.pending} onRead={code => { if (barcode.current) barcode.current.value = code; }}/>
+      </div>
         <label>{t("Danh mục")}<select name="category" defaultValue={item?.categoryId ?? ''}><option value="">{t("Chưa phân loại")}</option>
           {categories.data?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <div className="columns"><label>{t("Kích cỡ")}<input name="size" defaultValue={item?.size} maxLength={120}/></label>

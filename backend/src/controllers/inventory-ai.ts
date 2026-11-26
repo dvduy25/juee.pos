@@ -5,14 +5,14 @@ import { z } from 'zod';
 import { transaction } from '../config/db';
 import { verifyOrigin } from '../middleware/auth';
 import { access, assertRestaurantMode } from '../middleware/business-access';
-import { BusinessAiSettings, WarehouseItem, inventoryAiProviders, type InventoryAiProvider } from '../models';
+import { BusinessAiSettings, WarehouseItem, inventoryAiProviders, retailBranchModes, type BranchMode, type InventoryAiProvider } from '../models';
 import { scopedRoute } from '../routes/branch';
-import { decryptAiKey, encryptAiKey, extractInvoice, extractMenu } from '../services/inventory-ai';
-import { aiMenuInput, aiReceiptInput, receiveAiPurchase, saveAiMenu, suggestMenuItems, suggestWarehouseItems } from '../services/inventory-ai-import';
+import { decryptAiKey, encryptAiKey, extractInvoice, extractMenu, extractRetailProducts } from '../services/inventory-ai';
+import { aiMenuInput, aiReceiptInput, aiRetailInput, receiveAiPurchase, saveAiMenu, saveAiRetail, suggestMenuItems, suggestRetailItems, suggestWarehouseItems } from '../services/inventory-ai-import';
 import { readProductImage } from '../services/product-image';
 import { idempotent } from '../services/sales';
 import { recordWarehouseMovement, warehouseQuantity } from '../services/warehouse';
-import { found } from '../utils/db';
+import { found, isDuplicate } from '../utils/db';
 import { label, objectId, read } from '../validators/common';
 
 type Route = { tenantId: string; branchId: string };
@@ -25,6 +25,10 @@ function settingsStatus(settings?: { provider?: InventoryAiProvider | null; encr
   const provider = settings?.provider ?? 'openai';
   const available = { openai: !!settings?.encryptedKey, gemini: !!settings?.encryptedGeminiKey };
   return { configured: available[provider], provider, available };
+}
+
+function assertRetailMode(mode: BranchMode) {
+  if (!retailBranchModes.includes(mode)) throw new ConflictException('Chỉ đăng bán hàng kho tại quầy bán lẻ.');
 }
 
 @Controller(scopedRoute)
@@ -74,14 +78,15 @@ export class InventoryAiController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 4 * 1024 * 1024, files: 1, fields: 4, fieldSize: 30_000 } }))
   async extract(@Req() req: Request, @Param() route: Route, @Body() body: unknown, @UploadedFile() file?: { buffer: Buffer; mimetype: string }) {
     verifyOrigin(req);
-    const input = read(z.object({ source: z.enum(['text', 'image', 'audio']), kind: z.enum(['receive', 'issue', 'menu']).default('issue'),
+    const input = read(z.object({ source: z.enum(['text', 'image']), kind: z.enum(['receive', 'issue', 'menu', 'retail']).default('issue'),
       text: z.string().trim().max(10_000).optional(), provider: aiProvider.optional() }).strict(), body);
-    const permission = input.kind === 'menu' ? 'catalog.branch-write' : input.kind === 'receive' ? 'purchases.manage' : 'warehouse.ai';
+    const permission = input.kind === 'menu' || input.kind === 'retail' ? 'catalog.branch-write' : input.kind === 'receive' ? 'purchases.manage' : 'warehouse.ai';
     const { scope, branch } = await access(req, route.tenantId, route.branchId, permission);
     if (input.kind === 'menu') {
       assertRestaurantMode(branch.mode);
       if (input.source !== 'image') throw new BadRequestException('Hãy chọn ảnh thực đơn.');
     }
+    if (input.kind === 'retail') assertRetailMode(branch.mode);
     if (input.source === 'text' ? !input.text || !!file : !file?.buffer.length || !!input.text) {
       throw new BadRequestException('Chọn một nguồn chứng từ hợp lệ.');
     }
@@ -97,8 +102,10 @@ export class InventoryAiController {
     if (input.kind === 'menu' && image) {
       return { lines: await suggestMenuItems(scope, await extractMenu(credentials, image)) };
     }
-    const audio = input.source === 'audio' ? file : undefined;
-    const invoice = await extractInvoice(credentials, { text: input.text, image, audio, purchasePhoto: input.kind === 'receive' });
+    if (input.kind === 'retail') {
+      return { lines: await suggestRetailItems(scope, await extractRetailProducts(credentials, { text: input.text, image })) };
+    }
+    const invoice = await extractInvoice(credentials, { text: input.text, image, purchasePhoto: input.kind === 'receive' });
     if (input.kind !== 'receive') return invoice;
     return { ...invoice, lines: await suggestWarehouseItems(scope, invoice.lines) };
   }
@@ -125,6 +132,23 @@ export class InventoryAiController {
       const current = await access(req, route.tenantId, route.branchId, 'catalog.branch-write', session);
       assertRestaurantMode(current.branch.mode);
       return saveAiMenu(scope, actorId, current.membership, input, session);
+    });
+  }
+
+  @Post('warehouse/ai/retail')
+  async retail(@Req() req: Request, @Param() route: Route, @Body() body: unknown, @Headers('idempotency-key') key?: string) {
+    verifyOrigin(req);
+    const input = read(aiRetailInput, body);
+    const { scope, actorId, branch } = await access(req, route.tenantId, route.branchId, 'catalog.branch-write');
+    assertRetailMode(branch.mode);
+    return idempotent(scope, 'AI_RETAIL_SAVE', key, { actorId, input }, async session => {
+      const current = await access(req, route.tenantId, route.branchId, 'catalog.branch-write', session);
+      assertRetailMode(current.branch.mode);
+      if (input.lines.some(line => line.mode === 'new')) await access(req, route.tenantId, route.branchId, 'warehouse.write', session);
+      return saveAiRetail(scope, actorId, input, session);
+    }).catch(error => {
+      if (isDuplicate(error)) throw new ConflictException('Mã hàng, mã vạch hoặc sản phẩm đã tồn tại. Hãy kiểm tra bảng duyệt.');
+      throw error;
     });
   }
 

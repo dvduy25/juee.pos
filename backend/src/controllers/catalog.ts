@@ -11,7 +11,7 @@ import { transaction } from '../config/db';
 import { BranchProductPrice, Category, Product, ProductVariant, TableSession, UnavailableProduct, WarehouseItem, retailBranchModes, serviceCounterModes, tableBranchModes, type BranchMode } from '../models';
 
 import { scopedRoute } from '../routes/branch';
-import { catalog, productBranchFilter, productTypeFilter } from '../services/catalog';
+import { catalog, listWarehouseProduct, productBranchFilter, productTypeFilter } from '../services/catalog';
 import { dishRecipeInput, saveDishRecipe } from '../services/dish-recipes';
 import { buffetMenuFilter } from '../services/buffet';
 import { optimizeProductImage, productImageLimits, productImagePath, readProductImage } from '../services/product-image';
@@ -198,18 +198,7 @@ export class CatalogController {
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, params.tenantId, params.branchId, 'catalog.branch-write', session);
       if (!retailBranchModes.includes(branch.mode)) throw new ConflictException('Chỉ đăng bán hàng kho tại quầy bán lẻ.');
-      const item = found(await WarehouseItem.findOne({ ...scope, _id: input.warehouseItemId }).session(session).lean(), 'Mặt hàng không thuộc kho chi nhánh.');
-      if (await Product.exists({ warehouseItemId: item._id }).session(session)) throw new ConflictException('Mặt hàng đã có trong danh sách sản phẩm. Kiểm tra cả hàng ngừng bán.');
-      const product = new Product({ tenantId: scope.tenantId, retailBranchId: scope.branchId, warehouseItemId: item._id,
-        productType: 'RETAIL', name: item.name, description: input.description, categoryId: item.categoryId });
-      if (image) {
-        product.images = [productImagePath(product.id, image.version)];
-        product.imageFile = image;
-      }
-      await product.save({ session });
-      await ProductVariant.insertOne({ tenantId: scope.tenantId, productId: product._id, sku: `WH-${item._id}`, basePrice: input.price, costPrice: 0 }, { session });
-      await logChange(scope, actorId, 'PRODUCT_CREATE', product._id, session, { warehouseItemId: item._id });
-      return { _id: product._id };
+      return { _id: await listWarehouseProduct(scope, actorId, input, session, image) };
     }).catch(error => {
       if (isDuplicate(error)) throw new ConflictException('Mặt hàng đã có trong danh sách sản phẩm.');
       throw error;

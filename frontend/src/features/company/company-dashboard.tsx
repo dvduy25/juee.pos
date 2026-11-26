@@ -4,7 +4,7 @@ import { useLanguage } from '@/i18n/language';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
-import { Building2, Camera } from 'lucide-react';
+import { Building2, ChevronDown, Sparkles } from 'lucide-react';
 import { Panel, State } from '@/components/business-ui';
 import { useBusiness, useData } from '@/hooks/use-business';
 import { currency } from '@/lib/format';
@@ -22,6 +22,7 @@ import { MemberCheckInManagement, MemberPlans } from './member-settings';
 import { HotelSettings } from './hotel-settings';
 import { CancellationHistory } from './cancellations';
 import { companySection } from './navigation';
+import type { AiDocumentKind } from './inventory-ai';
 
 function TabLoading() {
   const { t } = useLanguage();
@@ -38,7 +39,24 @@ const Promotions = dynamic(() => import('./finance').then(module => module.Promo
 const Purchases = dynamic(() => import('./finance').then(module => module.Purchases), { loading: TabLoading });
 const StaffWorkspace = dynamic(() => import('./staff-work').then(module => module.StaffWorkspace), { loading: TabLoading });
 const InventoryAi = dynamic(() => import('./inventory-ai').then(module => module.InventoryAi), { loading: TabLoading });
+const AiDocumentImport = dynamic(() => import('./inventory-ai').then(module => module.AiDocumentImport), { loading: TabLoading });
 const TaxDeclarations = dynamic(() => import('./tax-declarations').then(module => module.TaxDeclarations), { loading: TabLoading });
+
+const aiImportLabels = {
+  receive: 'Nhập hàng bằng AI',
+  issue: 'Xuất kho bằng AI',
+  menu: 'Nhập thực đơn bằng AI',
+  retail: 'Đăng bán sản phẩm bằng AI',
+};
+
+function AiImport({ kind }: { kind: AiDocumentKind }) {
+  const { t } = useLanguage();
+  const [loaded, setLoaded] = useState(false);
+  return <details className="company-ai-import" onToggle={event => { if (event.currentTarget.open) setLoaded(true); }}>
+    <summary className="plain"><Sparkles size={16} aria-hidden="true"/> {t(aiImportLabels[kind])} <ChevronDown size={15} aria-hidden="true"/></summary>
+    {loaded && <AiDocumentImport kind={kind}/>}
+  </details>;
+}
 
 export function CompanyDashboard({ requested }: { requested?: string }) {
   const { t } = useLanguage();
@@ -46,12 +64,12 @@ export function CompanyDashboard({ requested }: { requested?: string }) {
   if (!company || staffMode) return <p className="error" role="alert">{t("Hãy dùng tài khoản chủ doanh nghiệp hoặc quản lý được giao chi nhánh.")}</p>;
   if (requested === 'owner-performance' && role !== 'OWNER') return <p className="error" role="alert">{t("Chỉ chủ doanh nghiệp được xem báo cáo tổng hợp.")}</p>;
   const { id: current, label } = companySection(requested, branch.mode, true, role);
-  const photoAction = (role === 'OWNER' || role === 'MANAGER') && (current === 'menu' || current === 'purchases');
+  const canImport = role === 'OWNER' || role === 'MANAGER';
+  const aiKind = current === 'products' ? 'retail' : current === 'menu' ? 'menu' : current === 'purchases' ? 'receive' :
+    current === 'warehouse' && role === 'OWNER' ? 'issue' : undefined;
   return <div className="company-dashboard">
-    <header className="company-title"><h1>{t(label)}</h1>{photoAction &&
-      <Link href={`/dashboard/company?tab=warehouse-ai&document=${current === 'menu' ? 'menu' : 'receive'}`} className="plain">
-        <Camera size={17} aria-hidden="true"/>{current === 'menu' ? t("Nhập thực đơn từ ảnh") : t("Nhập hàng từ ảnh")}
-      </Link>}</header>
+    <header className="company-title"><h1>{t(label)}</h1></header>
+    {canImport && aiKind && <AiImport key={branch.id + aiKind} kind={aiKind}/>}
     {current === 'overview' && <CompanyOverview/>}
     {current === 'branches' && <BranchSettings member={company.membership} branches={branches} onCreate={company.createBusiness} embedded/>}
     {current === 'products' && <RetailCatalog key={branch.id}/>}

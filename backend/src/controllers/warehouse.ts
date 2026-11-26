@@ -33,9 +33,10 @@ export class WarehouseController {
   @Get('warehouse/items')
   async items(@Req() req: Request, @Param() route: Route, @Query() query: unknown) {
     const { scope } = await access(req, route.tenantId, route.branchId, 'warehouse.read');
-    const { page, q, stock, alerts } = read(z.object({ page: pageSchema, q: z.string().trim().max(120).optional(),
-      stock: z.enum(['LOW', 'EMPTY', 'SOON', 'EXPIRED']).optional(), alerts: z.literal('yes').optional() }), query);
+    const { page, q, code, stock, alerts } = read(z.object({ page: pageSchema, q: z.string().trim().max(120).optional(),
+      code: z.string().trim().min(1).max(80).optional(), stock: z.enum(['LOW', 'EMPTY', 'SOON', 'EXPIRED']).optional(), alerts: z.literal('yes').optional() }), query);
     const search = q ? localFilter(q) : undefined;
+    const byCode = code ? { $or: [{ barcode: code }, { code: code.toUpperCase() }] } : undefined;
     const now = Date.now();
     const today = facilityToday(now);
     const soonUntil = facilityToday(now + 7 * 86400000);
@@ -52,7 +53,7 @@ export class WarehouseController {
     const expired = expires({ $lt: ['$$lot.expiresOn', today] });
     const filters = { LOW: low, EMPTY: empty, SOON: soon, EXPIRED: expired };
     const [items, total, lowStock, emptyStock, soonStock, expiredStock] = await Promise.all([
-      WarehouseItem.find({ ...scope, ...(search ? { $or: [{ name: search }, { code: search }, { barcode: search }] } : {}),
+      WarehouseItem.find({ ...scope, ...(byCode ?? (search ? { $or: [{ name: search }, { code: search }, { barcode: search }] } : {})),
         ...(stock ? filters[stock] : {}) }).sort('name _id').skip((page - 1) * 50).limit(50).lean(),
       WarehouseItem.countDocuments(scope), WarehouseItem.countDocuments({ ...scope, ...low }), WarehouseItem.countDocuments({ ...scope, ...empty }),
       alerts ? WarehouseItem.countDocuments({ ...scope, ...soon }) : 0,

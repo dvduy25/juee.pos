@@ -2,30 +2,24 @@
 
 import { useLanguage } from '@/i18n/language';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
-import { ArrowDown, Camera, CheckCircle2, ChevronDown, FileImage, FileText, Images, Info, KeyRound, LoaderCircle, MapPin, Mic, PackageMinus,
-  PackagePlus, ScanLine, Square, Utensils, X } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
+import { ArrowDown, Camera, CheckCircle2, ChevronDown, FileImage, FileText, Images, Info, KeyRound, LoaderCircle, MapPin,
+  ScanLine, X } from 'lucide-react';
+import Link from 'next/link';
 import { State } from '@/components/business-ui';
 import { useAction, useBusiness, useData } from '@/hooks/use-business';
-import { usesTables } from '@/types/business';
-import { ReviewIssue, ReviewMenu, ReviewReceipt, type IssueDraft, type MenuDraft, type ReceiptDraft } from './inventory-ai-review';
+import { ReviewIssue, ReviewMenu, ReviewReceipt, ReviewRetail, type IssueDraft, type MenuDraft, type ReceiptDraft, type RetailDraft } from './inventory-ai-review';
 import './inventory-ai.css';
 
-type Source = 'text' | 'image' | 'audio';
-type Kind = 'receive' | 'issue' | 'menu';
-type Draft = { kind: 'receive'; data: ReceiptDraft } | { kind: 'issue'; data: IssueDraft } | { kind: 'menu'; data: MenuDraft };
+type Source = 'text' | 'image';
+export type AiDocumentKind = 'receive' | 'issue' | 'menu' | 'retail';
+type Draft = { kind: 'receive'; data: ReceiptDraft } | { kind: 'issue'; data: IssueDraft } | { kind: 'menu'; data: MenuDraft } |
+  { kind: 'retail'; data: RetailDraft };
 type AiProvider = 'openai' | 'gemini';
 type AiSettings = { configured: boolean; provider?: AiProvider; available?: Record<AiProvider, boolean> };
 const providerLabels = { openai: 'OpenAI', gemini: 'Gemini' };
-const documentOptions = [
-  { value: 'receive', label: 'Nhập hàng', Icon: PackagePlus },
-  { value: 'menu', label: 'Thực đơn', Icon: Utensils },
-  { value: 'issue', label: 'Xuất kho', Icon: PackageMinus },
-] as const;
 const sourceOptions = [
   { value: 'image', label: 'Ảnh', Icon: Camera },
   { value: 'text', label: 'Văn bản', Icon: FileText },
-  { value: 'audio', label: 'Ghi âm', Icon: Mic },
 ] as const;
 const photoLimit = 4 * 1024 * 1024;
 const photoTypes = ['image/jpeg', 'image/png', 'image/webp'];
@@ -56,42 +50,44 @@ async function photoForUpload(file: File) {
 export function InventoryAi() {
   const { t } = useLanguage();
   const { branch, role } = useBusiness();
-  const query = useSearchParams();
-  const initial = query.get('document') === 'menu' && usesTables(branch.mode) ? 'menu' : 'receive';
   const settings = useData<AiSettings>('/warehouse/ai/settings');
-  const owner = role === 'OWNER';
   const config = settings.data;
-  const connectionId = useId();
   return <div className="inventory-ai">
-    <div className={owner && config ? 'ai-layout ai-layout-with-settings' : 'ai-layout'}>
-      {config?.configured ? <InvoiceAssistant key={branch.id + initial} initial={initial} provider={config.provider}/> :
-        <section className="card ai-workspace" aria-label={t("Đọc chứng từ")}>
-          <State query={settings}/>
-          {config && <div className="ai-empty">
-            <span className="ai-icon"><ScanLine size={29} aria-hidden="true"/></span>
-            <h2>{t("Đọc chứng từ")}</h2>
-            <p>{owner ? t("Chọn nhà cung cấp và lưu khóa API để tạo bản nháp từ chứng từ.") :
-              t("Chủ doanh nghiệp cần lưu khóa API để bật tính năng đọc chứng từ.")}</p>
-            {owner && <a className="plain" href={`#${connectionId}`}>{t("Tới cài đặt khóa API")} <ArrowDown size={16} aria-hidden="true"/></a>}
-          </div>}
-        </section>}
-      {owner && config && <aside className="card ai-connection" id={connectionId} aria-labelledby={connectionId + '-title'}>
-        <div className="ai-connection-head">
-          <span className="ai-icon"><KeyRound size={19} aria-hidden="true"/></span>
-          <div>
-            <h2 id={connectionId + '-title'}>{t("Khóa API của doanh nghiệp")}</h2>
-            <p className="ai-connection-state" data-ready={config.configured}>
-              {config.configured ? <><CheckCircle2 size={14} aria-hidden="true"/>{t("Đang dùng")} {providerLabels[config.provider ?? 'openai']}</> : t("Chưa cài khóa API")}
-            </p>
-          </div>
+    <section className="card ai-connection ai-settings">
+      <header className="ai-connection-head">
+        <span className="ai-icon"><KeyRound size={19} aria-hidden="true"/></span>
+        <div>
+          <h2>{t("Khóa API của doanh nghiệp")}</h2>
+          {config && <p className="ai-connection-state" data-ready={config.configured}>
+            {config.configured ? <><CheckCircle2 size={14} aria-hidden="true"/>{t("Đang dùng")} {providerLabels[config.provider ?? 'openai']}</> : t("Chưa cài khóa API")}
+          </p>}
         </div>
-        <details className="ai-connection-details" open={!config.configured}>
-          <summary>{t("Cài đặt và cách lấy khóa")} <ChevronDown size={17} aria-hidden="true"/></summary>
-          <ProviderSettings key={branch.id} settings={config}/>
-        </details>
-      </aside>}
-    </div>
+      </header>
+      <State query={settings}/>
+      {config && (role === 'OWNER' ? <ProviderSettings key={branch.id} settings={config}/> :
+        <p className="muted">{t("Chủ doanh nghiệp cần lưu khóa API để bật tính năng đọc chứng từ.")}</p>)}
+    </section>
   </div>;
+}
+
+export function AiDocumentImport({ kind }: { kind: AiDocumentKind }) {
+  const { t } = useLanguage();
+  const { role } = useBusiness();
+  const settings = useData<AiSettings>('/warehouse/ai/settings');
+  if (settings.data?.configured) {
+    return <div className="inventory-ai"><InvoiceAssistant kind={kind} provider={settings.data.provider}/></div>;
+  }
+  return <div className="inventory-ai"><section className="card ai-workspace" aria-label={t("Đọc chứng từ")}>
+    <State query={settings}/>
+    {settings.data && <div className="ai-empty">
+      <span className="ai-icon"><KeyRound size={29} aria-hidden="true"/></span>
+      <h2>{t("Chưa cài khóa API")}</h2>
+      <p>{t("Chủ doanh nghiệp cần lưu khóa API để bật tính năng đọc chứng từ.")}</p>
+      {role === 'OWNER' && <Link className="plain" href="/dashboard/company?tab=warehouse-ai">
+        {t("Tới cài đặt khóa API")} <ArrowDown size={16} aria-hidden="true"/>
+      </Link>}
+    </div>}
+  </section></div>;
 }
 
 function ProviderSettings({ settings }: { settings: AiSettings }) {
@@ -101,7 +97,7 @@ function ProviderSettings({ settings }: { settings: AiSettings }) {
   const saved = settings.available?.[provider] ?? settings.configured;
   const active = settings.configured && (settings.provider ?? 'openai') === provider;
   const name = providerLabels[provider];
-  const submitLabel = active ? 'Thay khóa' : `Sử dụng ${name}`;
+  const submitLabel = active ? t("Thay khóa") : t("Sử dụng {0}", name);
   const path = '/warehouse/ai/settings';
 
   return <>
@@ -152,12 +148,11 @@ function ProviderSettings({ settings }: { settings: AiSettings }) {
   </>;
 }
 
-function InvoiceAssistant({ initial, provider }: { initial: 'receive' | 'menu'; provider?: AiProvider }) {
+function InvoiceAssistant({ kind, provider }: { kind: AiDocumentKind; provider?: AiProvider }) {
   const { t } = useLanguage();
-  const { branch, role } = useBusiness();
+  const { branch } = useBusiness();
   const action = useAction();
   const [source, setSource] = useState<Source>('image');
-  const [kind, setKind] = useState<Kind>(initial);
   const [draft, setDraft] = useState<Draft>();
   const [photo, setPhoto] = useState<File>();
   const [readPhoto, setReadPhoto] = useState<File>();
@@ -165,48 +160,6 @@ function InvoiceAssistant({ initial, provider }: { initial: 'receive' | 'menu'; 
   const [showFeedback, setShowFeedback] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [notice, setNotice] = useState('');
-  const [audio, setAudio] = useState<File>();
-  const [recording, setRecording] = useState(false);
-  const [recordError, setRecordError] = useState('');
-  const recorder = useRef<MediaRecorder>(undefined);
-  const stream = useRef<MediaStream>(undefined);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const mounted = useRef(false);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      clearTimeout(timer.current);
-      stream.current?.getTracks().forEach(track => track.stop());
-    };
-  }, []);
-
-  async function toggleRecording() {
-    if (recorder.current?.state === 'recording') { recorder.current.stop(); return; }
-    setAudio(undefined); setRecordError(''); setRecording(true);
-    let microphone: MediaStream | undefined;
-    try {
-      microphone = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!mounted.current) { microphone.getTracks().forEach(track => track.stop()); return; }
-      stream.current = microphone;
-      const recording = new MediaRecorder(microphone);
-      recorder.current = recording;
-      const clips: Blob[] = [];
-      recording.ondataavailable = event => { if (event.data.size) clips.push(event.data); };
-      recording.onstop = () => {
-        clearTimeout(timer.current);
-        microphone?.getTracks().forEach(track => track.stop());
-        if (!mounted.current) return;
-        setRecording(false);
-        if (clips.length) setAudio(new File(clips, 'ghi-am', { type: recording.mimeType || clips[0].type }));
-      };
-      recording.start();
-      timer.current = setTimeout(() => { if (recording.state === 'recording') recording.stop(); }, 60_000);
-    } catch {
-      microphone?.getTracks().forEach(track => track.stop());
-      if (mounted.current) { setRecording(false); setRecordError('Không mở được micro. Bạn có thể tải bản ghi có sẵn.'); }
-    }
-  }
 
   async function extract(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -232,7 +185,6 @@ function InvoiceAssistant({ initial, provider }: { initial: 'receive' | 'menu'; 
         setPreparing(false);
       }
     }
-    if (source === 'audio' && audio) data.set('file', audio);
     const path = '/warehouse/ai/extract';
     const options = { message: 'Đã đọc xong. Kiểm tra từng dòng trước khi xác nhận.' };
     setShowFeedback(true);
@@ -241,6 +193,9 @@ function InvoiceAssistant({ initial, provider }: { initial: 'receive' | 'menu'; 
       if (next) setDraft({ kind, data: next });
     } else if (kind === 'receive') {
       const next = await action.send<ReceiptDraft>(path, data, options);
+      if (next) setDraft({ kind, data: next });
+    } else if (kind === 'retail') {
+      const next = await action.send<RetailDraft>(path, data, options);
       if (next) setDraft({ kind, data: next });
     } else {
       const next = await action.send<IssueDraft>(path, data, options);
@@ -252,7 +207,6 @@ function InvoiceAssistant({ initial, provider }: { initial: 'receive' | 'menu'; 
     setDraft(undefined);
     setPhoto(undefined);
     setReadPhoto(undefined);
-    setAudio(undefined);
     setNotice(message);
   }
 
@@ -280,20 +234,7 @@ function InvoiceAssistant({ initial, provider }: { initial: 'receive' | 'menu'; 
     </header>}
     {notice && <p className="success" role="status">{t(notice)}</p>}
     {!draft && <form className="ai-capture" onSubmit={extract} aria-busy={busy}>
-      <fieldset className="ai-choice-field" disabled={recording || busy}>
-        <legend>{t("Loại chứng từ")}</legend>
-        <div className="ai-document-options">
-          {documentOptions.filter(option => option.value === 'receive' || (option.value === 'menu' ? usesTables(branch.mode) : role === 'OWNER'))
-            .map(({ value, label, Icon }) => <label className="ai-choice ai-document-option" key={value}>
-              <input type="radio" name="kind" value={value} checked={kind === value} onChange={() => {
-                setKind(value); choosePhoto(undefined);
-                if (value === 'menu') setSource('image');
-              }}/>
-              <Icon size={20} aria-hidden="true"/><span>{t(label)}</span>
-            </label>)}
-        </div>
-      </fieldset>
-      {kind !== 'menu' && <fieldset className="ai-choice-field" disabled={recording || busy}>
+      {kind !== 'menu' && <fieldset className="ai-choice-field" disabled={busy}>
         <legend>{t("Nguồn chứng từ")}</legend>
         <div className="ai-source-options">
           {sourceOptions.map(({ value, label, Icon }) => <label className="ai-choice ai-source-option" key={value}>
@@ -306,24 +247,16 @@ function InvoiceAssistant({ initial, provider }: { initial: 'receive' | 'menu'; 
       </fieldset>}
       {source === 'image' && <>
         <PhotoInput photo={photo} busy={busy} choose={choosePhoto}
-          hint={kind === 'menu' ? t("Chụp rõ tên và giá từng món.") : t("Chụp thẳng, đủ tên hàng và số lượng. Tránh bóng và lóa.")}/>
+          hint={kind === 'menu' ? t("Chụp rõ tên và giá từng món.") : kind === 'retail'
+            ? t("Chụp rõ tên sản phẩm và giá bán. Đưa cả mã vạch vào ảnh nếu có.")
+            : t("Chụp thẳng, đủ tên hàng và số lượng. Tránh bóng và lóa.")}/>
         {photoError && <p role="alert" className="error">{photoError}</p>}
       </>}
       {source === 'text' && <label>{t("Nội dung chứng từ")}<textarea name="text" maxLength={10000} required rows={6} disabled={busy}
-        placeholder={t("Nhập tên hàng, đơn vị, số lượng và đơn giá…")}/></label>}
-      {source === 'audio' && <div className="ai-audio">
-        <button type="button" className="plain ai-secondary" disabled={busy} onClick={() => void toggleRecording()}>
-          {recording ? <Square size={16} aria-hidden="true"/> : <Mic size={17} aria-hidden="true"/>}
-          {recording ? t("Dừng ghi âm") : audio ? t("Ghi âm lại") : t("Ghi âm tối đa 1 phút")}
-        </button>
-        {audio ? <p className="ai-inline-note"><CheckCircle2 size={17} aria-hidden="true"/>{t("Đã có bản ghi âm")}</p> :
-          <label>{t("Tải bản ghi (tối đa 4 MB)")}<input name="file" type="file"
-            accept={provider === 'gemini' ? '.webm,.m4a,.mp4,.mp3,.wav,.ogg,.aac,.flac' : 'audio/webm,audio/mp4,audio/mpeg,audio/wav,audio/ogg'}
-            required disabled={recording || busy}/></label>}
-        {recordError && <p role="alert" className="error">{recordError}</p>}
-      </div>}
+        placeholder={kind === 'retail' ? t("Nhập mỗi sản phẩm một dòng, kèm mã hàng, đơn vị và giá bán nếu có…") :
+          t("Nhập tên hàng, đơn vị, số lượng và đơn giá…")}/></label>}
       <footer className="ai-capture-footer">
-        <button type="submit" className="button ai-main-action" disabled={recording || busy || (source === 'image' && !photo)}>
+        <button type="submit" className="button ai-main-action" disabled={busy || (source === 'image' && !photo)}>
           {busy ? <LoaderCircle className="ai-spinner" size={18} aria-hidden="true"/> : <ScanLine size={18} aria-hidden="true"/>}
           {preparing ? t("Đang chuẩn bị ảnh…") : action.pending ? t("Đang đọc chứng từ…") : t("Đọc bằng AI")}
         </button>
@@ -335,6 +268,7 @@ function InvoiceAssistant({ initial, provider }: { initial: 'receive' | 'menu'; 
     {!notice && showFeedback && action.feedback}
     {draft?.kind === 'receive' && <ReviewReceipt draft={draft.data} close={close} done={finish} photo={reviewPhoto}/>}
     {draft?.kind === 'menu' && <ReviewMenu draft={draft.data} close={close} done={finish} photo={reviewPhoto}/>}
+    {draft?.kind === 'retail' && <ReviewRetail draft={draft.data} close={close} done={finish} photo={reviewPhoto}/>}
     {draft?.kind === 'issue' && <ReviewIssue draft={draft.data} close={close} done={finish} photo={reviewPhoto}/>}
   </section>;
 }

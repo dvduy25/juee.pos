@@ -273,3 +273,67 @@ function IssueRow({ line, remove }: { line: InvoiceLine; remove?: () => void }) 
       defaultValue={line.quantity ?? ''} required/></label>
   </article>;
 }
+
+type RetailLine = {
+  name: string; unit: string | null; code: string | null; barcode: string | null; price: number | null;
+  item: WarehouseMatch | null; needsMatch: boolean;
+};
+export type RetailDraft = { lines: RetailLine[] };
+
+export function ReviewRetail({ draft, close, done, photo }: { draft: RetailDraft } & ReviewProps) {
+  const { t } = useLanguage();
+  const action = useAction();
+  const [rows, setRows] = useState(() => draft.lines.map((line, index) => ({ line, index })));
+
+  async function commit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const lines = rows.map(({ index }) => {
+      const price = Number(form.get(`price-${index}`));
+      return form.get(`mode-${index}`) === 'existing' ? { mode: 'existing', price, warehouseItemId: form.get(`item-${index}`) } : {
+        mode: 'new', price, name: form.get(`name-${index}`), unit: form.get(`unit-${index}`),
+        code: String(form.get(`code-${index}`) ?? '').trim() || undefined,
+        barcode: String(form.get(`barcode-${index}`) ?? '').trim() || undefined,
+      };
+    });
+    const result = await action.send('/warehouse/ai/retail', { lines }, { idempotent: true });
+    if (result) done('Đã lưu sản phẩm bán lẻ.');
+  }
+
+  return <form onSubmit={commit} className="ai-review">
+    <ReviewHeader title={t("Duyệt sản phẩm bán lẻ")}>{t("Kiểm tra mặt hàng kho và giá bán trước khi xác nhận.")}</ReviewHeader>
+    {photo}
+    <fieldset disabled={action.pending} className="ai-review-fields">
+      <p className="muted">{t("Mặt hàng mới bắt đầu với tồn kho 0. Hãy nhập hàng trước khi bán.")}</p>
+      <div className="ai-review-list">
+        <h3>{rows.length} {t("mặt hàng đề xuất")}</h3>
+        {rows.map(({ line, index }) => <RetailRow key={index} line={line} index={index}
+          remove={rows.length > 1 ? () => setRows(current => current.filter(row => row.index !== index)) : undefined}/>)}
+      </div>
+    </fieldset>
+    <ReviewActions pending={action.pending} confirm={t("Xác nhận đăng bán")} close={close}/>
+    {action.feedback}
+  </form>;
+}
+
+function RetailRow({ line, index, remove }: { line: RetailLine; index: number; remove?: () => void }) {
+  const { t } = useLanguage();
+  const [mode, setMode] = useState<RowMode>(line.item ? 'existing' : line.needsMatch ? '' : 'new');
+  return <article className="ai-review-line">
+    <ReviewLineHeader name={line.name} unit={line.unit} status={line.barcode ?? line.code ?? undefined} attention={!mode} remove={remove}/>
+    <label>{t("Xử lý")}<select name={`mode-${index}`} value={mode} required onChange={event => setMode(event.target.value as RowMode)}>
+      <option value="">{t("Chọn cách xử lý")}</option>
+      <option value="existing">{t("Đăng bán mặt hàng có sẵn")}</option>
+      <option value="new">{t("Tạo mặt hàng mới")}</option>
+    </select></label>
+    {mode === 'existing' && <WarehousePicker initial={line.item ?? undefined} fieldName={`item-${index}`}/>}
+    {mode === 'new' && <div className="form-grid form-grid-business">
+      <label>{t("Tên hàng")}<input name={`name-${index}`} defaultValue={line.name} maxLength={120} required/></label>
+      <label>{t("Đơn vị")}<input name={`unit-${index}`} defaultValue={line.unit ?? ''} maxLength={32} required/></label>
+      <label>{t("Mã hàng kho")}<input name={`code-${index}`} defaultValue={line.code ?? ''} maxLength={60}/></label>
+      <label>{t("Mã vạch")}<input name={`barcode-${index}`} defaultValue={line.barcode ?? ''} maxLength={80}/></label>
+    </div>}
+    <label>{t("Giá bán trước thuế (đ)")}<input name={`price-${index}`} type="number" min="0" max="1000000000000" step="1"
+      defaultValue={line.price ?? ''} required/></label>
+  </article>;
+}

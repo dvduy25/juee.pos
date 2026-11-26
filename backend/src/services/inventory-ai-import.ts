@@ -5,7 +5,7 @@ import { logChange, requireSharedCatalog, type Scope } from '../middleware/busin
 import { BranchProductPrice, Product, ProductVariant, WarehouseItem, type Role } from '../models';
 import { found } from '../utils/db';
 import { label, objectId, vnd } from '../validators/common';
-import { productTypeFilter } from './catalog';
+import { listWarehouseProduct, productTypeFilter } from './catalog';
 import { purchaseHeader, purchaseLine, savePurchase } from './purchases';
 
 const unit = z.string().trim().min(1).max(32);
@@ -15,6 +15,14 @@ export const aiReceiptInput = purchaseHeader.extend({ lines: z.array(receiptLine
 export const aiMenuInput = z.object({
   lines: z.array(z.object({ name: label, price: vnd, variantId: objectId.optional() }).strict()).min(1).max(30),
 }).strict();
+
+const retailCode = z.string().trim().min(1).max(60).transform(value => value.toUpperCase());
+const retailBarcode = z.string().trim().min(1).max(80);
+const retailLine = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('existing'), warehouseItemId: objectId, price: vnd }).strict(),
+  z.object({ mode: z.literal('new'), name: label, unit, code: retailCode.optional(), barcode: retailBarcode.optional(), price: vnd }).strict(),
+]);
+export const aiRetailInput = z.object({ lines: z.array(retailLine).min(1).max(30) }).strict();
 
 function normalized(value: string) {
   return value.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('vi');
@@ -80,6 +88,57 @@ export async function receiveAiPurchase(scope: Scope, actorId: string, input: z.
     lines.push({ itemId, quantity: line.quantity, unitCost: line.unitCost, taxBps: line.taxBps, expiresOn: line.expiresOn });
   }
   return savePurchase(scope, actorId, { ...input, lines }, session);
+}
+
+export async function suggestRetailItems(scope: Scope, lines: {
+  name: string; unit: string | null; code: string | null; barcode: string | null; price: number | null;
+}[]) {
+  const codes = [...new Set(lines.flatMap(line => [line.barcode, line.code]).filter((value): value is string => !!value))];
+  const [named, coded] = await Promise.all([
+    warehouseNames(scope, lines.map(line => line.name)),
+    codes.length ? WarehouseItem.find({ ...scope, $or: [{ code: { $in: codes.map(code => code.toUpperCase()) } },
+      { barcode: { $in: codes } }] }).select('_id name code unit barcode').lean() : [],
+  ]);
+  return lines.map(line => {
+    const identifiers = [line.code, line.barcode].filter((value): value is string => !!value);
+    const exact = coded.filter(item => identifiers.some(code => item.barcode === code || item.code === code.toUpperCase()));
+    const sameName = named.get(normalized(line.name)) ?? [];
+    const unitName = line.unit && normalized(line.unit);
+    const compatible = unitName ? sameName.filter(item => normalized(item.unit) === unitName) : sameName;
+    const match = exact.length ? exact.length === 1 && exact[0] : !identifiers.length && compatible.length === 1 && compatible[0];
+    return { ...line, item: match ? { id: String('_id' in match ? match._id : match.id), name: match.name, unit: match.unit, code: match.code } : null,
+      needsMatch: !!(exact.length || sameName.length) };
+  });
+}
+
+export async function saveAiRetail(scope: Scope, actorId: string, input: z.output<typeof aiRetailInput>, session: ClientSession) {
+  const names = await warehouseNames(scope, input.lines.flatMap(line => line.mode === 'new' ? [line.name] : []), session);
+  const createdNames = new Set<string>();
+  for (const line of input.lines) {
+    let warehouseItemId: string;
+    if (line.mode === 'existing') warehouseItemId = line.warehouseItemId;
+    else {
+      const name = normalized(line.name);
+      const unitName = normalized(line.unit);
+      const nameKey = JSON.stringify([name, unitName]);
+      if (createdNames.has(nameKey) || names.get(name)?.some(item => normalized(item.unit) === unitName)) {
+        throw new ConflictException(`Kho đã có “${line.name}” (${line.unit}). Chọn mặt hàng đó trong bảng duyệt.`);
+      }
+      const identifiers = [line.code, line.barcode].filter((value): value is string => !!value);
+      if (identifiers.length && await WarehouseItem.exists({ ...scope, $or: [{ code: { $in: identifiers.map(code => code.toUpperCase()) } },
+        { barcode: { $in: identifiers } }] }).session(session)) {
+        throw new ConflictException('Mã hàng hoặc mã vạch đã tồn tại.');
+      }
+      const id = new Types.ObjectId();
+      await new WarehouseItem({ _id: id, ...scope, code: line.code ?? `AI-${id.toHexString().toUpperCase()}`,
+        name: line.name, unit: line.unit, barcode: line.barcode }).save({ session });
+      await logChange(scope, actorId, 'WAREHOUSE_ITEM_CREATE', id, session);
+      warehouseItemId = id.toHexString();
+      createdNames.add(nameKey);
+    }
+    await listWarehouseProduct(scope, actorId, { warehouseItemId, price: line.price, description: '' }, session);
+  }
+  return { count: input.lines.length };
 }
 
 function sharedMenu(scope: Scope) {

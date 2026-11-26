@@ -1,9 +1,12 @@
-import type { Scope } from '../middleware/business-access';
-import { localFilter } from '../utils/db';
+import { ConflictException } from '@nestjs/common';
+import type { ClientSession } from 'mongoose';
+import { logChange, type Scope } from '../middleware/business-access';
+import { found, localFilter } from '../utils/db';
 import { BranchProductPrice, DishRecipe, Product, ProductVariant, UnavailableProduct, WarehouseItem } from '../models';
 import { buffetMenuFilter } from './buffet';
 import { availableStock } from './stock-lots';
 import { facilityToday } from './membership-plans';
+import { productImagePath, type readProductImage } from './product-image';
 
 export function productTypeFilter(type: 'RETAIL' | 'FOOD') {
   // Older catalogs have no productType and are available in both modes.
@@ -89,4 +92,24 @@ export async function catalog(scope: Scope, opts: {
         attributes: { size: stock?.size, color: stock?.color }, paused: variant.paused || (!opts.ignoreRecipeStock && available < 1000),
       })) : recipeStatus ? variants.map(variant => ({ ...variant, paused: true })) : variants };
   });
+}
+
+export async function listWarehouseProduct(scope: Scope, actorId: string,
+  input: { warehouseItemId: string; price: number; description: string }, session: ClientSession,
+  image?: NonNullable<ReturnType<typeof readProductImage>>) {
+  const item = found(await WarehouseItem.findOne({ ...scope, _id: input.warehouseItemId }).session(session).lean(), 'Mặt hàng không thuộc kho chi nhánh.');
+  if (await Product.exists({ warehouseItemId: item._id }).session(session)) {
+    throw new ConflictException('Mặt hàng đã có trong danh sách sản phẩm. Kiểm tra cả hàng ngừng bán.');
+  }
+  const product = new Product({ tenantId: scope.tenantId, retailBranchId: scope.branchId, warehouseItemId: item._id,
+    productType: 'RETAIL', name: item.name, description: input.description, categoryId: item.categoryId });
+  if (image) {
+    product.images = [productImagePath(product.id, image.version)];
+    product.imageFile = image;
+  }
+  await product.save({ session });
+  await ProductVariant.insertOne({ tenantId: scope.tenantId, productId: product._id,
+    sku: `WH-${item._id}`, basePrice: input.price, costPrice: 0 }, { session });
+  await logChange(scope, actorId, 'PRODUCT_CREATE', product._id, session, { warehouseItemId: item._id });
+  return product._id;
 }
