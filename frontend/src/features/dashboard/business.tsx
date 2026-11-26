@@ -4,9 +4,10 @@ import { useLanguage } from '@/i18n/language';
 import Link from 'next/link';
 import { redirect, usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useState, useTransition, type ComponentType, type ReactNode } from 'react';
 import { Building2, ChevronDown, Store, Utensils } from 'lucide-react';
 import { api } from '@/services/api-client';
+import { PageLoading } from '@/components/page-loading';
 import { Workspace, type BranchSelection, type WorkspaceLayoutProps } from '@/components/workspace';
 import { BusinessContext, useBusiness, type CompanySelection } from '@/hooks/use-business';
 import type { Branch, Membership, WorkspaceMode } from '@/types/business';
@@ -61,11 +62,14 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
   const company = pathname === '/dashboard/company' || companySecurity;
   const staffMode = !!props.user.staffMode;
   const selectedScope = props.user.staffMode ?? props.user.selectedBranch;
+  const [switching, startSwitch] = useTransition();
   const [creating, setCreating] = useState(false);
-  const [preferred, setPreferred] = useState<WorkspaceMode>('RETAIL');
+  const [preferred, setPreferred] = useState<'RETAIL' | 'RESTAURANT'>();
   const [branchChange, setBranchChange] = useState<{ member: Membership; branchId?: string; destination?: string }>();
   useEffect(() => {
-    if (localStorage.getItem('juee-hybrid-mode') === 'RESTAURANT') setPreferred('RESTAURANT');
+    let saved: string | null = null;
+    try { saved = localStorage.getItem('juee-hybrid-mode'); } catch { /* The workspace can run without persisted preferences. */ }
+    setPreferred(saved === 'RESTAURANT' ? 'RESTAURANT' : 'RETAIL');
   }, []);
   const tenants = useQuery({ queryKey: ['tenants', props.user.staffMode?.branchId ?? 'management'], queryFn: () => api<Membership[]>('/tenants'), refetchInterval: 15000 });
   const selectable = company ? tenants.data?.filter(item => item.role === 'OWNER' || item.role === 'MANAGER') : tenants.data;
@@ -79,14 +83,20 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
   const section = Object.hasOwn(navigation, requested) ? requested as Section : undefined;
   const supported = section ? modesFor(section).filter(item => item === 'RETAIL' || item === 'RESTAURANT') : [];
   const directMode = supported.length === 1 ? supported[0] : undefined;
-  const mode = branch?.mode === 'HYBRID' ? (directMode ?? preferred) : branch?.mode ?? 'RETAIL';
-  const allowedSections = employeeSections(mode);
+  const mode = branch?.mode === 'HYBRID' ? directMode ?? preferred : branch?.mode;
+  const error = tenants.error ?? (!security ? branches.error : null);
+  const loading = tenants.isPending || (!security && !!tenantId && branches.isPending) ||
+    (branch?.mode === 'HYBRID' && !mode);
+  if (switching || (loading && !error)) return <PageLoading fullPage dark={props.dark}/>;
+
+  const allowedSections = mode ? employeeSections(mode) : [];
   const active = subscriptionActive(member?.subscription);
 
-  function chooseHybridMode(hybridMode: WorkspaceMode, navigateHome = false) {
-    setPreferred(hybridMode);
-    localStorage.setItem('juee-hybrid-mode', hybridMode);
-    if (navigateHome && !company) router.push('/dashboard');
+  function chooseHybridMode(hybridMode: 'RETAIL' | 'RESTAURANT', navigateHome = false) {
+    try { localStorage.setItem('juee-hybrid-mode', hybridMode); } catch { /* The selected mode still applies for this session. */ }
+    if (navigateHome && !company) {
+      startSwitch(() => { setPreferred(hybridMode); router.push('/dashboard'); });
+    } else setPreferred(hybridMode);
   }
 
   function requestBranchChange(id: string, branchId?: string, destination?: string) {
@@ -100,10 +110,12 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
   }
 
   function changeBranch(scope: BranchSelection, destination?: string) {
-    props.onBranchChange(scope);
     setBranchChange(undefined);
-    if (destination) router.push(destination);
-    else if (!company) router.push('/dashboard');
+    startSwitch(() => {
+      props.onBranchChange(scope);
+      if (destination) router.push(destination);
+      else if (!company) router.push('/dashboard');
+    });
   }
 
   const branchDialog = branchChange && <BranchAccessDialog member={branchChange.member} requestedBranch={branchChange.branchId}
@@ -116,7 +128,7 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
       <button className="plain" type="button" key={item.tenant.id} onClick={() => requestBranchChange(item.tenant.id)}>{item.tenant.name}</button>);
   }
 
-  const nav = branch && member && active ? menus[mode].map(group => {
+  const nav = mode && branch && member && active ? menus[mode].map(group => {
     const visible = group.sections.filter(key => canView(key, member.role, mode) &&
       (!staffMode || allowedSections.includes(key)));
     if (!visible.length) return null;
@@ -127,7 +139,7 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
         return <Link key={key} href={dashboardHref(key)} title={t(title)}
           aria-current={section === key ? 'page' : undefined}
           onClick={() => {
-            if (branch.mode === 'HYBRID' && mode !== preferred) chooseHybridMode(mode);
+            if ((mode === 'RETAIL' || mode === 'RESTAURANT') && branch.mode === 'HYBRID' && mode !== preferred) chooseHybridMode(mode);
           }}><Icon size={18}/><span>{t(title)}</span></Link>;
       })}</div>
     </div>;
@@ -159,12 +171,10 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
   </div>;
 
   const Layout = company ? CompanyLayout : BranchLayout;
-  const error = tenants.error ?? (!security ? branches.error : null);
-  const loading = tenants.isPending || (!security && !!tenantId && branches.isPending);
   const canSwitch = staffMode || (active && branch && (member?.role === 'OWNER' || member?.role === 'MANAGER'));
   const accountSecurityHref = staffMode || security ? undefined : !member ? '/dashboard/security' :
     member.role === 'MANAGER' || !active ? '/dashboard/company/security' : undefined;
-  if (company && !loading && !error && (staffMode || !member)) return <CompanyLayout {...props} mode={mode} picker={null} navigation={null}>
+  if (company && !error && (staffMode || !member)) return <CompanyLayout {...props} mode={mode} picker={null} navigation={null}>
     <section className="card desk-empty"><h1>{t("Quản lý doanh nghiệp")}</h1>
       <p>{t("Hãy dùng tài khoản chủ doanh nghiệp hoặc tài khoản quản lý được giao chi nhánh.")}</p>
       <div className="actions business-filters">
@@ -175,7 +185,7 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
     </section>
     {branchDialog}
   </CompanyLayout>;
-  if (personalSecurity && !loading && !error) {
+  if (personalSecurity && !error) {
     if (staffMode) redirect('/dashboard');
     if (member && canView('company', member.role)) redirect('/dashboard/company/security');
     return <Layout {...props} mode={mode} tenant={member?.tenant.name} role={member?.role} picker={null} navigation={nav}>
@@ -186,17 +196,19 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
       <AccountSecurity/>
     </Layout>;
   }
-  if (!staffMode && !loading && !error && ((!member && !selectedScope) || creating)) return <StoreSetup {...props}
+  if (!staffMode && !error && ((!member && !selectedScope) || creating)) return <StoreSetup {...props}
     onBack={member && (() => setCreating(false))} onCreate={(tenantId, branchId) => { changeBranch({ tenantId, branchId }); setCreating(false); }}/>;
   return <Layout {...props} mode={mode} tenant={member?.tenant.name} branch={branch?.name} role={member?.role} picker={picker} modePicker={modePicker} navigation={nav}
     branchMode={branch?.mode} active={active} onCreateBusiness={company && member?.role === 'OWNER' && active && branch ? () => setCreating(true) : undefined}
     accountSecurityHref={accountSecurityHref}
-    workMode={!company && canSwitch && <WorkModeControl key={String(staffMode)} staffMode={staffMode} tenantId={tenantId} branchId={branch?.id}
+    workMode={!company && mode && canSwitch && <WorkModeControl key={String(staffMode)} staffMode={staffMode} tenantId={tenantId} branchId={branch?.id}
       description={employeeDescription(mode)} hasPassword={props.user.hasPassword !== false}
-      onChange={scope => { props.onWorkModeChange(scope); router.replace(scope && !allowedSections.includes('overview') ? dashboardHref(allowedSections[0]) : '/dashboard'); }}/> }>
+      onChange={scope => startSwitch(() => {
+        props.onWorkModeChange(scope);
+        router.replace(scope && !allowedSections.includes('overview') ? dashboardHref(allowedSections[0]) : '/dashboard');
+      })}/> }>
     {error && <p className="error" role="alert">{t(error.message)}</p>}
-    {loading ? <div className="skeleton" aria-label={t("Đang tải cửa hàng")}/> :
-      !error && (companySecurity ? props.children : selectedScope && (!member || !branch) ?
+    {!error && (companySecurity ? props.children : selectedScope && (!member || !branch) ?
         <section className="card desk-empty"><h1>{t("Chi nhánh chưa được cấp quyền")}</h1>
           <p>{t("Chọn chi nhánh được giao hoặc đăng nhập bằng tài khoản chủ doanh nghiệp hay quản lý của chi nhánh cần vào.")}</p>
           <div className="actions business-filters">{!staffMode && availableBusinesses()}
@@ -211,7 +223,7 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
 }
 
 function BranchContext({ member, branch, branches, mode, children, active, staffMode, onCreate, company }: {
-  member: Membership; branch?: Branch; branches: Branch[]; mode: WorkspaceMode; children: ReactNode;
+  member: Membership; branch?: Branch; branches: Branch[]; mode?: WorkspaceMode; children: ReactNode;
   active: boolean; staffMode: boolean; onCreate?: () => void; company?: CompanySelection;
 }) {
   const { t } = useLanguage();
@@ -226,7 +238,7 @@ function BranchContext({ member, branch, branches, mode, children, active, staff
   if (!staffMode && !branch) {
     return <BranchSettings key={member.tenant.id} member={member} branches={branches} onCreate={onCreate}/>;
   }
-  if (!branch) return <p className="error" role="alert">{t("Bạn chưa được cấp quyền vào chi nhánh này.")}</p>;
+  if (!branch || !mode) return <p className="error" role="alert">{t("Bạn chưa được cấp quyền vào chi nhánh này.")}</p>;
   return <BusinessContext.Provider key={`${branch.id}:${mode}:${staffMode}`} value={{ tenantId: member.tenant.id,
     branch, branches, membership: member, active, role: member.role, mode, staffMode, root: `/tenants/${member.tenant.id}/branches/${branch.id}`,
     company: company && { ...company, membership: member, createBusiness: onCreate } }}>

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { api, restore, setToken, ApiError } from '@/services/api-client';
+import { PageLoading } from './page-loading';
 
 export type BranchSelection = { tenantId: string; branchId: string };
 type User = { name: string; email: string; hasPassword?: boolean; staffMode?: BranchSelection; selectedBranch?: BranchSelection };
@@ -50,7 +51,7 @@ function Shell({ layout: Layout, children }: WorkspaceProps) {
       const { pathname, search, hash } = window.location;
       router.replace('/login?' + new URLSearchParams({ next: pathname + search + hash }));
     };
-    setDark(localStorage.getItem('juee-theme') === 'dark');
+    try { setDark(localStorage.getItem('juee-theme') === 'dark'); } catch { /* Use the default theme. */ }
     restore().then(ok => ok ? api<User>('/auth/me') : undefined).then(result => {
       if (!mounted) return;
       if (result) setUser(result);
@@ -79,12 +80,13 @@ function Shell({ layout: Layout, children }: WorkspaceProps) {
     } catch { setError('Không thể đăng xuất. Vui lòng thử lại.'); }
   }
 
+  if (!user && !error) return <PageLoading fullPage dark={dark}/>;
   if (!user) return <div className={`auth ${dark ? 'dark' : ''}`}>
-    {error ? <div className="card auth-card">
+    <div className="card auth-card">
       <p role="alert" className="error">{t(error)}</p>
       <button className="plain" type="button" onClick={() => window.location.reload()}>{t("Thử lại")}</button>
       <Link className="plain" href="/login">{t("Trang đăng nhập")}</Link>
-    </div> : <div className="card skeleton" aria-label={t("Đang tải")}/>}
+    </div>
   </div>;
 
   return <Layout user={user} dark={dark} onThemeChange={toggleTheme} onLogout={logout} error={error}

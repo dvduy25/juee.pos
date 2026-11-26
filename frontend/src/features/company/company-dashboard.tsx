@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { Building2, ChevronDown, Sparkles } from 'lucide-react';
 import { Panel, State } from '@/components/business-ui';
+import { PageLoading } from '@/components/page-loading';
 import { useBusiness, useData } from '@/hooks/use-business';
 import { currency } from '@/lib/format';
 import type { Branch } from '@/types/business';
@@ -25,8 +26,7 @@ import { companySection } from './navigation';
 import type { AiDocumentKind } from './inventory-ai';
 
 function TabLoading() {
-  const { t } = useLanguage();
-  return <div className="skeleton" role="status" aria-label={t("Đang tải nội dung")}/>;
+  return <PageLoading/>;
 }
 const Reports = dynamic(() => import('@/features/dashboard/reports').then(module => module.Reports), { loading: TabLoading });
 const OwnerPerformance = dynamic(() => import('./owner-performance').then(module => module.OwnerPerformance), { loading: TabLoading });

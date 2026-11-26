@@ -1680,4 +1680,5 @@ export const english: Readonly<Record<string, string>> = {
   "{0} · {1} đang tạm ngừng bán.": "{0} · {1} is currently off sale.",
   "Không tìm thấy sản phẩm đang bán có mã {0}.": "No product on sale matches code {0}.",
   "Không thể tra mã vạch.": "Could not look up the barcode.",
+  "Đang mở trang…": "Loading page…",
 };

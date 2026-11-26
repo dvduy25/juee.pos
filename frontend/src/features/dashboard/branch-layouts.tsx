@@ -14,7 +14,7 @@ import type { Branch, WorkspaceMode } from '@/types/business';
 const icons = { RETAIL: Store, RESTAURANT: Utensils, CAFE: Coffee, GYM: Dumbbell, POOL: Waves, HOTEL: BedDouble, TICKETS: Ticket };
 
 type LayoutProps = WorkspaceLayoutProps & {
-  mode: WorkspaceMode;
+  mode?: WorkspaceMode;
   tenant?: string;
   branch?: string;
   role?: string;
@@ -48,7 +48,7 @@ export function CompanyLayout({ branchMode, active = false, onCreateBusiness, ..
       <Plus size={18} aria-hidden="true"/><span>{t("Tạo doanh nghiệp")}</span></button>}
     <Link href="/dashboard" title={t("Về trang chi nhánh")}><ArrowLeft size={18} aria-hidden="true"/><span>{t("Về trang chi nhánh")}</span></Link>
   </div></div>;
-  return <DeskFrame {...props} theme={props.tenant ? props.mode : 'company'} brandHref="/dashboard/company" area={t("Quản lý doanh nghiệp")}
+  return <DeskFrame {...props} theme={props.mode ?? 'company'} brandHref="/dashboard/company" area={t("Quản lý doanh nghiệp")}
     heading={<><Building2 size={19} aria-hidden="true"/><div><strong>{props.tenant ?? t('Quản lý doanh nghiệp')}</strong>
       {props.branch && <small>{props.branch}</small>}</div></>} navigation={sections} footer={footer}>
     <div className="company-content">{props.children}</div>
@@ -57,11 +57,11 @@ export function CompanyLayout({ branchMode, active = false, onCreateBusiness, ..
 
 export function BranchLayout(props: LayoutProps) {
   const { t } = useLanguage();
-  const Icon = icons[props.mode];
+  const Icon = props.mode ? icons[props.mode] : Store;
   const reception = props.mode === 'GYM' || props.mode === 'POOL' || props.mode === 'HOTEL';
   const footer = props.role && <div className="desk-role"><Building2 size={17} aria-hidden="true"/><div><strong>{props.tenant}</strong>
     <small>{reception && props.role === 'CASHIER' ? t("Lễ tân") : roleNames[props.role] ?? props.role}</small></div></div>;
-  return <DeskFrame {...props} theme={props.mode} brandHref="/dashboard" area={branchNames[props.mode]} footer={footer} toolbar={props.modePicker}
+  return <DeskFrame {...props} theme={props.mode ?? 'company'} brandHref="/dashboard" area={t(props.mode ? branchNames[props.mode] : 'Cửa hàng')} footer={footer} toolbar={props.modePicker}
     heading={<><Icon size={19} aria-hidden="true"/><div><strong>{props.branch ?? props.tenant ?? t('Cửa hàng')}</strong>
       {props.branch && props.tenant && <small>{props.tenant}</small>}</div></>}/>;
 }
