@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { BusinessDialog } from '@/components/business-dialog';
@@ -15,6 +16,7 @@ type Coach = { id: string; name: string; specialty?: string };
 const canManageClasses = (role: string) => role === 'OWNER' || role === 'MANAGER';
 
 export function MemberClasses() {
+  const { t } = useLanguage();
   const { role } = useBusiness();
   const [day, setDay] = useState(() => vietnamLocalTime().slice(0, 10));
   const [page, setPage] = useState(1);
@@ -22,9 +24,9 @@ export function MemberClasses() {
   const [selected, setSelected] = useState<string>();
   const query = useData<MemberClass[]>(`/member-classes?day=${day}&page=${page}`, 8000);
   const selectedClass = query.data?.find(item => item.id === selected);
-  return <Panel title="Lịch lớp trong 14 ngày" action={canManageClasses(role) &&
-    <button type="button" className="button" onClick={() => setCreating(true)}><Plus size={17}/> Thêm lớp</button>}>
-    <label>Xem từ ngày<input type="date" value={day} onChange={event => {
+  return <Panel title={t("Lịch lớp trong 14 ngày")} action={canManageClasses(role) &&
+    <button type="button" className="button" onClick={() => setCreating(true)}><Plus size={17}/> {t("Thêm lớp")}</button>}>
+    <label>{t("Xem từ ngày")}<input type="date" value={day} onChange={event => {
       if (event.target.value) { setDay(event.target.value); setPage(1); }
     }}/></label>
     <State query={query} empty={query.data?.length === 0}/>
@@ -34,9 +36,9 @@ export function MemberClasses() {
       const started = Date.parse(item.startsAt) <= Date.now();
       return <div className="list-row service-list-row" key={item.id}>
         <div><strong>{item.name}</strong><small>{date(item.startsAt)} – {date(item.endsAt)}</small>
-          <small>{item.instructor && `${item.instructor} · `}{item.canceledAt ? 'Đã hủy' :
+          <small>{item.instructor && `${item.instructor} · `}{item.canceledAt ? t("Đã hủy") :
             `${booked}/${item.capacity} chỗ · ${started ? `${attended} có mặt` : `${item.seats.length - booked} người chờ`}`}</small></div>
-        <button className="plain" type="button" onClick={() => setSelected(item.id)}>Xem danh sách</button>
+        <button className="plain" type="button" onClick={() => setSelected(item.id)}>{t("Xem danh sách")}</button>
       </div>;
     })}
     <Pager page={page} full={query.data?.length === 50} onChange={setPage}/>
@@ -48,8 +50,9 @@ export function MemberClasses() {
 }
 
 function CreateClass({ close, saved }: { close: () => void; saved: (item: MemberClass) => void }) {
+  const { t } = useLanguage();
   const action = useAction();
-  return <BusinessDialog title="Thêm lớp" close={close} pending={action.pending}>
+  return <BusinessDialog title={t("Thêm lớp")} close={close} pending={action.pending}>
     <form onSubmit={event => submit(event, form => {
       void action.send<MemberClass>('/member-classes', {
         name: value(form, 'name'), instructor: value(form, 'instructor') || undefined, instructorId: value(form, 'instructorId') || undefined,
@@ -57,24 +60,25 @@ function CreateClass({ close, saved }: { close: () => void; saved: (item: Member
         startsAt: vietnamDateTimeInput(value(form, 'startsAt')), endsAt: vietnamDateTimeInput(value(form, 'endsAt')),
       }, { idempotent: true }).then(result => { if (result) saved(result); });
     })}>
-      <label>Tên lớp<input name="name" maxLength={120} required/></label>
+      <label>{t("Tên lớp")}<input name="name" maxLength={120} required/></label>
       <div className="columns"><CoachField/>
-        <label>Số chỗ<input type="number" name="capacity" min={1} max={100} defaultValue={10} required/></label></div>
-      <label>Tên người hướng dẫn khách mời<input name="instructor" maxLength={120} placeholder="Dùng cho lớp chưa chọn huấn luyện viên"/></label>
-      <div className="columns"><label>Bắt đầu (giờ Việt Nam)<input type="datetime-local" name="startsAt" required/></label>
-        <label>Kết thúc (giờ Việt Nam)<input type="datetime-local" name="endsAt" required/></label></div>
-      <button type="submit" className="button" disabled={action.pending}>Lưu lớp</button>
+        <label>{t("Số chỗ")}<input type="number" name="capacity" min={1} max={100} defaultValue={10} required/></label></div>
+      <label>{t("Tên người hướng dẫn khách mời")}<input name="instructor" maxLength={120} placeholder={t("Dùng cho lớp chưa chọn huấn luyện viên")}/></label>
+      <div className="columns"><label>{t("Bắt đầu (giờ Việt Nam)")}<input type="datetime-local" name="startsAt" required/></label>
+        <label>{t("Kết thúc (giờ Việt Nam)")}<input type="datetime-local" name="endsAt" required/></label></div>
+      <button type="submit" className="button" disabled={action.pending}>{t("Lưu lớp")}</button>
     </form>{action.feedback}
   </BusinessDialog>;
 }
 
 function CoachField({ item }: { item?: MemberClass }) {
+  const { t } = useLanguage();
   const coaches = useData<Coach[]>('/member-class-coaches');
   const options = coaches.data ?? [];
   return <div>
-    <label>Huấn luyện viên<select key={item?.instructorId ?? 'unassigned'} name="instructorId" defaultValue={item?.instructorId ?? ''}
+    <label>{t("Huấn luyện viên")}<select key={item?.instructorId ?? 'unassigned'} name="instructorId" defaultValue={item?.instructorId ?? ''}
       disabled={coaches.isLoading || !!coaches.error}>
-      <option value="">Chưa phân công</option>
+      <option value="">{t("Chưa phân công")}</option>
       {item?.instructorId && !options.some(coach => coach.id === item.instructorId) && <option value={item.instructorId}>{item.instructor}</option>}
       {options.map(coach => <option key={coach.id} value={coach.id}>{coach.name}{coach.specialty && ` · ${coach.specialty}`}</option>)}
     </select></label>
@@ -83,6 +87,7 @@ function CoachField({ item }: { item?: MemberClass }) {
 }
 
 function ClassRoster({ item, close }: { item: MemberClass; close: () => void }) {
+  const { t } = useLanguage();
   const { role } = useBusiness();
   const action = useAction();
   const [search, setSearch] = useState('');
@@ -93,10 +98,10 @@ function ClassRoster({ item, close }: { item: MemberClass; close: () => void }) 
   const members = useData<MemberList>(`/members?q=${encodeURIComponent(search)}`, undefined, open && !!search.trim());
   const options = members.data?.members ?? [];
   return <BusinessDialog title={item.name} close={close} pending={action.pending}>
-    <p>{item.canceledAt ? 'Lớp đã hủy' : date(item.startsAt)}</p>
-    {item.instructor && <p>Huấn luyện viên · {item.instructor}</p>}
+    <p>{item.canceledAt ? t("Lớp đã hủy") : date(item.startsAt)}</p>
+    {item.instructor && <p>{t("Huấn luyện viên ·")} {item.instructor}</p>}
     {open && canManageClasses(role) && <details className="business-details">
-      <summary>Phân công huấn luyện viên</summary>
+      <summary>{t("Phân công huấn luyện viên")}</summary>
       <form onSubmit={event => submit(event, form => {
         if (!form.has('instructorId')) return;
         setNotice('');
@@ -104,7 +109,7 @@ function ClassRoster({ item, close }: { item: MemberClass; close: () => void }) 
           { method: 'PATCH', message: 'Đã lưu phân công.' });
       })}>
         <CoachField item={item}/>
-        <button type="submit" className="plain" disabled={action.pending}>Lưu phân công</button>
+        <button type="submit" className="plain" disabled={action.pending}>{t("Lưu phân công")}</button>
       </form>
     </details>}
     {open && <form onSubmit={event => submit(event, () => {
@@ -117,42 +122,42 @@ function ClassRoster({ item, close }: { item: MemberClass; close: () => void }) 
         }
       });
     })}>
-      <label>Tìm hội viên<input type="search" placeholder="Tên, mã hoặc số điện thoại" maxLength={120} value={search}
+      <label>{t("Tìm hội viên")}<input type="search" placeholder={t("Tên, mã hoặc số điện thoại")} maxLength={120} value={search}
         onChange={event => { setSearch(event.target.value); setMemberId(''); }}/></label>
       {!!search.trim() && <><State query={members} empty={members.data?.members.length === 0}/>
-        {!!options.length && <label>Hội viên<select value={memberId} required onChange={event => setMemberId(event.target.value)}>
-          <option value="">Chọn hội viên</option>{options.map(member => <option key={member.id} value={member.id}>
+        {!!options.length && <label>{t("Hội viên")}<select value={memberId} required onChange={event => setMemberId(event.target.value)}>
+          <option value="">{t("Chọn hội viên")}</option>{options.map(member => <option key={member.id} value={member.id}>
             {member.name} · {member.code}
           </option>)}
         </select></label>}</>}
-      <button type="submit" className="button" disabled={!memberId || action.pending}>Đăng ký lớp</button>
+      <button type="submit" className="button" disabled={!memberId || action.pending}>{t("Đăng ký lớp")}</button>
     </form>}
     {notice && <p className="success" role="status">{notice}</p>}
-    {item.seats.length === 0 && <p className="muted">Chưa có hội viên đăng ký.</p>}
+    {item.seats.length === 0 && <p className="muted">{t("Chưa có hội viên đăng ký.")}</p>}
     {item.seats.map(seat => <div className="list-row" key={seat.id}>
       <div><strong>{seat.memberName}</strong><small>{seat.attendedAt ? `Có mặt · ${date(seat.attendedAt)}` :
-        seat.status === 'BOOKED' ? 'Đã giữ chỗ' : 'Đang chờ'}</small></div>
+        seat.status === 'BOOKED' ? t("Đã giữ chỗ") : t("Đang chờ")}</small></div>
       {open && <button type="button" className="plain" disabled={action.pending} onClick={() => {
         setNotice('');
         void action.send<{ promoted?: string }>(`/member-classes/${item.id}/seats/${seat.memberId}`, undefined,
           { method: 'DELETE' }).then(result => { if (result) setNotice(result.promoted ?
             `Đã bỏ chỗ. ${result.promoted} được chuyển từ danh sách chờ.` : 'Đã bỏ chỗ.'); });
-      }}>Bỏ chỗ</button>}
+      }}>{t("Bỏ chỗ")}</button>}
       {!open && !item.canceledAt && seat.status === 'BOOKED' && <button type="button" className="plain" disabled={action.pending}
         onClick={() => {
           setNotice('');
           void action.send(`/member-classes/${item.id}/seats/${seat.memberId}/attendance`, { attended: !seat.attendedAt },
             { method: 'PATCH', message: seat.attendedAt ? 'Đã bỏ điểm danh.' : 'Đã điểm danh.' });
-        }}>{seat.attendedAt ? 'Bỏ điểm danh' : 'Điểm danh'}</button>}
+        }}>{seat.attendedAt ? t("Bỏ điểm danh") : t("Điểm danh")}</button>}
     </div>)}
     {open && canManageClasses(role) && <div className="actions">
       <button type="button" className="plain" disabled={action.pending} onClick={() => setConfirmCancel(!confirmCancel)}>
-        {confirmCancel ? 'Giữ lớp' : 'Hủy lớp'}
+        {confirmCancel ? t("Giữ lớp") : t("Hủy lớp")}
       </button>
       {confirmCancel && <button type="button" className="button" disabled={action.pending} onClick={() => {
         setNotice('');
         void action.send(`/member-classes/${item.id}/cancel`, undefined, { message: 'Đã hủy lớp.' });
-      }}>Xác nhận hủy lớp</button>}
+      }}>{t("Xác nhận hủy lớp")}</button>}
     </div>}
     {action.feedback}
   </BusinessDialog>;

@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useSyncExternalStore } from 'react';
 import { Printer } from 'lucide-react';
 import { useBusiness } from '@/hooks/use-business';
@@ -30,12 +31,13 @@ function subscribe(listener: () => void) {
 }
 
 export function AutoPrintSwitch() {
+  const { t } = useLanguage();
   const { root } = useBusiness();
   const key = preferenceKey(root);
   const enabled = useSyncExternalStore(subscribe, () => read(key) === 'on', () => false);
   return <label className="receipt-print-switch no-print">
     <Printer size={17} aria-hidden="true"/>
-    <span>Tự động in hóa đơn</span>
+    <span>{t("Tự động in hóa đơn")}</span>
     <input type="checkbox" role="switch" checked={enabled} onChange={event => {
       write(key, event.currentTarget.checked ? 'on' : 'off');
       window.dispatchEvent(new Event(preferenceChanged));

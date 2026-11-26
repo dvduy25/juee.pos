@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { CalendarClock, Clock3, LogIn, Moon, Package, Users } from 'lucide-react';
 import { useState } from 'react';
 import { BusinessDialog } from '@/components/business-dialog';
@@ -28,6 +29,7 @@ export function ReserveRoom({ initialRoomId, initialArrival, booking, close, sav
   initialRoomId?: string; initialArrival?: ArrivalMode; booking?: Booking;
   close: () => void; saved: (booking: Booking) => void;
 }) {
+  const { t } = useLanguage();
   const today = hotelDay();
   const [mode, setMode] = useState<BookingType>(booking?.bookingType ?? 'NIGHTLY');
   const [arrival, setArrival] = useState(initialArrival);
@@ -101,7 +103,7 @@ export function ReserveRoom({ initialRoomId, initialArrival, booking, close, sav
   const formReady = datesReady && !!room && rate != null && !query.isError;
   const showDuration = hourly && !immediate && (!booking || booking.durationHours != null);
 
-  return <BusinessDialog className="hotel-reservation-dialog" title={booking ? `Sửa lưu trú · ${booking.roomCode}` : 'Đăng ký lưu trú'}
+  return <BusinessDialog className="hotel-reservation-dialog" title={booking ? `Sửa lưu trú · ${booking.roomCode}` : t("Đăng ký lưu trú")}
     close={close} pending={action.pending}>
     <form className="hotel-reservation" onSubmit={event => submit(event, form => {
       if (!room || rate == null || !formReady) return;
@@ -122,92 +124,92 @@ export function ReserveRoom({ initialRoomId, initialArrival, booking, close, sav
       });
     })}>
       <fieldset className="hotel-form-section" disabled={action.pending}>
-        <legend>Loại lưu trú</legend>
-        {booking ? <p>{bookingTypes[mode]}{plan && ` · ${plan.name} · ${plan.durationHours} giờ`}</p> :
+        <legend>{t("Loại lưu trú")}</legend>
+        {booking ? <p>{t(bookingTypes[mode])}{plan && ` · ${plan.name} · ${plan.durationHours} giờ`}</p> :
           <div className="hotel-choices hotel-stay-choices">
             {stayChoices.map(({ key, icon: Icon }) => <label key={key} className="hotel-choice">
               <input type="radio" name="stayType" checked={mode === key} onChange={() => setMode(key)}/>
-              <Icon size={18} aria-hidden="true"/><strong>{bookingTypes[key]}</strong>
+              <Icon size={18} aria-hidden="true"/><strong>{t(bookingTypes[key])}</strong>
             </label>)}
           </div>}
       </fieldset>
       {!booking && <fieldset className="hotel-form-section" disabled={action.pending}>
-        <legend>Hình thức nhận phòng</legend>
+        <legend>{t("Hình thức nhận phòng")}</legend>
         <div className="hotel-choices">
           {arrivalChoices.map(({ key, label, detail, icon: Icon }) => <label key={key} className="hotel-choice">
             <input type="radio" name="arrival" checked={arrival === key} onChange={() => setArrival(key)} required/>
-            <Icon size={19} aria-hidden="true"/><span><strong>{label}</strong><small>{detail}</small></span>
+            <Icon size={19} aria-hidden="true"/><span><strong>{t(label)}</strong><small>{detail}</small></span>
           </label>)}
         </div>
       </fieldset>}
       {(booking || arrival) && <>
         <fieldset className="hotel-form-section" disabled={action.pending}>
-          <legend>{immediate ? 'Thời gian lưu trú' : 'Lịch lưu trú'}</legend>
-          {immediate && <p className="hotel-hint">Hệ thống lấy giờ hiện tại khi xác nhận.</p>}
+          <legend>{immediate ? t("Thời gian lưu trú") : t("Lịch lưu trú")}</legend>
+          {immediate && <p className="hotel-hint">{t("Hệ thống lấy giờ hiện tại khi xác nhận.")}</p>}
           {bundled && !booking && <>
             <State query={plans}/>
-            {plans.data?.length === 0 && <p className="notice">Chưa có combo đang áp dụng.</p>}
+            {plans.data?.length === 0 && <p className="notice">{t("Chưa có combo đang áp dụng.")}</p>}
             <label>Combo<select value={packageId} required onChange={event => setPackageId(event.target.value)}>
-              <option value="">Chọn combo</option>
-              {plans.data?.map(item => <option key={item.id} value={item.id}>{item.name} · {item.durationHours} giờ · {currency.format(item.price)}</option>)}
+              <option value="">{t("Chọn combo")}</option>
+              {plans.data?.map(item => <option key={item.id} value={item.id}>{item.name} · {item.durationHours} {t("giờ ·")} {currency.format(item.price)}</option>)}
             </select></label>
           </>}
           <div className="hotel-form-fields">
-            {!immediate && (legacyNight ? <label>Ngày nhận phòng<input type="date" value={startDate} disabled={inHouse}
+            {!immediate && (legacyNight ? <label>{t("Ngày nhận phòng")}<input type="date" value={startDate} disabled={inHouse}
               required onChange={event => setStartDate(event.target.value)}/></label> :
-              <label>Ngày và giờ nhận phòng<input type="datetime-local" value={startTime} disabled={inHouse} required
+              <label>{t("Ngày và giờ nhận phòng")}<input type="datetime-local" value={startTime} disabled={inHouse} required
                 min={pastSavedStart ? undefined : currentMinute} onChange={event => {
                   const next = event.target.value;
                   setStartTime(next);
                   if (nightly && next && endDate <= next.slice(0, 10)) setEndDate(hotelDay(Date.parse(next.slice(0, 10)) + dayMs));
                 }}/></label>)}
-            {nightly && (immediate ? <label>Số đêm<input type="number" value={nights || ''} min={1} max={365} required
+            {nightly && (immediate ? <label>{t("Số đêm")}<input type="number" value={nights || ''} min={1} max={365} required
               onChange={event => setNights(Number(event.target.value))}/></label> :
-              <label>Ngày trả phòng<input type="date" value={endDate} min={minEnd} required onChange={event => setEndDate(event.target.value)}/></label>)}
-            {showDuration && <label>Số giờ dự kiến<input type="number" value={hourCount || ''} min={1} max={8760}
+              <label>{t("Ngày trả phòng")}<input type="date" value={endDate} min={minEnd} required onChange={event => setEndDate(event.target.value)}/></label>)}
+            {showDuration && <label>{t("Số giờ dự kiến")}<input type="number" value={hourCount || ''} min={1} max={8760}
               required disabled={inHouse} onChange={event => setHourCount(Number(event.target.value))}/></label>}
           </div>
-          {!startReady && !!startTime && <p className="notice">Chọn ngày giờ nhận phòng sau thời điểm hiện tại.</p>}
-          {nightly && endsOn && nightTotal >= 1 && <p>Trả phòng trước <strong>12:00 ngày {calendarDate(endsOn)}</strong></p>}
-          {bundled && datesReady && <p>{immediate ? <>Combo bắt đầu khi check-in và kéo dài <strong>{holdHours} giờ</strong>.</> :
-            <>Hết combo lúc <strong>{date(endsAt!)}</strong></>}</p>}
-          {hourly && <p className="hotel-hint">{fixedHours ? 'Lượt lưu trú tính tiền theo số giờ đã đặt.' :
-            immediate ? 'Tiền phòng tính theo thời gian ở thực tế đến khi trả phòng.' :
-              'Số giờ dự kiến dùng để giữ chỗ. Tiền phòng tính theo thời gian ở thực tế.'}</p>}
+          {!startReady && !!startTime && <p className="notice">{t("Chọn ngày giờ nhận phòng sau thời điểm hiện tại.")}</p>}
+          {nightly && endsOn && nightTotal >= 1 && <p>{t("Trả phòng trước")} <strong>{t("12:00 ngày")} {calendarDate(endsOn)}</strong></p>}
+          {bundled && datesReady && <p>{immediate ? <>{t("Combo bắt đầu khi check-in và kéo dài")} <strong>{holdHours} {t("giờ")}</strong>.</> :
+            <>{t("Hết combo lúc")} <strong>{date(endsAt!)}</strong></>}</p>}
+          {hourly && <p className="hotel-hint">{fixedHours ? t("Lượt lưu trú tính tiền theo số giờ đã đặt.") :
+            immediate ? t("Tiền phòng tính theo thời gian ở thực tế đến khi trả phòng.") :
+              t("Số giờ dự kiến dùng để giữ chỗ. Tiền phòng tính theo thời gian ở thực tế.")}</p>}
         </fieldset>
         {datesReady && <>
           <fieldset className="hotel-form-section" disabled={action.pending}>
-            <legend>Phòng</legend>
+            <legend>{t("Phòng")}</legend>
             <State query={query}/>
-            {query.isSuccess && !available.length && <p className="notice">Không có phòng phù hợp với loại lưu trú và thời gian đã chọn.</p>}
+            {query.isSuccess && !available.length && <p className="notice">{t("Không có phòng phù hợp với loại lưu trú và thời gian đã chọn.")}</p>}
             {initialRoomId && roomId === initialRoomId && query.isSuccess && !room && !!available.length &&
-              <p className="notice">Phòng đã chọn không phù hợp với thời gian hoặc loại lưu trú này. Hãy chọn phòng khác.</p>}
-            {!!available.length && <label>Chọn phòng<select value={room?.id ?? ''} disabled={inHouse} required onChange={event => setRoom(event.target.value)}>
-              <option value="" disabled>Chọn phòng</option>
-              {available.map(item => <option key={item.id} value={item.id}>{item.code} · {item.category} · {item.capacity} khách
+              <p className="notice">{t("Phòng đã chọn không phù hợp với thời gian hoặc loại lưu trú này. Hãy chọn phòng khác.")}</p>}
+            {!!available.length && <label>{t("Chọn phòng")}<select value={room?.id ?? ''} disabled={inHouse} required onChange={event => setRoom(event.target.value)}>
+              <option value="" disabled>{t("Chọn phòng")}</option>
+              {available.map(item => <option key={item.id} value={item.id}>{item.code} · {item.category} · {item.capacity} {t("khách")}
                 {!bundled && ` · ${currency.format(rateFor(item)!)}${hourly ? ' giờ đầu' : '/đêm'}`}</option>)}
             </select></label>}
           </fieldset>
         </>}
         <fieldset className="hotel-form-section" disabled={action.pending}>
-            <legend><Users size={16} aria-hidden="true"/> Thông tin khách</legend>
-            <label>Tên khách<input name="guestName" maxLength={120} defaultValue={booking?.guestName} required/></label>
+            <legend><Users size={16} aria-hidden="true"/> {t("Thông tin khách")}</legend>
+            <label>{t("Tên khách")}<input name="guestName" maxLength={120} defaultValue={booking?.guestName} required/></label>
             <div className="hotel-form-fields">
-              <label>Điện thoại<input name="phone" type="tel" maxLength={30} defaultValue={booking?.phone}/></label>
-              <label>Số khách<input name="guestCount" type="number" min={1} max={room?.capacity ?? 100} defaultValue={booking?.guestCount ?? 1} required/></label>
+              <label>{t("Điện thoại")}<input name="phone" type="tel" maxLength={30} defaultValue={booking?.phone}/></label>
+              <label>{t("Số khách")}<input name="guestCount" type="number" min={1} max={room?.capacity ?? 100} defaultValue={booking?.guestCount ?? 1} required/></label>
             </div>
-            <label>Ghi chú<textarea name="note" rows={2} maxLength={500} defaultValue={booking?.note}/></label>
+            <label>{t("Ghi chú")}<textarea name="note" rows={2} maxLength={500} defaultValue={booking?.note}/></label>
         </fieldset>
       </>}
       {action.feedback}
       <footer className="hotel-form-footer">
         {rate != null && !inHouse && <div>
-          <small>{bundled ? plan?.name : nightly ? `${nightTotal} đêm` : fixedHours ? `${holdHours} giờ` : 'Giờ đầu'}</small>
+          <small>{bundled ? plan?.name : nightly ? `${nightTotal} đêm` : fixedHours ? `${holdHours} giờ` : t("Giờ đầu")}</small>
           <strong>{currency.format(rate * (nightly ? nightTotal : fixedHours ? holdHours ?? 1 : 1))}</strong>
-          {nextRate != null && !fixedHours && <small>{hourly ? 'Mỗi giờ tiếp theo' : 'Mỗi giờ quá hạn'} {currency.format(nextRate)}</small>}
+          {nextRate != null && !fixedHours && <small>{hourly ? t("Mỗi giờ tiếp theo") : t("Mỗi giờ quá hạn")} {currency.format(nextRate)}</small>}
         </div>}
-        <button type="submit" className="button" disabled={!formReady || action.pending}>{booking ? 'Lưu thay đổi' :
-          immediate ? 'Xác nhận check-in' : 'Xác nhận đặt trước'}</button>
+        <button type="submit" className="button" disabled={!formReady || action.pending}>{booking ? t("Lưu thay đổi") :
+          immediate ? t("Xác nhận check-in") : t("Xác nhận đặt trước")}</button>
       </footer>
     </form>
   </BusinessDialog>;

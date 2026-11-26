@@ -21,20 +21,23 @@ export function useOrderClock(enabled = true) {
   return now;
 }
 
-export function elapsedTime(start: string, end: number) {
+export function elapsedTime(start: string, end: number, language: 'vi' | 'en' = 'vi') {
   const seconds = Math.floor(Math.max(0, end - Date.parse(start)) / 1000);
   if (!end || !Number.isFinite(seconds)) return '';
-  if (seconds < 60) return `${seconds} giây`;
+  const units = language === 'en' ? [' h', ' min', ' s'] : [' giờ', ' phút', ' giây'];
+  if (seconds < 60) return seconds + units[2];
   const minutes = Math.floor(seconds / 60);
-  return minutes < 60 ? `${minutes} phút ${seconds % 60} giây` : `${Math.floor(minutes / 60)} giờ ${minutes % 60} phút`;
+  return minutes < 60 ? minutes + units[1] + ' ' + seconds % 60 + units[2]
+    : Math.floor(minutes / 60) + units[0] + ' ' + minutes % 60 + units[1];
 }
 
-export function itemTiming(orderedAt: string, status: string, servedAt: string | undefined, now: number) {
+export function itemTiming(orderedAt: string, status: string, servedAt: string | undefined, now: number, language: 'vi' | 'en' = 'vi') {
   if (status === 'CANCELED') return '';
   if (status === 'SERVED') {
-    const elapsed = servedAt && elapsedTime(orderedAt, Date.parse(servedAt));
+    const elapsed = servedAt && elapsedTime(orderedAt, Date.parse(servedAt), language);
+    if (language === 'en') return elapsed ? `Served after ${elapsed}` : 'Served';
     return elapsed ? `Đã ra món sau ${elapsed}` : 'Đã phục vụ';
   }
-  const elapsed = elapsedTime(orderedAt, now);
-  return elapsed ? `Đã chờ ${elapsed}` : '';
+  const elapsed = elapsedTime(orderedAt, now, language);
+  return elapsed ? `${language === 'en' ? 'Waited' : 'Đã chờ'} ${elapsed}` : '';
 }

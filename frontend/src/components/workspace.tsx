@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -31,6 +32,7 @@ export function Workspace({ layout, children }: WorkspaceProps) {
 }
 
 function Shell({ layout: Layout, children }: WorkspaceProps) {
+  const { t } = useLanguage();
   const queryClient = useQueryClient();
   const router = useRouter();
   const [user, setUser] = useState<User>();
@@ -79,10 +81,10 @@ function Shell({ layout: Layout, children }: WorkspaceProps) {
 
   if (!user) return <div className={`auth ${dark ? 'dark' : ''}`}>
     {error ? <div className="card auth-card">
-      <p role="alert" className="error">{error}</p>
-      <button className="plain" type="button" onClick={() => window.location.reload()}>Thử lại</button>
-      <Link className="plain" href="/login">Trang đăng nhập</Link>
-    </div> : <div className="card skeleton" aria-label="Đang tải"/>}
+      <p role="alert" className="error">{t(error)}</p>
+      <button className="plain" type="button" onClick={() => window.location.reload()}>{t("Thử lại")}</button>
+      <Link className="plain" href="/login">{t("Trang đăng nhập")}</Link>
+    </div> : <div className="card skeleton" aria-label={t("Đang tải")}/>}
   </div>;
 
   return <Layout user={user} dark={dark} onThemeChange={toggleTheme} onLogout={logout} error={error}

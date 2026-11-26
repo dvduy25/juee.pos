@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useState, type FormEvent } from 'react';
 import { BusinessDialog } from '@/components/business-dialog';
 import { Pager, Panel, State } from '@/components/business-ui';
@@ -22,24 +23,25 @@ function download(entry: Declaration) {
 }
 
 export function TaxDeclarations() {
+  const { t } = useLanguage();
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Declaration | 'new'>();
   const [filing, setFiling] = useState<Declaration>();
   const query = useData<Declaration[]>(`/tax-declarations?page=${page}`);
   return <>
-    <Panel title="Hồ sơ kê khai của doanh nghiệp">
-      <p className="muted">Lưu số liệu đã đối chiếu, xuất bảng làm việc và ghi mã tiếp nhận sau khi nộp trên hệ thống thuế. Nộp hồ sơ chính thức thực hiện bên ngoài JUEE POS.</p>
-      <button type="button" className="button" onClick={() => setEditing('new')}>Tạo bản nháp</button>
+    <Panel title={t("Hồ sơ kê khai của doanh nghiệp")}>
+      <p className="muted">{t("Lưu số liệu đã đối chiếu, xuất bảng làm việc và ghi mã tiếp nhận sau khi nộp trên hệ thống thuế. Nộp hồ sơ chính thức thực hiện bên ngoài JUEE POS.")}</p>
+      <button type="button" className="button" onClick={() => setEditing('new')}>{t("Tạo bản nháp")}</button>
       <State query={query}/>
-      {query.data?.length === 0 && <p className="muted">Chưa có hồ sơ kê khai.</p>}
+      {query.data?.length === 0 && <p className="muted">{t("Chưa có hồ sơ kê khai.")}</p>}
       {query.data?.map(entry => <div className="list-row" key={entry.id}>
-        <div><strong>{entry.name}</strong><small>{entry.startsOn} đến {entry.endsOn} · {currency.format(entry.payableTax)}</small>
-          <small>{entry.receipt ? `Đã ghi nhận nộp ${entry.filedOn} · ${entry.receipt}` : 'Bản nháp'}</small></div>
+        <div><strong>{entry.name}</strong><small>{entry.startsOn} {t("đến")} {entry.endsOn} · {currency.format(entry.payableTax)}</small>
+          <small>{entry.receipt ? t("Đã ghi nhận nộp {0} · {1}", entry.filedOn, entry.receipt) : t("Bản nháp")}</small></div>
         <div className="actions">
-          <button className="plain" type="button" onClick={() => download(entry)}>Tải CSV</button>
+          <button className="plain" type="button" onClick={() => download(entry)}>{t("Tải CSV")}</button>
           {!entry.receipt && <>
-            <button className="plain" type="button" onClick={() => setEditing(entry)}>Sửa</button>
-            <button className="plain" type="button" onClick={() => setFiling(entry)}>Ghi nhận đã nộp</button>
+            <button className="plain" type="button" onClick={() => setEditing(entry)}>{t("Sửa")}</button>
+            <button className="plain" type="button" onClick={() => setFiling(entry)}>{t("Ghi nhận đã nộp")}</button>
           </>}
         </div>
       </div>)}
@@ -51,6 +53,7 @@ export function TaxDeclarations() {
 }
 
 function TaxForm({ entry, close }: { entry?: Declaration; close: () => void }) {
+  const { t } = useLanguage();
   const action = useAction();
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,34 +64,35 @@ function TaxForm({ entry, close }: { entry?: Declaration; close: () => void }) {
     }, { method: entry ? 'PATCH' : 'POST' });
     if (result) close();
   }
-  return <BusinessDialog title="Bản nháp kê khai thuế" close={close} pending={action.pending}>
+  return <BusinessDialog title={t("Bản nháp kê khai thuế")} close={close} pending={action.pending}>
     <form onSubmit={save}>
       <div className="columns">
-        <label>Tên hồ sơ<input name="name" maxLength={120} defaultValue={entry?.name} required/></label>
-        <label>Mã số thuế<input name="taxId" maxLength={14} defaultValue={entry?.taxId} required/></label>
-        <label>Từ ngày<input type="date" name="startsOn" defaultValue={entry?.startsOn} required/></label>
-        <label>Đến ngày<input type="date" name="endsOn" defaultValue={entry?.endsOn} required/></label>
-        {amounts.map(([key, label]) => <label key={key}>{label} (đ)<input type="number" name={key} min={0} max={1000000000000} step={1} defaultValue={entry?.[key]} required/></label>)}
+        <label>{t("Tên hồ sơ")}<input name="name" maxLength={120} defaultValue={entry?.name} required/></label>
+        <label>{t("Mã số thuế")}<input name="taxId" maxLength={14} defaultValue={entry?.taxId} required/></label>
+        <label>{t("Từ ngày")}<input type="date" name="startsOn" defaultValue={entry?.startsOn} required/></label>
+        <label>{t("Đến ngày")}<input type="date" name="endsOn" defaultValue={entry?.endsOn} required/></label>
+        {amounts.map(([key, label]) => <label key={key}>{t(label)} {t("(đ)")}<input type="number" name={key} min={0} max={1000000000000} step={1} defaultValue={entry?.[key]} required/></label>)}
       </div>
-      <label>Ghi chú<textarea name="note" maxLength={1500} defaultValue={entry?.note}/></label>
-      <button className="button" disabled={action.pending}>Lưu bản nháp</button>
+      <label>{t("Ghi chú")}<textarea name="note" maxLength={1500} defaultValue={entry?.note}/></label>
+      <button className="button" disabled={action.pending}>{t("Lưu bản nháp")}</button>
     </form>{action.feedback}
   </BusinessDialog>;
 }
 
 function FilingForm({ entry, close }: { entry: Declaration; close: () => void }) {
+  const { t } = useLanguage();
   const action = useAction();
-  return <BusinessDialog title="Ghi nhận hồ sơ đã nộp" close={close} pending={action.pending}>
+  return <BusinessDialog title={t("Ghi nhận hồ sơ đã nộp")} close={close} pending={action.pending}>
     <form onSubmit={event => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
       void action.send(`/tax-declarations/${entry.id}/filing`, { receipt: form.get('receipt'), filedOn: form.get('filedOn') }, { method: 'PATCH' })
         .then(result => { if (result) close(); });
     }}>
-      <p className="muted">Lấy mã tiếp nhận từ nơi đã nộp hồ sơ. Hồ sơ được khóa chỉnh sửa sau khi ghi nhận.</p>
-      <label>Mã tiếp nhận<input name="receipt" maxLength={120} required/></label>
-      <label>Ngày nộp<input type="date" name="filedOn" required/></label>
-      <button className="button" disabled={action.pending}>Xác nhận đã nộp</button>
+      <p className="muted">{t("Lấy mã tiếp nhận từ nơi đã nộp hồ sơ. Hồ sơ được khóa chỉnh sửa sau khi ghi nhận.")}</p>
+      <label>{t("Mã tiếp nhận")}<input name="receipt" maxLength={120} required/></label>
+      <label>{t("Ngày nộp")}<input type="date" name="filedOn" required/></label>
+      <button className="button" disabled={action.pending}>{t("Xác nhận đã nộp")}</button>
     </form>{action.feedback}
   </BusinessDialog>;
 }

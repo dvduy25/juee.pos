@@ -1,6 +1,7 @@
 'use client';
 
-import Link from 'next/link';
+import { useLanguage } from '@/i18n/language';
+import { LanguageSwitch } from '@/components/language-switch';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, BedDouble, Coffee, Dumbbell, Layers3, LogOut, Store, Ticket, Utensils } from 'lucide-react';
@@ -23,6 +24,7 @@ type Model = typeof models[number];
 export function StoreSetup({ dark, onLogout, error, onCreate, onBack }: Pick<WorkspaceLayoutProps, 'dark' | 'onLogout' | 'error'> & {
   onCreate: (id: string, branchId: string) => void; onBack?: () => void;
 }) {
+  const { homeHref, t } = useLanguage();
   const [model, setModel] = useState<Model>();
   const lastChosen = useRef<Model['mode']>(undefined);
   const modelButtons = useRef<Partial<Record<Model['mode'], HTMLButtonElement>>>({});
@@ -31,20 +33,20 @@ export function StoreSetup({ dark, onLogout, error, onCreate, onBack }: Pick<Wor
   }, [model]);
   return <div className={`auth setup-page ${dark ? 'dark' : ''}`}>
     <main className="setup-content">
-      <header className="auth-header"><Link className="brand" href="/"><Layers3/> JUEE POS</Link>
-        <div className="actions"><FullscreenButton className="icon"/><button className="plain" onClick={onLogout}><LogOut size={17}/> Đăng xuất</button></div>
+      <header className="auth-header"><a className="brand" href={homeHref}><Layers3/> JUEE POS</a>
+        <div className="actions"><LanguageSwitch/><FullscreenButton className="icon"/><button className="plain" onClick={onLogout}><LogOut size={17}/> {t("Đăng xuất")}</button></div>
       </header>
-      {error && <p className="error" role="alert">{error}</p>}
+      {error && <p className="error" role="alert">{t(error)}</p>}
       {model ? <StoreRegistration model={model} onBack={() => setModel(undefined)} onCreate={onCreate}/> : <>
-        {onBack && <button type="button" className="plain setup-back" onClick={onBack}><ArrowLeft size={17} aria-hidden="true"/> Về cửa hàng</button>}
-        <div className="setup-intro"><h1>Chọn mô hình quản lý</h1>
-          <p>Chọn mô hình phù hợp với cách cửa hàng của bạn hoạt động.</p>
+        {onBack && <button type="button" className="plain setup-back" onClick={onBack}><ArrowLeft size={17} aria-hidden="true"/> {t("Về cửa hàng")}</button>}
+        <div className="setup-intro"><h1>{t("Chọn mô hình quản lý")}</h1>
+          <p>{t("Chọn mô hình phù hợp với cách cửa hàng của bạn hoạt động.")}</p>
         </div>
         <div className="setup-models">{models.map(item => <button type="button" className="card setup-model" key={item.mode}
           ref={element => { if (element) modelButtons.current[item.mode] = element; else delete modelButtons.current[item.mode]; }}
           data-theme={item.mode === 'MEMBERS' ? 'GYM' : item.mode} onClick={() => { lastChosen.current = item.mode; setModel(item); }}>
           <span className="setup-icon"><item.Icon size={26} aria-hidden="true"/></span>
-          <span className="setup-model-copy"><strong>{item.name}</strong><small>{item.description}</small></span>
+          <span className="setup-model-copy"><strong>{t(item.name)}</strong><small>{t(item.description)}</small></span>
           <span className="setup-model-arrow"><ArrowRight size={19} aria-hidden="true"/></span>
         </button>)}</div>
       </>}
@@ -53,6 +55,7 @@ export function StoreSetup({ dark, onLogout, error, onCreate, onBack }: Pick<Wor
 }
 
 function StoreRegistration({ model, onBack, onCreate }: { model: Model; onBack: () => void; onCreate: (id: string, branchId: string) => void }) {
+  const { t } = useLanguage();
   const client = useQueryClient();
   const submitting = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -80,23 +83,23 @@ function StoreRegistration({ model, onBack, onCreate }: { model: Model; onBack: 
   }
 
   return <section className="setup-registration" data-theme={mode} aria-labelledby="setup-registration-heading">
-    <button type="button" className="plain setup-back" onClick={onBack} disabled={saving}><ArrowLeft size={17} aria-hidden="true"/> Chọn mô hình khác</button>
+    <button type="button" className="plain setup-back" onClick={onBack} disabled={saving}><ArrowLeft size={17} aria-hidden="true"/> {t("Chọn mô hình khác")}</button>
     <div className="card setup-form">
     <div className="setup-form-heading">
       <span className="setup-icon"><model.Icon size={26} aria-hidden="true"/></span>
-      <div><p>{model.name}</p><h1 id="setup-registration-heading" ref={heading} tabIndex={-1}>Tạo cửa hàng</h1></div>
+      <div><p>{t(model.name)}</p><h1 id="setup-registration-heading" ref={heading} tabIndex={-1}>{t("Tạo cửa hàng")}</h1></div>
     </div>
     <form onSubmit={submit}>
       <div className="columns">
-        <label>Tên cửa hàng<input name="tenant" autoComplete="organization" required maxLength={120}/></label>
-        <label>Tên chi nhánh<input name="branch" defaultValue="Chi nhánh chính" required maxLength={120}/></label>
+        <label>{t("Tên cửa hàng")}<input name="tenant" autoComplete="organization" required maxLength={120}/></label>
+        <label>{t("Tên chi nhánh")}<input name="branch" defaultValue={t("Chi nhánh chính")} required maxLength={120}/></label>
       </div>
-      {model.mode === 'MEMBERS' && <label>Loại cơ sở<select value={facility} onChange={event => setFacility(event.target.value === 'POOL' ? 'POOL' : 'GYM')}>
+      {model.mode === 'MEMBERS' && <label>{t("Loại cơ sở")}<select value={facility} onChange={event => setFacility(event.target.value === 'POOL' ? 'POOL' : 'GYM')}>
         <option value="GYM">{branchNames.GYM}</option><option value="POOL">{branchNames.POOL}</option>
       </select></label>}
       <BranchLocationFields required/>
-      {error && <p className="error" role="alert">{error}</p>}
-      <button className="button" disabled={saving}>{saving ? 'Đang xử lý…' : 'Tạo cửa hàng miễn phí'}</button>
+      {error && <p className="error" role="alert">{t(error)}</p>}
+      <button className="button" disabled={saving}>{saving ? t("Đang xử lý…") : t("Tạo cửa hàng miễn phí")}</button>
     </form>
     </div>
   </section>;

@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useState } from 'react';
 import { Download } from 'lucide-react';
 import { BusinessDialog } from '@/components/business-dialog';
@@ -18,11 +19,12 @@ export function reportParams(period: ReportPeriod, on: string) {
 export function ReportPeriodFields({ period, on, setPeriod, setOn, disabled = false }: {
   period: ReportPeriod; on: string; setPeriod: (value: ReportPeriod) => void; setOn: (value: string) => void; disabled?: boolean;
 }) {
+  const { t } = useLanguage();
   return <>
-    <label>Kỳ báo cáo<select value={period} disabled={disabled} onChange={event => setPeriod(event.target.value as ReportPeriod)}>
-      {Object.entries(periods).map(([key, label]) => <option value={key} key={key}>{label}</option>)}
+    <label>{t("Kỳ báo cáo")}<select value={period} disabled={disabled} onChange={event => setPeriod(event.target.value as ReportPeriod)}>
+      {Object.entries(periods).map(([key, label]) => <option value={key} key={key}>{t(label)}</option>)}
     </select></label>
-    {period !== 'all' && <label>Ngày trong kỳ<input type="date" min="1970-01-01" max={reportDay.format(new Date())}
+    {period !== 'all' && <label>{t("Ngày trong kỳ")}<input type="date" min="1970-01-01" max={reportDay.format(new Date())}
       value={on} disabled={disabled} onChange={event => setOn(event.target.value)}/></label>}
   </>;
 }
@@ -30,6 +32,7 @@ export function ReportPeriodFields({ period, on, setPeriod, setOn, disabled = fa
 export function CsvExport({ path, filename, label = 'Xuất CSV', snapshot = false }: {
   path: string; filename: string; label?: string; snapshot?: boolean;
 }) {
+  const { t } = useLanguage();
   const { root } = useBusiness();
   const [open, setOpen] = useState(false);
   const [period, setPeriod] = useState<ReportPeriod>('month');
@@ -57,13 +60,13 @@ export function CsvExport({ path, filename, label = 'Xuất CSV', snapshot = fal
       setError('');
       if (snapshot) void download();
       else setOpen(true);
-    }}><Download size={16} aria-hidden="true"/>{pending && snapshot ? 'Đang xuất…' : label}</button>
-    {snapshot && error && <small className="error" role="alert">{error}</small>}
-    {open && <BusinessDialog title={label} close={() => setOpen(false)} pending={pending}>
+    }}><Download size={16} aria-hidden="true"/>{pending && snapshot ? t("Đang xuất…") : label}</button>
+    {snapshot && error && <small className="error" role="alert">{t(error)}</small>}
+    {open && <BusinessDialog title={t(label)} close={() => setOpen(false)} pending={pending}>
       <form onSubmit={event => { event.preventDefault(); void download(); }}>
         <div className="columns"><ReportPeriodFields period={period} on={on} setPeriod={setPeriod} setOn={setOn} disabled={pending}/></div>
-        {error && <p className="error" role="alert">{error}</p>}
-        <button className="button" disabled={pending}>{pending ? 'Đang xuất…' : 'Tải file CSV'}</button>
+        {error && <p className="error" role="alert">{t(error)}</p>}
+        <button className="button" disabled={pending}>{pending ? t("Đang xuất…") : t("Tải file CSV")}</button>
       </form>
     </BusinessDialog>}
   </>;

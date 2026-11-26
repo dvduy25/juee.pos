@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="vi">
+<html lang="__JUEE_LANG__" data-english-home="__JUEE_EN_HOME__">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,7 +11,10 @@
   <title>JUEE POS | Quản lý bán hàng và vận hành chi nhánh</title>
   <link rel="icon" href="__JUEE_ASSETS__/mark.png" type="image/png">
   <link rel="stylesheet" href="__JUEE_ASSETS__/main.css">
-  <script src="__JUEE_ASSETS__/main.js" defer></script>
+  <link rel="alternate" hreflang="vi" href="__JUEE_HOME__">
+  <link rel="alternate" hreflang="en" href="__JUEE_EN_HOME__">
+  <script src="__JUEE_ASSETS__/locale.js"></script>
+  <script type="module" src="__JUEE_ASSETS__/main.js"></script>
 </head>
 <body>
   <a class="skip" href="#noi-dung">Đến nội dung</a>
@@ -25,7 +28,7 @@
         <a href="__JUEE_APP__/pricing">Bảng giá</a>
         <a href="#hoi-dap">Hỏi đáp</a>
       </nav>
-      <div class="nav-account"><a href="__JUEE_APP__/login">Đăng nhập</a><a class="button ink" href="__JUEE_APP__/register">Đăng ký</a></div>
+      <div class="nav-account">__JUEE_LANGUAGE_SWITCH__<a href="__JUEE_APP__/login">Đăng nhập</a><a class="button ink" href="__JUEE_APP__/register">Đăng ký</a></div>
     </div>
   </header>
 
@@ -127,7 +130,7 @@
             <li><div><strong>Bàn 02 · Cơm chiên hải sản</strong><small>1 phần · Gọi lúc 11:45</small></div><span class="status warning">Đang chờ</span></li>
             <li><div><strong>Bàn 06 · Salad cá hồi</strong><small>1 phần · Gọi lúc 11:36</small></div><span class="status success">Đã ra món</span></li>
           </ul>
-          <div class="model-screen-footer"><button class="button demo-action" type="button">Xác nhận món đầu đã ra</button><output role="status"></output></div>
+          <div class="model-screen-footer"><button class="button demo-action" data-retry="Thử lại" type="button">Xác nhận món đầu đã ra</button><output role="status"></output></div>
         </div>
       </div>
     </section>

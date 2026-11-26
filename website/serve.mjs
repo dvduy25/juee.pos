@@ -11,8 +11,8 @@ createServer(async (req, res) => {
     return res.writeHead(405, { Allow: 'GET, HEAD' }).end();
   }
   const pathname = req.url?.split('?')[0];
-  const path = pathname === '/' ? '/index.html' : pathname;
-  if (!path || (path !== '/index.html' && !/^\/assets\/[a-zA-Z0-9][\w.-]*$/.test(path))) return res.writeHead(404).end();
+  const path = pathname === '/' ? '/index.html' : pathname === '/en/' || pathname === '/en' ? '/en/index.html' : pathname;
+  if (!path || (path !== '/index.html' && path !== '/en/index.html' && !/^\/assets\/[a-zA-Z0-9][\w.-]*$/.test(path))) return res.writeHead(404).end();
   const type = mime[extname(path)];
   if (!type) return res.writeHead(404).end();
   try {

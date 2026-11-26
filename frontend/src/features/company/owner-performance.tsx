@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
@@ -24,15 +25,17 @@ function profitMargin(row: FinancialAmounts) {
 }
 
 function AmountCells({ row }: { row: FinancialAmounts }) {
+  const { t } = useLanguage();
   return <>
     <td>{currency.format(row.revenue)}</td>
     <td>{currency.format(row.operatingExpenses)}</td>
-    <td data-loss={row.profitBeforeTax < 0}><strong>{currency.format(row.profitBeforeTax)}</strong>{row.provisional && <small>Tạm tính</small>}</td>
+    <td data-loss={row.profitBeforeTax < 0}><strong>{currency.format(row.profitBeforeTax)}</strong>{row.provisional && <small>{t("Tạm tính")}</small>}</td>
     <td>{profitMargin(row)}</td>
   </>;
 }
 
 export function OwnerPerformance() {
+  const { t } = useLanguage();
   const { company, tenantId } = useBusiness();
   const [period, setPeriod] = useState<ReportPeriod>('month');
   const [on, setOn] = useState('');
@@ -43,42 +46,42 @@ export function OwnerPerformance() {
   const query = useQuery({ queryKey: ['owner-performance', tenantId, path], queryFn: () => api<Report>(path), staleTime: 30_000 });
   const report = query.isSuccess ? query.data : undefined;
 
-  return <Panel title="Tổng hợp theo cửa hàng" className="owner-performance">
+  return <Panel title={t("Tổng hợp theo cửa hàng")} className="owner-performance">
     <div className="actions business-filters owner-performance-filters">
-      <label>Cửa hàng<select value={store} onChange={event => setStore(event.target.value)}>
-        <option value="">Tất cả cửa hàng của tôi</option>
+      <label>{t("Cửa hàng")}<select value={store} onChange={event => setStore(event.target.value)}>
+        <option value="">{t("Tất cả cửa hàng của tôi")}</option>
         {company?.businesses.filter(item => item.role === 'OWNER' && item.subscription?.status !== 'SUSPENDED' && item.subscription?.status !== 'CANCELED')
           .map(item => <option key={item.tenant.id} value={item.tenant.id}>{item.tenant.name}</option>)}
       </select></label>
       <ReportPeriodFields period={period} on={on} setPeriod={setPeriod} setOn={setOn}/>
       <button type="button" className="plain" disabled={query.isFetching} onClick={() => void query.refetch()}>
-        <RefreshCw size={17} aria-hidden="true"/> Làm mới
+        <RefreshCw size={17} aria-hidden="true"/> {t("Làm mới")}
       </button>
     </div>
     <State query={query}/>
-    {report && !report.stores.length && <p className="muted">Chưa có cửa hàng đang hoạt động để tổng hợp.</p>}
+    {report && !report.stores.length && <p className="muted">{t("Chưa có cửa hàng đang hoạt động để tổng hợp.")}</p>}
     {!!report?.stores.length && <>
-      <p className="muted">{period === 'all' ? 'Toàn bộ đến ' : `${day.format(new Date(report.start))} – `}{day.format(new Date(report.end))}</p>
+      <p className="muted">{period === 'all' ? t("Toàn bộ đến") : `${day.format(new Date(report.start))} – `}{day.format(new Date(report.end))}</p>
       <div className="company-metrics">
-        <div><small>Doanh thu thuần ghi nhận</small><strong>{currency.format(report.revenue)}</strong></div>
-        <div><small>Chi phí vận hành</small><strong>{currency.format(report.operatingExpenses)}</strong></div>
-        <div data-loss={report.profitBeforeTax < 0}><small>Lợi nhuận trước thuế{report.provisional ? ' (tạm tính)' : ''}</small>
+        <div><small>{t("Doanh thu thuần ghi nhận")}</small><strong>{currency.format(report.revenue)}</strong></div>
+        <div><small>{t("Chi phí vận hành")}</small><strong>{currency.format(report.operatingExpenses)}</strong></div>
+        <div data-loss={report.profitBeforeTax < 0}><small>{t("Lợi nhuận trước thuế")}{report.provisional ? t("(tạm tính)") : ''}</small>
           <strong>{currency.format(report.profitBeforeTax)}</strong></div>
-        <div><small>Tỷ suất lợi nhuận</small><strong>{profitMargin(report)}</strong></div>
+        <div><small>{t("Tỷ suất lợi nhuận")}</small><strong>{profitMargin(report)}</strong></div>
       </div>
-      <div className="company-table-wrap" role="region" aria-label="Doanh thu và lợi nhuận theo cửa hàng và chi nhánh" tabIndex={0}>
+      <div className="company-table-wrap" role="region" aria-label={t("Doanh thu và lợi nhuận theo cửa hàng và chi nhánh")} tabIndex={0}>
         <table className="company-table owner-performance-table">
-          <thead><tr><th scope="col">Cửa hàng / chi nhánh</th><th scope="col">Doanh thu ghi nhận</th><th scope="col">Chi phí vận hành</th>
-            <th scope="col">Lợi nhuận trước thuế</th><th scope="col">Tỷ suất</th></tr></thead>
+          <thead><tr><th scope="col">{t("Cửa hàng / chi nhánh")}</th><th scope="col">{t("Doanh thu ghi nhận")}</th><th scope="col">{t("Chi phí vận hành")}</th>
+            <th scope="col">{t("Lợi nhuận trước thuế")}</th><th scope="col">{t("Tỷ suất")}</th></tr></thead>
           {report.stores.map(item => <tbody key={item.id}>
-            <tr className="owner-store-total"><th scope="row">{item.name}<small>{item.branches.length} chi nhánh</small></th><AmountCells row={item}/></tr>
+            <tr className="owner-store-total"><th scope="row">{item.name}<small>{item.branches.length} {t("chi nhánh")}</small></th><AmountCells row={item}/></tr>
             {item.branches.map(branch => <tr key={branch.id}><th scope="row" className="owner-branch-name">{branch.name}
-              <small>{branchNames[branch.mode]}</small></th><AmountCells row={branch}/></tr>)}
+              <small>{t(branchNames[branch.mode])}</small></th><AmountCells row={branch}/></tr>)}
           </tbody>)}
         </table>
       </div>
-      <p className="muted">Lợi nhuận trước thuế đã tính giá vốn, chênh lệch kiểm kê và chi phí vận hành. Tỷ suất là lợi nhuận chia cho doanh thu ghi nhận.</p>
-      {report.provisional && <p className="notice">Một số chi nhánh còn thiếu giá vốn hoặc có chênh lệch kho tạm tính.</p>}
+      <p className="muted">{t("Lợi nhuận trước thuế đã tính giá vốn, chênh lệch kiểm kê và chi phí vận hành. Tỷ suất là lợi nhuận chia cho doanh thu ghi nhận.")}</p>
+      {report.provisional && <p className="notice">{t("Một số chi nhánh còn thiếu giá vốn hoặc có chênh lệch kho tạm tính.")}</p>}
     </>}
   </Panel>;
 }

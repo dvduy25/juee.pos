@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useQuery } from '@tanstack/react-query';
 import { UserRound } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -51,39 +52,42 @@ export function StaffAvatar({ id, version }: { id?: string; version?: string }) 
 export function StaffIdentityFields({ id, version, identity, required }: {
   id?: string; version?: string; identity?: StaffIdentity; required: boolean;
 }) {
+  const { t } = useLanguage();
   const [avatar, setAvatar] = useState<File>();
   const preview = useImageUrl(avatar);
   return <fieldset className="staff-identity-fields">
-    <legend>CCCD và ảnh hồ sơ</legend>
-    <label>Số CCCD<input name="citizenId" type="text" inputMode="numeric" autoComplete="off" maxLength={12} pattern="[0-9]{12}"
-      title="Nhập 12 chữ số trên CCCD" required={required} defaultValue={identity?.citizenId}/></label>
+    <legend>{t("CCCD và ảnh hồ sơ")}</legend>
+    <label>{t("Số CCCD")}<input name="citizenId" type="text" inputMode="numeric" autoComplete="off" maxLength={12} pattern="[0-9]{12}"
+      title={t("Nhập 12 chữ số trên CCCD")} required={required} defaultValue={identity?.citizenId}/></label>
     <div className="staff-identity-avatar">
-      {preview ? <span className="member-avatar"><img src={preview} alt="Ảnh đại diện đã chọn"/></span> : <StaffAvatar id={id} version={version}/>}
-      <label>{version ? 'Thay ảnh đại diện' : 'Ảnh đại diện'}
+      {preview ? <span className="member-avatar"><img src={preview} alt={t("Ảnh đại diện đã chọn")}/></span> : <StaffAvatar id={id} version={version}/>}
+      <label>{version ? t("Thay ảnh đại diện") : t("Ảnh đại diện")}
         <input name="avatar" type="file" accept={imageTypes} required={required && !version} onChange={event => setAvatar(event.target.files?.[0])}/></label>
     </div>
-    <label>Ảnh giấy tờ (nếu có)<input name="documents" type="file" accept={imageTypes} multiple/>
-      <small>JPG, PNG hoặc WebP. Tối đa 8 ảnh giấy tờ mỗi hồ sơ, 4 MB mỗi ảnh và 8 MB mỗi lần lưu.</small></label>
+    <label>{t("Ảnh giấy tờ (nếu có)")}<input name="documents" type="file" accept={imageTypes} multiple/>
+      <small>{t("JPG, PNG hoặc WebP. Tối đa 8 ảnh giấy tờ mỗi hồ sơ, 4 MB mỗi ảnh và 8 MB mỗi lần lưu.")}</small></label>
     {id && identity?.documents.map(document => <StaffDocumentRow key={document.id} staffId={id} document={document}/>)}
   </fieldset>;
 }
 
 function StaffDocumentRow({ staffId, document }: { staffId: string; document: StaffDocument }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   return <div className="staff-document-row">
     <div className="list-row"><strong>{document.name}</strong><div className="actions">
-      <button type="button" className="plain" aria-expanded={open} onClick={() => setOpen(value => !value)}>{open ? 'Ẩn ảnh' : 'Xem ảnh'}</button>
-      <label className="check"><input name="removeDocumentId" type="checkbox" value={document.id}/> Xóa khi lưu</label>
+      <button type="button" className="plain" aria-expanded={open} onClick={() => setOpen(value => !value)}>{open ? t("Ẩn ảnh") : t("Xem ảnh")}</button>
+      <label className="check"><input name="removeDocumentId" type="checkbox" value={document.id}/> {t("Xóa khi lưu")}</label>
     </div></div>
     {open && <StaffDocumentPreview staffId={staffId} document={document}/>}
   </div>;
 }
 
 function StaffDocumentPreview({ staffId, document }: { staffId: string; document: StaffDocument }) {
+  const { t } = useLanguage();
   const { root } = useBusiness();
   const image = useQuery({ queryKey: ['staff-document', root, staffId, document.id],
     queryFn: () => apiBlob(`${root}/staff/${staffId}/documents/${document.id}`), gcTime: 0, retry: false });
   const src = useImageUrl(image.data);
   if (image.error) return <p className="error" role="alert">{image.error.message}</p>;
-  return src ? <img className="staff-document-preview" src={src} alt={document.name}/> : <p className="muted" role="status">Đang tải ảnh…</p>;
+  return src ? <img className="staff-document-preview" src={src} alt={document.name}/> : <p className="muted" role="status">{t("Đang tải ảnh…")}</p>;
 }

@@ -1,7 +1,9 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useEffect, useRef, useState } from 'react';
 import { ScanLine } from 'lucide-react';
+import { LanguageSwitch } from '@/components/language-switch';
 import { FullscreenButton } from '@/components/fullscreen-button';
 import { date, submit, value } from '@/lib/format';
 import { api, apiBlob, ApiError, requestKey } from '@/services/api-client';
@@ -13,6 +15,7 @@ type CheckInResult = { id: string; createdAt: string; remaining?: number; photoP
 type Feedback = { text: string; visit?: CheckInResult };
 
 function KioskPhoto({ path, authorization, proof }: { path: string; authorization: string; proof: string }) {
+  const { t } = useLanguage();
   const [src, setSrc] = useState('');
   useEffect(() => {
     let active = true;
@@ -25,10 +28,11 @@ function KioskPhoto({ path, authorization, proof }: { path: string; authorizatio
     }).catch(() => undefined);
     return () => { active = false; if (url) URL.revokeObjectURL(url); };
   }, [path, authorization, proof]);
-  return src ? <img className="member-photo" src={src} alt="Ảnh hội viên vừa check-in"/> : null;
+  return src ? <img className="member-photo" src={src} alt={t("Ảnh hội viên vừa check-in")}/> : null;
 }
 
 export function MemberKiosk({ tenantId, branchId, preferredMethod }: { tenantId: string; branchId: string; preferredMethod?: KioskMethod }) {
+  const { t } = useLanguage();
   const path = `/member-kiosk/${tenantId}/${branchId}`;
   const storageKey = `juee-kiosk:${tenantId}:${branchId}`;
   const [key, setKey] = useState<string>();
@@ -118,22 +122,22 @@ export function MemberKiosk({ tenantId, branchId, preferredMethod }: { tenantId:
   }
 
   return <main className="member-kiosk-page" data-theme={settings?.mode === 'POOL' ? 'POOL' : 'GYM'}><section className="card member-kiosk-card">
-    <header className="guest-section-head"><div><small>{settings?.name ?? 'JUEE POS'}</small><h1>Check-in hội viên</h1></div><FullscreenButton/></header>
-    {key === '' && <p className="notice">Hãy mở link tự check-in từ cài đặt của phòng.</p>}
-    {key && !settings && !error && <p role="status">Đang tải cài đặt phòng…</p>}
-    {error && <p className="error" role="alert">{error}</p>}
-    {settings && !method && <p className="notice">Phương thức check-in của màn hình này đang tắt.</p>}
+    <header className="guest-section-head"><div><small>{settings?.name ?? 'JUEE POS'}</small><h1>{t("Check-in hội viên")}</h1></div><div className="access-header-tools"><LanguageSwitch/><FullscreenButton/></div></header>
+    {key === '' && <p className="notice">{t("Hãy mở link tự check-in từ cài đặt của phòng.")}</p>}
+    {key && !settings && !error && <p role="status">{t("Đang tải cài đặt phòng…")}</p>}
+    {error && <p className="error" role="alert">{t(error)}</p>}
+    {settings && !method && <p className="notice">{t("Phương thức check-in của màn hình này đang tắt.")}</p>}
     {method && <form onSubmit={event => submit(event, (form, element) => void checkIn(form, element))}>
-      <label>{method === 'CARD' ? 'Quét thẻ hội viên' : 'Nhập hoặc quét mã hội viên'}
+      <label>{method === 'CARD' ? t("Quét thẻ hội viên") : t("Nhập hoặc quét mã hội viên")}
         <input ref={input} name="code" autoComplete="off" autoCapitalize="off" spellCheck={false} maxLength={80} required
-          readOnly={pending} placeholder={method === 'CARD' ? 'Đưa thẻ vào đầu đọc' : 'Mã hội viên'}/>
+          readOnly={pending} placeholder={method === 'CARD' ? t("Đưa thẻ vào đầu đọc") : t("Mã hội viên")}/>
       </label>
-      <button type="submit" className="button" disabled={pending}><ScanLine size={18}/> {pending ? 'Đang check-in…' : 'Check-in'}</button>
+      <button type="submit" className="button" disabled={pending}><ScanLine size={18}/> {pending ? t("Đang check-in…") : 'Check-in'}</button>
     </form>}
     {feedback?.visit ? <div className="success member-kiosk-result" role="status">
       {key && feedback.visit.photoProof && <KioskPhoto key={feedback.visit.id} path={`${path}/check-ins/${feedback.visit.id}/photo`}
         authorization={`Bearer ${key}`} proof={feedback.visit.photoProof}/>}
-      <div>{feedback.text}<br/>Giờ check-in <time dateTime={feedback.visit.createdAt}>{date(feedback.visit.createdAt)}</time></div>
+      <div>{feedback.text}<br/>{t("Giờ check-in")} <time dateTime={feedback.visit.createdAt}>{date(feedback.visit.createdAt)}</time></div>
       {(feedback.visit.progress || typeof feedback.visit.remaining === 'number') && <dl className="member-visit-details member-progress">
         <VisitProgressFields progress={feedback.visit.progress} remaining={feedback.visit.remaining}/>
       </dl>}

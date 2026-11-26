@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { BusinessDialog } from '@/components/business-dialog';
@@ -19,6 +20,7 @@ export type Employee = { id: string; role: string; branchIds: string[]; disabled
 export const employeeName = (item: Employee) => item.staffName ?? item.user?.name ?? 'Nhân viên';
 
 export function StaffDirectory({ coaches = false }: { coaches?: boolean }) {
+  const { t } = useLanguage();
   const { branches, role } = useBusiness();
   const owner = role === 'OWNER';
   const canEdit = owner || role === 'MANAGER';
@@ -35,19 +37,19 @@ export function StaffDirectory({ coaches = false }: { coaches?: boolean }) {
     ...(scope ? { branch: scope } : {}), ...(status ? { status } : {}), ...(coaches ? { role: 'COACH' } : {}),
     ...(owner && !coaches ? { accountActions: 'true' } : {}) });
   const employees = useData<Employee[]>(`/staff?${params}`);
-  return <Panel title={coaches ? 'Danh sách huấn luyện viên' : 'Danh sách nhân viên'} action={canEdit && <div className="actions">
-    {owner && !coaches && <button type="button" className="plain" onClick={() => { setNotice(''); setEditor('manager'); }}><Plus size={17}/> Thêm quản lý</button>}
+  return <Panel title={coaches ? t("Danh sách huấn luyện viên") : t("Danh sách nhân viên")} action={canEdit && <div className="actions">
+    {owner && !coaches && <button type="button" className="plain" onClick={() => { setNotice(''); setEditor('manager'); }}><Plus size={17}/> {t("Thêm quản lý")}</button>}
     <button type="button" className="button" onClick={() => { setNotice(''); setEditor('new'); }}>
-      <Plus size={17}/>{coaches ? 'Thêm huấn luyện viên' : 'Thêm nhân viên'}
+      <Plus size={17}/>{coaches ? t("Thêm huấn luyện viên") : t("Thêm nhân viên")}
     </button></div>}>
     <div className="company-filters">
-      <label>Tìm kiếm<input type="search" value={search} maxLength={120} placeholder={coaches ? 'Tên, email hoặc chuyên môn' : 'Tên, email hoặc chức vụ'}
+      <label>{t("Tìm kiếm")}<input type="search" value={search} maxLength={120} placeholder={coaches ? t("Tên, email hoặc chuyên môn") : t("Tên, email hoặc chức vụ")}
         onChange={event => { setSearch(event.target.value); setPage(1); }}/></label>
-      {owner && <label>Chi nhánh<select value={scope} onChange={event => { setScope(event.target.value); setPage(1); }}>
-        <option value="">Tất cả</option>{branches.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+      {owner && <label>{t("Chi nhánh")}<select value={scope} onChange={event => { setScope(event.target.value); setPage(1); }}>
+        <option value="">{t("Tất cả")}</option>{branches.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
       </select></label>}
-      <label>Trạng thái<select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}>
-        <option value="">Tất cả</option><option value="active">Đang hoạt động</option><option value="disabled">Đã ngừng hoạt động</option>
+      <label>{t("Trạng thái")}<select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}>
+        <option value="">{t("Tất cả")}</option><option value="active">{t("Đang hoạt động")}</option><option value="disabled">{t("Đã ngừng hoạt động")}</option>
       </select></label>
     </div>
     <State query={employees} empty={employees.data?.length === 0}/>
@@ -56,20 +58,20 @@ export function StaffDirectory({ coaches = false }: { coaches?: boolean }) {
       <div className="staff-identity-avatar"><StaffAvatar id={item.id} version={item.staffAvatarVersion}/><div>
         <strong>{employeeName(item)}</strong><small>{[(item.role === 'OWNER' || item.role === 'MANAGER') && item.user?.email, item.phone].filter(Boolean).join(' · ')}</small>
         {item.position && <small>{item.position}</small>}
-        <small>{item.role === 'OWNER' ? 'Tất cả chi nhánh' :
+        <small>{item.role === 'OWNER' ? t("Tất cả chi nhánh") :
           branches.filter(branch => item.branchIds.includes(branch.id)).map(branch => branch.name).join(', ')}</small>
         {item.role === 'COACH' && [item.specialty, item.certifications].filter(Boolean).map((entry, index) => <small key={index}>{entry}</small>)}
       </div></div>
       <div className="actions business-filters">
         <span className="badge">{roleNames[item.role] ?? item.role}</span>
-        {item.disabled && <span className="badge warning">Đã ngừng hoạt động</span>}
-        {item.role === 'MANAGER' && item.user?.locked && <span className="badge warning">Tài khoản bị khóa</span>}
+        {item.disabled && <span className="badge warning">{t("Đã ngừng hoạt động")}</span>}
+        {item.role === 'MANAGER' && item.user?.locked && <span className="badge warning">{t("Tài khoản bị khóa")}</span>}
         {(owner || item.canEditProfile) && item.role !== 'OWNER' && <>
-          <button type="button" className="plain" onClick={() => { setNotice(''); setEditor(item); }}>Sửa hồ sơ</button>
-          {owner && item.role === 'MANAGER' && <button type="button" className="plain" onClick={() => { setNotice(''); setAssigning(item); }}>Phân quyền cửa hàng</button>}
-          {item.canResetPassword && <button type="button" className="plain" onClick={() => { setNotice(''); setResetting(item); }}>Đặt lại mật khẩu</button>}
+          <button type="button" className="plain" onClick={() => { setNotice(''); setEditor(item); }}>{t("Sửa hồ sơ")}</button>
+          {owner && item.role === 'MANAGER' && <button type="button" className="plain" onClick={() => { setNotice(''); setAssigning(item); }}>{t("Phân quyền cửa hàng")}</button>}
+          {item.canResetPassword && <button type="button" className="plain" onClick={() => { setNotice(''); setResetting(item); }}>{t("Đặt lại mật khẩu")}</button>}
           <button type="button" className="plain member-delete" onClick={() => { setNotice(''); setRemoving(item); }}
-            aria-label={`Xóa ${employeeName(item)}`}>Xóa</button>
+            aria-label={t("Xóa {0}", employeeName(item))}>{t("Xóa")}</button>
         </>}
       </div>
     </div>)}
@@ -96,6 +98,7 @@ export function StaffDirectory({ coaches = false }: { coaches?: boolean }) {
 function StaffForm({ employee, initialRole, close, saved }: {
   employee?: Employee; initialRole: 'CASHIER' | 'COACH' | 'MANAGER'; close: () => void; saved: (notice: string) => void;
 }) {
+  const { t } = useLanguage();
   const { branch, branches, role: actorRole } = useBusiness();
   const action = useAction();
   const [createAccount, setCreateAccount] = useState(true);
@@ -104,12 +107,12 @@ function StaffForm({ employee, initialRole, close, saved }: {
   const identity = useStaffIdentity(employee?.id);
   const needsAccount = role === 'MANAGER' && !employee?.user;
   const requiresIdentity = !employee || (role === 'MANAGER' && employee.role !== 'MANAGER');
-  const title = initialRole === 'MANAGER' ? 'Thêm quản lý' : initialRole === 'COACH' ? 'Thêm huấn luyện viên' : 'Thêm nhân viên';
+  const title = initialRole === 'MANAGER' ? t("Thêm quản lý") : initialRole === 'COACH' ? t("Thêm huấn luyện viên") : t("Thêm nhân viên");
   return <BusinessDialog title={employee ? `Sửa hồ sơ · ${employeeName(employee)}` : title}
     pending={action.pending} close={close}>
-    {needsAccount && <div className="business-settings-tabs" role="group" aria-label="Cách cấp tài khoản">
-      <button type="button" className="plain" aria-pressed={createAccount} disabled={action.pending} onClick={() => setCreateAccount(true)}>Tạo tài khoản</button>
-      <button type="button" className="plain" aria-pressed={!createAccount} disabled={action.pending} onClick={() => setCreateAccount(false)}>Dùng tài khoản có sẵn</button>
+    {needsAccount && <div className="business-settings-tabs" role="group" aria-label={t("Cách cấp tài khoản")}>
+      <button type="button" className="plain" aria-pressed={createAccount} disabled={action.pending} onClick={() => setCreateAccount(true)}>{t("Tạo tài khoản")}</button>
+      <button type="button" className="plain" aria-pressed={!createAccount} disabled={action.pending} onClick={() => setCreateAccount(false)}>{t("Dùng tài khoản có sẵn")}</button>
     </div>}
     <form onSubmit={event => submit(event, form => {
       setNotice('');
@@ -143,43 +146,44 @@ function StaffForm({ employee, initialRole, close, saved }: {
         body,
         { method: employee ? 'PATCH' : 'POST' }).then(result => {
         if (!result) return;
-        const message = employee ? 'Đã lưu hồ sơ nhân viên.' : 'Đã thêm nhân viên.';
+        const message = employee ? t("Đã lưu hồ sơ nhân viên.") : t("Đã thêm nhân viên.");
         saved(result.verificationRequired ? `${message} Quản lý cần xác minh email trước khi đăng nhập.` : message);
       });
     })}>
-      {needsAccount && <label>Email đăng nhập<input name="email" type="email" maxLength={254} required/></label>}
-      {role === 'MANAGER' && employee?.user && <p className="muted">Email đăng nhập · {employee.user.email}</p>}
-      <div className="columns"><label>Họ tên<input name="staffName" maxLength={120}
+      {needsAccount && <label>{t("Email đăng nhập")}<input name="email" type="email" maxLength={254} required/></label>}
+      {role === 'MANAGER' && employee?.user && <p className="muted">{t("Email đăng nhập ·")} {employee.user.email}</p>}
+      <div className="columns"><label>{t("Họ tên")}<input name="staffName" maxLength={120}
         required={role !== 'MANAGER' || (needsAccount && createAccount)} defaultValue={employee?.staffName ?? employee?.user?.name}/></label>
-        <label>Số điện thoại<input name="phone" type="tel" autoComplete="off" pattern={'[+]?[0-9]{7,15}'} maxLength={16} defaultValue={employee?.phone ?? ''}/></label></div>
-      {needsAccount && createAccount && <label>Mật khẩu đăng nhập<input name="password" type="password"
-        autoComplete="new-password" minLength={12} maxLength={128} required/><small>Từ 12 ký tự.</small></label>}
-      <div className="columns"><label>Vai trò<select name="role" value={role} onChange={event => setRole(event.target.value)}>
+        <label>{t("Số điện thoại")}<input name="phone" type="tel" autoComplete="off" pattern={'[+]?[0-9]{7,15}'} maxLength={16} defaultValue={employee?.phone ?? ''}/></label></div>
+      {needsAccount && createAccount && <label>{t("Mật khẩu đăng nhập")}<input name="password" type="password"
+        autoComplete="new-password" minLength={12} maxLength={128} required/><small>{t("Từ 12 ký tự.")}</small></label>}
+      <div className="columns"><label>{t("Vai trò")}<select name="role" value={role} onChange={event => setRole(event.target.value)}>
         {Object.entries(roleNames).filter(([key]) => key !== 'OWNER' && (key !== 'MANAGER' || actorRole === 'OWNER'))
           .map(([key, name]) => <option key={key} value={key}>{name}</option>)}
-      </select></label><label>Chức vụ<input name="position" maxLength={120} defaultValue={employee?.position ?? ''} placeholder="Ví dụ: Trưởng ca"/></label></div>
+      </select></label><label>{t("Chức vụ")}<input name="position" maxLength={120} defaultValue={employee?.position ?? ''} placeholder={t("Ví dụ: Trưởng ca")}/></label></div>
       {role === 'COACH' && <div className="columns">
-        <label>Chuyên môn<input name="specialty" maxLength={200} defaultValue={employee?.specialty ?? ''}/></label>
-        <label>Chứng chỉ<input name="certifications" maxLength={300} defaultValue={employee?.certifications ?? ''}/></label>
+        <label>{t("Chuyên môn")}<input name="specialty" maxLength={200} defaultValue={employee?.specialty ?? ''}/></label>
+        <label>{t("Chứng chỉ")}<input name="certifications" maxLength={300} defaultValue={employee?.certifications ?? ''}/></label>
       </div>}
       {employee && <State query={identity}/>}
       {(!employee || identity.data) && <StaffIdentityFields id={employee?.id} version={employee?.staffAvatarVersion}
         identity={identity.data} required={requiresIdentity}/>}
       <BranchAssignments branches={branches} selected={employee?.branchIds ?? [branch.id]}
-        label={role === 'MANAGER' ? 'Cửa hàng và chi nhánh được phép vào' : 'Chi nhánh làm việc'}/>
-      {employee && <label className="check"><input type="checkbox" name="disabled" defaultChecked={employee.disabled}/> Ngừng hoạt động tại doanh nghiệp</label>}
-      <button type="submit" className="button" disabled={action.pending || (!!employee && !identity.data)}>{employee ? 'Lưu hồ sơ' : title}</button>
+        label={role === 'MANAGER' ? t("Cửa hàng và chi nhánh được phép vào") : t("Chi nhánh làm việc")}/>
+      {employee && <label className="check"><input type="checkbox" name="disabled" defaultChecked={employee.disabled}/> {t("Ngừng hoạt động tại doanh nghiệp")}</label>}
+      <button type="submit" className="button" disabled={action.pending || (!!employee && !identity.data)}>{employee ? t("Lưu hồ sơ") : title}</button>
     </form>{action.feedback}
     {notice && <p className="error" role="alert">{notice}</p>}
   </BusinessDialog>;
 }
 
 function BranchAssignments({ branches, selected, label }: { branches: Branch[]; selected: string[]; label: string }) {
+  const { t } = useLanguage();
   const [checked, setChecked] = useState(() => new Set(selected));
   return <fieldset><legend>{label}</legend>
     {branches.length > 1 && <div className="actions">
-      <button type="button" className="plain" onClick={() => setChecked(new Set(branches.map(branch => branch.id)))}>Chọn tất cả</button>
-      <button type="button" className="plain" onClick={() => setChecked(new Set())}>Bỏ chọn tất cả</button>
+      <button type="button" className="plain" onClick={() => setChecked(new Set(branches.map(branch => branch.id)))}>{t("Chọn tất cả")}</button>
+      <button type="button" className="plain" onClick={() => setChecked(new Set())}>{t("Bỏ chọn tất cả")}</button>
     </div>}
     {branches.map(branch => <label className="check" key={branch.id}>
       <input type="checkbox" name="branch" value={branch.id} checked={checked.has(branch.id)} onChange={event => {
@@ -192,27 +196,29 @@ function BranchAssignments({ branches, selected, label }: { branches: Branch[]; 
 }
 
 function ManagerAssignments({ employee, close, saved }: { employee: Employee; close: () => void; saved: () => void }) {
+  const { t } = useLanguage();
   const { branches } = useBusiness();
   const action = useAction();
   const [error, setError] = useState('');
-  return <BusinessDialog title="Phân quyền cửa hàng" close={close} pending={action.pending}>
+  return <BusinessDialog title={t("Phân quyền cửa hàng")} close={close} pending={action.pending}>
     <p><strong>{employeeName(employee)}</strong>{employee.user && ` · ${employee.user.email}`}</p>
     <form onSubmit={event => submit(event, form => {
       const branchIds = form.getAll('branch');
       setError(branchIds.length ? '' : 'Hãy chọn ít nhất một cửa hàng hoặc chi nhánh. Dùng Ngừng hoạt động để thu hồi toàn bộ quyền.');
       if (branchIds.length) void action.send(`/staff/${employee.id}`, { branchIds }, { method: 'PATCH' }).then(result => { if (result) saved(); });
     })}>
-      <BranchAssignments branches={branches} selected={employee.branchIds} label="Cửa hàng và chi nhánh được phép vào"/>
-      {error && <p className="error" role="alert">{error}</p>}
-      <button type="submit" className="button" disabled={action.pending}>Lưu quyền</button>
+      <BranchAssignments branches={branches} selected={employee.branchIds} label={t("Cửa hàng và chi nhánh được phép vào")}/>
+      {error && <p className="error" role="alert">{t(error)}</p>}
+      <button type="submit" className="button" disabled={action.pending}>{t("Lưu quyền")}</button>
     </form>{action.feedback}
   </BusinessDialog>;
 }
 
 function ResetManagerPassword({ employee, close, saved }: { employee: Employee; close: () => void; saved: () => void }) {
+  const { t } = useLanguage();
   const action = useAction();
   const [mismatch, setMismatch] = useState(false);
-  return <BusinessDialog title="Đặt lại mật khẩu quản lý" close={close} pending={action.pending}>
+  return <BusinessDialog title={t("Đặt lại mật khẩu quản lý")} close={close} pending={action.pending}>
     <p><strong>{employeeName(employee)}</strong> · {employee.user?.email}</p>
     <form onSubmit={event => submit(event, form => {
       const password = form.get('password');
@@ -220,22 +226,23 @@ function ResetManagerPassword({ employee, close, saved }: { employee: Employee; 
       setMismatch(!same);
       if (same) void action.send(`/staff/${employee.id}/reset-password`, { password }).then(result => { if (result) saved(); });
     })}>
-      <label>Mật khẩu mới<input type="password" name="password" minLength={12} maxLength={128} autoComplete="new-password" required/></label>
-      <label>Nhập lại mật khẩu<input type="password" name="confirm" minLength={12} maxLength={128} autoComplete="new-password" required/></label>
-      <p className="muted">Quản lý sẽ đăng nhập lại bằng mật khẩu mới.</p>
-      {mismatch && <p className="error" role="alert">Hai mật khẩu chưa khớp.</p>}
-      <button type="submit" className="button" disabled={action.pending}>Xác nhận đặt lại</button>
+      <label>{t("Mật khẩu mới")}<input type="password" name="password" minLength={12} maxLength={128} autoComplete="new-password" required/></label>
+      <label>{t("Nhập lại mật khẩu")}<input type="password" name="confirm" minLength={12} maxLength={128} autoComplete="new-password" required/></label>
+      <p className="muted">{t("Quản lý sẽ đăng nhập lại bằng mật khẩu mới.")}</p>
+      {mismatch && <p className="error" role="alert">{t("Hai mật khẩu chưa khớp.")}</p>}
+      <button type="submit" className="button" disabled={action.pending}>{t("Xác nhận đặt lại")}</button>
     </form>{action.feedback}
   </BusinessDialog>;
 }
 
 function RemoveStaff({ employee, close, saved }: { employee: Employee; close: () => void; saved: () => void }) {
+  const { t } = useLanguage();
   const action = useAction();
-  return <BusinessDialog title="Xóa nhân viên" close={close} closeLabel="Hủy" pending={action.pending}>
-    <p>Xóa <strong>{employeeName(employee)}</strong> khỏi doanh nghiệp? Hệ thống sẽ thu hồi quyền và hủy những ca sắp tới. Lịch sử chấm công vẫn được lưu.</p>
+  return <BusinessDialog title={t("Xóa nhân viên")} close={close} closeLabel="Hủy" pending={action.pending}>
+    <p>{t("Xóa")} <strong>{employeeName(employee)}</strong> {t("khỏi doanh nghiệp? Hệ thống sẽ thu hồi quyền và hủy những ca sắp tới. Lịch sử chấm công vẫn được lưu.")}</p>
     <button type="button" className="button member-delete-confirm" disabled={action.pending} onClick={() => {
       void action.send(`/staff/${employee.id}`, undefined, { method: 'DELETE' }).then(result => { if (result) saved(); });
-    }}>Xóa nhân viên</button>
+    }}>{t("Xóa nhân viên")}</button>
     {action.feedback}
   </BusinessDialog>;
 }

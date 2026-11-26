@@ -1,0 +1,22 @@
+.language-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 40px;
+  padding: 0 8px;
+  white-space: nowrap;
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+.access-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 420px) {
+  .desk-account .language-switch { min-width: 34px; padding-inline: 5px; }
+  .desk-account .language-switch svg { display: none; }
+}

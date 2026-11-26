@@ -1,5 +1,7 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
+import { LanguageSwitch } from '@/components/language-switch';
 import Link from 'next/link';
 import { FullscreenButton } from '@/components/fullscreen-button';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -15,6 +17,7 @@ const titles: Record<Mode, string> = {
 };
 
 export function AccountLink({ mode }: { mode: Mode }) {
+  const { homeHref, t } = useLanguage();
   const [email, setEmail] = useState('');
   const [resend, setResend] = useState(false);
   const [token, setToken] = useState('');
@@ -82,37 +85,37 @@ export function AccountLink({ mode }: { mode: Mode }) {
 
   const verify = mode === 'verify-email';
   const content = <>
-    {error && <p className={`error ${verify ? 'access-feedback' : ''}`} role="alert">{error}</p>}
-    {message && <p className={verify ? 'access-note' : undefined} role="status">{message}</p>}
+    {error && <p className={`error ${verify ? 'access-feedback' : ''}`} role="alert">{t(error)}</p>}
+    {message && <p className={verify ? 'access-note' : undefined} role="status">{t(message)}</p>}
     {ready && !completed && (mode === 'reset-password' && !token
-      ? <p>Mở liên kết trong email hoặc <Link className="plain" href="/forgot-password">yêu cầu liên kết mới</Link>.</p>
+      ? <p>{t("Mở liên kết trong email hoặc")} <Link className="plain" href="/forgot-password">{t("yêu cầu liên kết mới")}</Link>.</p>
       : <form method="post" className={verify ? 'access-form' : undefined} onSubmit={submit}>
         {mode === 'reset-password' && <>
-          <label>Mật khẩu mới<input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required/></label>
-          <label>Nhập lại mật khẩu<input name="confirm" type="password" autoComplete="new-password" minLength={12} maxLength={128} required/></label>
+          <label>{t("Mật khẩu mới")}<input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required/></label>
+          <label>{t("Nhập lại mật khẩu")}<input name="confirm" type="password" autoComplete="new-password" minLength={12} maxLength={128} required/></label>
         </>}
         {(mode === 'forgot-password' || (mode === 'verify-email' && !token)) &&
           <label className={verify ? 'access-field' : undefined}>Email<input name="email" type="email" autoComplete="email" maxLength={254}
             value={email} onChange={event => setEmail(event.target.value)} required/></label>}
-        {mode === 'verify-email' && !token && !resend && <label>Mã OTP 6 chữ số<input name="code"
+        {mode === 'verify-email' && !token && !resend && <label>{t("Mã OTP 6 chữ số")}<input name="code"
           className="access-code" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" maxLength={6} required/></label>}
-        <button className={verify ? 'button access-submit' : 'button'} disabled={busy}>{busy ? 'Đang xử lý…' :
-          token || (verify && !resend) ? titles[mode] : verify ? 'Gửi mã OTP' : 'Gửi email'}</button>
+        <button className={verify ? 'button access-submit' : 'button'} disabled={busy}>{busy ? t("Đang xử lý…") :
+          token || (verify && !resend) ? titles[mode] : verify ? t("Gửi mã OTP") : t("Gửi email")}</button>
         {mode === 'verify-email' && !token && <button type="button" className="plain" disabled={busy}
-          onClick={() => { setResend(!resend); setError(''); setMessage(''); }}>{resend ? 'Nhập mã OTP' : 'Gửi lại mã OTP'}</button>}
+          onClick={() => { setResend(!resend); setError(''); setMessage(''); }}>{resend ? t("Nhập mã OTP") : t("Gửi lại mã OTP")}</button>}
       </form>)}
-    {mode === 'verify-email' && token && error && <a className="plain" href="/verify-email">Yêu cầu liên kết mới</a>}
+    {mode === 'verify-email' && token && error && <a className="plain" href="/verify-email">{t("Yêu cầu liên kết mới")}</a>}
   </>;
 
-  if (verify) return <AuthScene title={titles[mode]} description={!completed ? 'Nhập mã xác minh được gửi đến email đăng ký.' : undefined}>
+  if (verify) return <AuthScene title={t(titles[mode])} description={!completed ? t("Nhập mã xác minh được gửi đến email đăng ký.") : undefined}>
     {content}
-    <p className="access-footer"><Link href="/login">Về trang đăng nhập</Link></p>
+    <p className="access-footer"><Link href="/login">{t("Về trang đăng nhập")}</Link></p>
   </AuthScene>;
 
   return <div className="auth"><section className="card auth-card">
-    <div className="auth-header"><Link className="brand" href="/"><Layers3/> JUEE POS</Link><FullscreenButton/></div>
-    <h1>{titles[mode]}</h1>
+    <div className="auth-header"><a className="brand" href={homeHref}><Layers3/> JUEE POS</a><div className="access-header-tools"><LanguageSwitch/><FullscreenButton/></div></div>
+    <h1>{t(titles[mode])}</h1>
     {content}
-    <Link className="plain" href="/login">Về trang đăng nhập</Link>
+    <Link className="plain" href="/login">{t("Về trang đăng nhập")}</Link>
   </section></div>;
 }

@@ -1,0 +1,225 @@
+{
+  "restaurant": {
+    "name": "Nhà hàng",
+    "icon": "utensils",
+    "title": "Từ bàn ăn đến bếp, cùng một đơn.",
+    "description": "Phục vụ ghi món theo bàn, bếp xác nhận món đã ra và thu ngân kiểm tra trước khi chốt hóa đơn.",
+    "features": [
+      "Gọi món tại bàn bằng mã QR",
+      "Xếp món bếp theo thứ tự gọi",
+      "Thanh toán ngay trong danh sách món đã gọi"
+    ],
+    "screen": "Màn hình bếp",
+    "action": "Xác nhận món đầu đã ra",
+    "rows": [
+      [
+        "Bàn 04 · Bò sốt tiêu đen",
+        "2 phần · Gọi lúc 11:42",
+        "Đang chờ",
+        "warning"
+      ],
+      [
+        "Bàn 02 · Cơm chiên hải sản",
+        "1 phần · Gọi lúc 11:45",
+        "Đang chờ",
+        "warning"
+      ],
+      [
+        "Bàn 06 · Salad cá hồi",
+        "1 phần · Gọi lúc 11:36",
+        "Đã ra món",
+        "success"
+      ]
+    ],
+    "result": [
+      "Đã ra món",
+      "Bếp đã xác nhận món của bàn 04."
+    ]
+  },
+  "retail": {
+    "name": "Bán lẻ",
+    "icon": "store",
+    "title": "Bán tại quầy, đối chiếu được tồn kho.",
+    "description": "Tìm hoặc quét mã vạch để thêm sản phẩm vào giỏ. Hệ thống ghi hóa đơn và cập nhật tồn sau giao dịch.",
+    "features": [
+      "Khuyến mãi theo sản phẩm hoặc toàn đơn",
+      "Tự động trừ tồn khi bán",
+      "Theo dõi kiểm kê và hạn sử dụng theo lô"
+    ],
+    "screen": "Hóa đơn tại quầy",
+    "action": "Xác nhận đã thu 117.000 ₫",
+    "rows": [
+      [
+        "Đơn tại quầy · 117.000 ₫",
+        "3 sản phẩm · Giảm giá 10.000 ₫",
+        "Chưa thu",
+        "warning"
+      ],
+      [
+        "Cà phê hạt rang · 2 gói",
+        "49.000 ₫ mỗi gói",
+        "Trong giỏ",
+        "neutral"
+      ],
+      [
+        "Giấy lọc cà phê · 1 hộp",
+        "29.000 ₫ mỗi hộp",
+        "Trong giỏ",
+        "neutral"
+      ]
+    ],
+    "result": [
+      "Đã thanh toán",
+      "Hóa đơn và số tồn đã cập nhật trong demo."
+    ]
+  },
+  "cafe": {
+    "name": "Quán nước",
+    "icon": "coffee",
+    "title": "Ghi món tại quầy, chuyển thẳng đến pha chế.",
+    "description": "Theo dõi đồ uống khách gọi tại bàn hoặc mang đi. Quầy pha chế xem món nào gọi trước và xác nhận khi đã phục vụ.",
+    "features": [
+      "Gọi món tại bàn hoặc mang đi",
+      "Theo dõi thời gian chờ món",
+      "Đánh dấu hết món theo chi nhánh"
+    ],
+    "screen": "Quầy pha chế",
+    "action": "Xác nhận đồ uống đã ra",
+    "rows": [
+      [
+        "Mang về · Bạc xỉu đá",
+        "2 ly · Gọi lúc 08:15",
+        "Đang pha",
+        "warning"
+      ],
+      [
+        "Bàn 02 · Trà đào cam sả",
+        "1 ly · Gọi lúc 08:17",
+        "Đang chờ",
+        "warning"
+      ],
+      [
+        "Bàn 01 · Cà phê sữa đá",
+        "1 ly · Gọi lúc 08:12",
+        "Đã phục vụ",
+        "success"
+      ]
+    ],
+    "result": [
+      "Đã phục vụ",
+      "Đơn mang về đã được cập nhật."
+    ]
+  },
+  "members": {
+    "name": "Hội viên",
+    "icon": "activity",
+    "title": "Check-in nhanh, biết ngay gói còn hạn.",
+    "description": "Lễ tân tra cứu hồ sơ, ảnh đại diện, hạn gói và số lượt còn lại. Mỗi lượt vào được ghi thời gian.",
+    "features": [
+      "Gói theo thời hạn hoặc số lượt",
+      "Lịch sử check-in theo hội viên",
+      "Liên kết mã với thẻ hoặc thiết bị đã tích hợp"
+    ],
+    "screen": "Quầy tiếp đón",
+    "action": "Check-in hội viên Mai",
+    "rows": [
+      [
+        "Trần Ngọc Mai",
+        "Gói 10 lượt · Còn 3 lượt",
+        "Đủ điều kiện",
+        "neutral"
+      ],
+      [
+        "Nguyễn Minh Anh",
+        "Gói tháng · Đã vào lúc 07:35",
+        "Đã check-in",
+        "success"
+      ],
+      [
+        "Lê Hoàng Nam",
+        "Gói tháng · Còn 8 ngày",
+        "Còn hạn",
+        "neutral"
+      ]
+    ],
+    "result": [
+      "Đã check-in",
+      "Check-in thành công. Hội viên còn 2 lượt.",
+      "Gói 10 lượt · Còn 2 lượt"
+    ]
+  },
+  "hotel": {
+    "name": "Khách sạn",
+    "icon": "bed",
+    "title": "Đặt trước hoặc check-in ngay tại quầy.",
+    "description": "Lễ tân xem sơ đồ phòng và nhận khách theo giờ, combo hoặc qua đêm. Với phòng theo giờ, tiền phòng tính theo thời gian ở thực tế.",
+    "features": [
+      "Đặt trước theo ngày và giờ khách đến",
+      "Theo dõi phòng đang ở, quá giờ và chờ dọn",
+      "Cộng phụ phí và in phiếu thu"
+    ],
+    "screen": "Lễ tân · Trả phòng",
+    "action": "Tính tiền 2 giờ 10 phút",
+    "rows": [
+      [
+        "Phòng 203 · Khách trả phòng",
+        "Nhận lúc 13:00 · Trả lúc 15:10",
+        "Chờ tính tiền",
+        "warning"
+      ],
+      [
+        "Giờ đầu",
+        "100.000 ₫",
+        "1 giờ",
+        "neutral"
+      ],
+      [
+        "Mỗi giờ tiếp theo",
+        "50.000 ₫ mỗi giờ · Làm tròn lên",
+        "2 giờ",
+        "neutral"
+      ]
+    ],
+    "result": [
+      "200.000 ₫",
+      "Tiền phòng là 200.000 ₫, tính theo 3 giờ."
+    ]
+  },
+  "tickets": {
+    "name": "Thu vé",
+    "icon": "ticket",
+    "title": "Bán vé ở quầy, soát vé bằng mã QR.",
+    "description": "Thiết lập loại vé, giá và khung giờ vào cửa. Nhân viên quét mã để ghi nhận lượt sử dụng.",
+    "features": [
+      "Cấu hình sức chứa và giá mua sớm",
+      "Phát hành và in vé QR",
+      "Tra cứu lịch sử bán và lượt vào"
+    ],
+    "screen": "Soát vé",
+    "action": "Soát vé JU-0241",
+    "rows": [
+      [
+        "JU-0241 · Vé người lớn",
+        "Khung giờ 08:00 đến 17:00",
+        "Chưa sử dụng",
+        "neutral"
+      ],
+      [
+        "JU-0240 · Vé trẻ em",
+        "Đã vào lúc 09:12",
+        "Đã soát",
+        "success"
+      ],
+      [
+        "JU-0239 · Vé người lớn",
+        "Đã vào lúc 09:09",
+        "Đã soát",
+        "success"
+      ]
+    ],
+    "result": [
+      "Đã soát",
+      "Đã ghi nhận lượt vào cho vé JU-0241."
+    ]
+  }
+}

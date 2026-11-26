@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useState } from 'react';
 import { Download } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -70,8 +71,9 @@ function incomingItems(purchases: PurchaseReport, inventory: Inventory) {
 }
 
 function Metrics({ items }: { items: readonly (readonly [string, string | number])[] }) {
+  const { t } = useLanguage();
   return <div className="business-metrics">{items.map(([label, value]) => <div className="product-tile" key={label}>
-    <small>{label}</small><strong>{value}</strong>
+    <small>{t(label)}</small><strong>{value}</strong>
   </div>)}</div>;
 }
 
@@ -156,59 +158,62 @@ function ValuationCell({ amount, status }: { amount: number | null; status: Valu
 }
 
 function InventoryReport({ inventory, mode }: { inventory: Inventory; mode: Branch['mode'] }) {
+  const { t } = useLanguage();
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState('');
   const items = inventory.items.filter(item => filter === 'short' ? item.shortage > 0 : filter === 'excess' ? item.excess > 0 : true);
   const rows = items.slice((page - 1) * pageSize, page * pageSize);
   const goods = usesRetail(mode) || inventory.items.some(item => item.sold > 0);
   const food = usesTables(mode) || inventory.items.some(item => item.used > 0);
-  return <Panel title="Xuất kho và kiểm kê" action={<label>Chênh lệch<select value={filter} onChange={event => { setFilter(event.target.value); setPage(1); }}>
-    <option value="">Tất cả</option><option value="short">Mặt hàng bị hụt</option><option value="excess">Mặt hàng bị dư</option>
+  return <Panel title={t("Xuất kho và kiểm kê")} action={<label>{t("Chênh lệch")}<select value={filter} onChange={event => { setFilter(event.target.value); setPage(1); }}>
+    <option value="">{t("Tất cả")}</option><option value="short">{t("Mặt hàng bị hụt")}</option><option value="excess">{t("Mặt hàng bị dư")}</option>
   </select></label>}>
     <Metrics items={[
       ['Lượt kiểm kê', inventory.checks], ['Tổng lượng hụt', quantitySummary(quantities(inventory.items, item => item.shortage), 1000)],
       ['Tổng lượng dư', quantitySummary(quantities(inventory.items, item => item.excess), 1000)],
       ['Giá trị hụt', money(inventory.shortageValue)], ['Giá trị dư', money(inventory.excessValue)],
     ]}/>
-    {inventory.estimatedCounts > 0 && <p className="muted">{inventory.estimatedCounts} lượt dùng giá nhập hiện tại để ước tính.</p>}
-    {inventory.unpricedCounts > 0 && <p className="muted">{inventory.unpricedCounts} lượt chưa đủ giá nhập để tính giá trị.</p>}
+    {inventory.estimatedCounts > 0 && <p className="muted">{inventory.estimatedCounts} {t("lượt dùng giá nhập hiện tại để ước tính.")}</p>}
+    {inventory.unpricedCounts > 0 && <p className="muted">{inventory.unpricedCounts} {t("lượt chưa đủ giá nhập để tính giá trị.")}</p>}
     {rows.length ? <div className="table-wrap"><table className="company-table">
-      <thead><tr><th scope="col">Hàng hóa / nguyên liệu</th><th scope="col">Giá nhập bình quân</th>
-        {goods && <th scope="col">Xuất bán</th>}{food && <th scope="col">Xuất chế biến</th>}
-        <th scope="col">Hụt</th><th scope="col">Dư</th><th scope="col">Giá trị hụt</th><th scope="col">Giá trị dư</th></tr></thead>
+      <thead><tr><th scope="col">{t("Hàng hóa / nguyên liệu")}</th><th scope="col">{t("Giá nhập bình quân")}</th>
+        {goods && <th scope="col">{t("Xuất bán")}</th>}{food && <th scope="col">{t("Xuất chế biến")}</th>}
+        <th scope="col">{t("Hụt")}</th><th scope="col">{t("Dư")}</th><th scope="col">{t("Giá trị hụt")}</th><th scope="col">{t("Giá trị dư")}</th></tr></thead>
       <tbody>{rows.map(item => <tr key={item.id}>
         <th scope="row">{item.name}<small>{item.unit}</small></th>
-        <td>{item.currentUnitCost != null ? `${currency.format(item.currentUnitCost)}/${item.unit}` : 'Chưa có giá nhập'}</td>
+        <td>{item.currentUnitCost != null ? `${currency.format(item.currentUnitCost)}/${item.unit}` : t("Chưa có giá nhập")}</td>
         {goods && <td>{units.format(item.sold / 1000)}</td>}{food && <td>{units.format(item.used / 1000)}</td>}
         <td>{units.format(item.shortage / 1000)}</td><td>{units.format(item.excess / 1000)}</td>
         <ValuationCell amount={item.shortageValue} status={item.shortageStatus}/><ValuationCell amount={item.excessValue} status={item.excessStatus}/>
       </tr>)}</tbody>
-    </table></div> : <p className="muted">Chưa có dữ liệu kho phù hợp trong kỳ.</p>}
+    </table></div> : <p className="muted">{t("Chưa có dữ liệu kho phù hợp trong kỳ.")}</p>}
     {(page > 1 || items.length > pageSize) && <Pager page={page} full={page * pageSize < items.length} onChange={setPage}/>}
   </Panel>;
 }
 
 function PurchasesReport({ purchases, inventory }: { purchases: PurchaseReport; inventory: Inventory }) {
+  const { t } = useLanguage();
   const [page, setPage] = useState(1);
   const items = incomingItems(purchases, inventory);
-  return <Panel title="Nhập hàng trong kỳ">
+  return <Panel title={t("Nhập hàng trong kỳ")}>
     <Metrics items={[[ 'Số phiếu nhập', purchases.count], ['Tổng số lượng nhập', quantitySummary(quantities(items, item => item.quantity + item.manual), 1000)],
       ['Trước thuế', currency.format(purchases.subtotal)], ['Thuế nhập', currency.format(purchases.tax)], ['Tổng tiền nhập', currency.format(purchases.total)]]}/>
     {items.length ? <div className="table-wrap"><table className="company-table">
-      <thead><tr><th scope="col">Mặt hàng</th><th scope="col">Theo phiếu nhập</th><th scope="col">Nhập trực tiếp vào kho</th>
-        <th scope="col">Trước thuế</th><th scope="col">Thuế</th><th scope="col">Tổng tiền theo phiếu</th></tr></thead>
+      <thead><tr><th scope="col">{t("Mặt hàng")}</th><th scope="col">{t("Theo phiếu nhập")}</th><th scope="col">{t("Nhập trực tiếp vào kho")}</th>
+        <th scope="col">{t("Trước thuế")}</th><th scope="col">{t("Thuế")}</th><th scope="col">{t("Tổng tiền theo phiếu")}</th></tr></thead>
       <tbody>{items.slice((page - 1) * pageSize, page * pageSize).map(item => <tr key={item.id}><th scope="row">{item.name}<small>{item.unit}</small></th>
         <td>{units.format(item.quantity / 1000)}</td><td>{units.format(item.manual / 1000)}</td>
         <td>{item.quantity ? currency.format(item.subtotal) : '—'}</td><td>{item.quantity ? currency.format(item.tax) : '—'}</td>
         <td>{item.quantity ? currency.format(item.total) : '—'}</td></tr>)}</tbody>
-    </table></div> : <p className="muted">Chưa có nhập hàng trong kỳ.</p>}
+    </table></div> : <p className="muted">{t("Chưa có nhập hàng trong kỳ.")}</p>}
     {items.length > pageSize && <Pager page={page} full={page * pageSize < items.length} onChange={setPage}/>}
   </Panel>;
 }
 
 function SalesReport({ report }: { report: Report }) {
+  const { t } = useLanguage();
   const [page, setPage] = useState(1);
-  return <Panel title="Mặt hàng đã bán trong kỳ">
+  return <Panel title={t("Mặt hàng đã bán trong kỳ")}>
     <Metrics items={[
       ['Đơn đã tạo', report.orders], ['Đơn còn xử lý', report.processing], ['Hóa đơn đã tất toán', report.profit.invoiceCount],
       ['Tổng số lượng bán', quantitySummary(quantities(report.salesItems, item => item.quantity))],
@@ -216,17 +221,18 @@ function SalesReport({ report }: { report: Report }) {
       ['Thực thu bán hàng sau hoàn', currency.format(report.revenue)],
     ]}/>
     {report.salesItems.length ? <><div className="table-wrap"><table className="company-table">
-      <thead><tr><th scope="col">Mặt hàng / dịch vụ</th><th scope="col">Số lượng bán</th><th scope="col">Tiền theo dòng bán</th></tr></thead>
+      <thead><tr><th scope="col">{t("Mặt hàng / dịch vụ")}</th><th scope="col">{t("Số lượng bán")}</th><th scope="col">{t("Tiền theo dòng bán")}</th></tr></thead>
       <tbody>{report.salesItems.slice((page - 1) * pageSize, page * pageSize).map(item => <tr key={item.id}><th scope="row">{item.name}</th>
         <td>{units.format(item.quantity)} {item.unit}</td><td>{currency.format(item.amount)}</td></tr>)}</tbody>
-    </table></div><p className="muted">Số lượng lấy từ hóa đơn đã tất toán và dịch vụ đã thu tiền. Tiền theo dòng bán tính trước giảm giá chung, thuế và hoàn tiền.</p></>
-      : <p className="muted">Chưa có mặt hàng hoặc dịch vụ đã bán trong kỳ.</p>}
+    </table></div><p className="muted">{t("Số lượng lấy từ hóa đơn đã tất toán và dịch vụ đã thu tiền. Tiền theo dòng bán tính trước giảm giá chung, thuế và hoàn tiền.")}</p></>
+      : <p className="muted">{t("Chưa có mặt hàng hoặc dịch vụ đã bán trong kỳ.")}</p>}
     {report.salesItems.length > pageSize && <Pager page={page} full={page * pageSize < report.salesItems.length} onChange={setPage}/>}
   </Panel>;
 }
 
 function CashReport({ cash }: { cash: Cash }) {
-  return <Panel title="Thu chi trong kỳ">
+  const { t } = useLanguage();
+  return <Panel title={t("Thu chi trong kỳ")}>
     <Totals items={[[ 'Tổng thu', cash.income], ['Tổng chi', cash.expenses], ['Chênh lệch thu chi', cash.net]]}/>
     {cash.series.length > 0 && <div className="business-chart"><ResponsiveContainer width="100%" height={250}>
       <BarChart data={cash.series}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="_id"/><YAxis width={80}/>
@@ -234,16 +240,17 @@ function CashReport({ cash }: { cash: Cash }) {
         <Bar dataKey="income" name="Thu" fill="#147e67" radius={[5, 5, 0, 0]}/><Bar dataKey="expenses" name="Chi" fill="#a34c3c" radius={[5, 5, 0, 0]}/>
       </BarChart></ResponsiveContainer></div>}
     {cash.breakdown.length ? <div className="table-wrap"><table className="company-table">
-      <thead><tr><th scope="col">Nguồn</th><th scope="col">Phương thức</th><th scope="col">Tiền thu</th><th scope="col">Tiền chi</th></tr></thead>
+      <thead><tr><th scope="col">{t("Nguồn")}</th><th scope="col">{t("Phương thức")}</th><th scope="col">{t("Tiền thu")}</th><th scope="col">{t("Tiền chi")}</th></tr></thead>
       <tbody>{cash.breakdown.map(item => <tr key={`${item.direction}:${item.source}:${item.method ?? ''}`}>
-        <th scope="row">{cashLabel(item)}</th><td>{item.method ? paymentMethodLabels[item.method] : '—'}</td>
+        <th scope="row">{cashLabel(item)}</th><td>{item.method ? t(paymentMethodLabels[item.method]) : '—'}</td>
         <td>{item.direction === 'IN' ? currency.format(item.amount) : '—'}</td><td>{item.direction === 'OUT' ? currency.format(item.amount) : '—'}</td>
       </tr>)}</tbody>
-    </table></div> : <p className="muted">Chưa có giao dịch thu chi trong kỳ.</p>}
+    </table></div> : <p className="muted">{t("Chưa có giao dịch thu chi trong kỳ.")}</p>}
   </Panel>;
 }
 
 export function Reports({ company = false }: { company?: boolean }) {
+  const { t } = useLanguage();
   const { branch } = useBusiness();
   const [period, setPeriod] = useState<ReportPeriod>('today');
   const [on, setOn] = useState('');
@@ -255,10 +262,10 @@ export function Reports({ company = false }: { company?: boolean }) {
   const provisional = report?.adjustedProfit.provisional ? ' (tạm tính)' : '';
 
   return <>
-    <Panel title={`Báo cáo · ${branch.name}`} action={<div className="actions business-filters">
+    <Panel title={t("Báo cáo · {0}", branch.name)} action={<div className="actions business-filters">
       <ReportPeriodFields period={period} on={on} setPeriod={setPeriod} setOn={setOn}/>
       <button className="plain" type="button" disabled={!report} onClick={() => { if (report) exportReport(report, period, branch); }}>
-        <Download size={16} aria-hidden="true"/> Xuất báo cáo CSV</button>
+        <Download size={16} aria-hidden="true"/> {t("Xuất báo cáo CSV")}</button>
     </div>}>
       <State query={query}/>
       {report && <><p className="muted">{reportRange(report, period)}</p><Totals items={[
@@ -272,23 +279,23 @@ export function Reports({ company = false }: { company?: boolean }) {
       <PurchasesReport key={`purchases:${scopeKey}`} purchases={report.purchases} inventory={report.inventory}/>
       <InventoryReport key={`inventory:${scopeKey}`} inventory={report.inventory} mode={branch.mode}/>
       <CashReport cash={report.cash}/>
-      <Panel title="Chi tiết lợi nhuận">
+      <Panel title={t("Chi tiết lợi nhuận")}>
         <Totals items={profitMetrics(report, branch.mode)}/>
-        <p className="muted">Lợi nhuận trước thuế bằng lãi sau kiểm kê trừ chi phí vận hành đã ghi nhận trong kỳ.</p>
+        <p className="muted">{t("Lợi nhuận trước thuế bằng lãi sau kiểm kê trừ chi phí vận hành đã ghi nhận trong kỳ.")}</p>
         <div className="table-wrap"><table className="company-table">
-          <thead><tr><th scope="col">Chi phí vận hành</th><th scope="col">Phiếu chi</th><th scope="col">Tổng</th></tr></thead>
+          <thead><tr><th scope="col">{t("Chi phí vận hành")}</th><th scope="col">{t("Phiếu chi")}</th><th scope="col">{t("Tổng")}</th></tr></thead>
           <tbody>{report.cash.operatingExpenses.items.map(item => <tr key={item.kind}>
-            <th scope="row">{item.label}</th><td>{item.count}</td><td>{currency.format(item.total)}</td>
+            <th scope="row">{t(item.label)}</th><td>{item.count}</td><td>{currency.format(item.total)}</td>
           </tr>)}</tbody>
         </table></div>
-        {report.adjustedProfit.margin !== null && <p className="muted">Tỷ lệ lãi sau kiểm kê {percent.format(report.adjustedProfit.margin)}.</p>}
-        {report.profit.buffetEstimate > 0 && <p className="muted">Giá vốn buffet tham khảo {currency.format(report.profit.buffetEstimate)}. Chênh lệch nguyên liệu buffet được phản ánh qua kiểm kê.</p>}
-        {report.profit.restockedCost > 0 && <p className="muted">Giá vốn hàng hóa đã giảm {currency.format(report.profit.restockedCost)} do nhận hàng trả lại.</p>}
+        {report.adjustedProfit.margin !== null && <p className="muted">{t("Tỷ lệ lãi sau kiểm kê")} {percent.format(report.adjustedProfit.margin)}.</p>}
+        {report.profit.buffetEstimate > 0 && <p className="muted">{t("Giá vốn buffet tham khảo")} {currency.format(report.profit.buffetEstimate)}{t(". Chênh lệch nguyên liệu buffet được phản ánh qua kiểm kê.")}</p>}
+        {report.profit.restockedCost > 0 && <p className="muted">{t("Giá vốn hàng hóa đã giảm")} {currency.format(report.profit.restockedCost)} {t("do nhận hàng trả lại.")}</p>}
         {report.adjustedProfit.provisional && <div className="notice">
-          {report.adjustedProfit.missingCostLines > 0 && <p>{report.adjustedProfit.missingCostLines} dòng bán chưa đủ giá vốn.</p>}
-          {report.inventory.unpricedCounts > 0 && <p>{report.inventory.unpricedCounts} lượt chênh lệch chưa có giá nhập.</p>}
-          {report.inventory.estimatedCounts > 0 && <p>{report.inventory.estimatedCounts} lượt chênh lệch dùng giá nhập hiện tại để ước tính.</p>}
-          {report.adjustedProfit.needsBuffetCount && <p>Chưa có kết quả kiểm kê trong kỳ để ghi nhận chênh lệch nguyên liệu buffet.</p>}
+          {report.adjustedProfit.missingCostLines > 0 && <p>{report.adjustedProfit.missingCostLines} {t("dòng bán chưa đủ giá vốn.")}</p>}
+          {report.inventory.unpricedCounts > 0 && <p>{report.inventory.unpricedCounts} {t("lượt chênh lệch chưa có giá nhập.")}</p>}
+          {report.inventory.estimatedCounts > 0 && <p>{report.inventory.estimatedCounts} {t("lượt chênh lệch dùng giá nhập hiện tại để ước tính.")}</p>}
+          {report.adjustedProfit.needsBuffetCount && <p>{t("Chưa có kết quả kiểm kê trong kỳ để ghi nhận chênh lệch nguyên liệu buffet.")}</p>}
         </div>}
       </Panel>
     </>}

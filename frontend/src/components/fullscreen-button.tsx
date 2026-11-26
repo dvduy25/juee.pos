@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useEffect, useState } from 'react';
 import { Maximize, Minimize } from 'lucide-react';
 
@@ -11,6 +12,7 @@ function setWideView(enabled: boolean) {
 }
 
 export function FullscreenButton({ className = 'plain' }: { className?: string }) {
+  const { t } = useLanguage();
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -44,7 +46,7 @@ export function FullscreenButton({ className = 'plain' }: { className?: string }
     }
   }
 
-  const label = expanded ? 'Thoát toàn màn hình' : 'Toàn màn hình';
+  const label = expanded ? t("Thoát toàn màn hình") : t("Toàn màn hình");
   return <button type="button" className={className} aria-label={label} title={label} onClick={() => void toggle()}>
     {expanded ? <Minimize size={18} aria-hidden="true"/> : <Maximize size={18} aria-hidden="true"/>}
   </button>;

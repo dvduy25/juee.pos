@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -21,10 +22,12 @@ import { AutoPrintSwitch, printPaidReceipt } from './receipt-print';
 
 type Cart = { product: string; productId: string; variant: Variant; quantity: number; buffetExtra?: boolean; modifierPrice: number; modifierIds: string[]; options: string; key: string };
 export function Pos() {
-  return <Suspense fallback={<div className="skeleton" aria-label="Đang tải quầy bán hàng"/>}><CounterRoute/></Suspense>;
+  const { t } = useLanguage();
+  return <Suspense fallback={<div className="skeleton" aria-label={t("Đang tải quầy bán hàng")}/>}><CounterRoute/></Suspense>;
 }
 
 function CounterRoute() {
+  const { t } = useLanguage();
   const { branch, mode, role } = useBusiness();
   const params = useSearchParams();
   const table = params.get('table') ?? '';
@@ -32,7 +35,7 @@ function CounterRoute() {
   const takeaway = usesTables(branch.mode) && params.get('takeaway') === '1';
   const food = usesTables(mode) || (branch.mode === 'HYBRID' && (!!table || takeaway));
   const showOrders = params.get('orders') === '1';
-  if (!food && role === 'WAITER') return <Link className="button" href="/dashboard/tables">Chọn bàn để gọi món</Link>;
+  if (!food && role === 'WAITER') return <Link className="button" href="/dashboard/tables">{t("Chọn bàn để gọi món")}</Link>;
   return <Counter key={`${food}:${table}:${session}:${takeaway}:${showOrders}`} productType={food ? 'FOOD' : 'RETAIL'}
     initialTable={takeaway ? '' : table} expectedSession={session} takeaway={takeaway} openTakeawayOrders={showOrders}/>;
 }
@@ -40,6 +43,7 @@ function CounterRoute() {
 function Counter({ productType, initialTable, expectedSession, takeaway, openTakeawayOrders }: {
   productType: 'FOOD' | 'RETAIL'; initialTable: string; expectedSession: string; takeaway: boolean; openTakeawayOrders: boolean;
 }) {
+  const { t } = useLanguage();
   const { role, root, mode, staffMode } = useBusiness();
   const serviceCounter = usesServiceCounter(mode);
   const router = useRouter();
@@ -237,34 +241,34 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
   const quantity = cart.reduce((sum, item) => sum + item.quantity, 0);
   const cartLink = <a className="plain pos-cart-link" href={atTable || viewedSession ? '#table-order-pane' : '#pos-current-cart'}
     onClick={takeaway ? () => setShowTakeawayOrders(false) : undefined}>
-    <ShoppingBasket size={17} aria-hidden="true"/> {atTable ? 'Món tại bàn' : takeaway ? 'Món mang về' : 'Giỏ hàng'} ({quantity})
+    <ShoppingBasket size={17} aria-hidden="true"/> {atTable ? t("Món tại bàn") : takeaway ? t("Món mang về") : t("Giỏ hàng")} ({quantity})
   </a>;
-  const categorySelect = <select aria-label="Danh mục" value={category} onChange={event => { setCategory(event.target.value); resetResults(); }}>
-    <option value="">{food ? 'Mọi danh mục' : 'Tất cả'}</option>
+  const categorySelect = <select aria-label={t("Danh mục")} value={category} onChange={event => { setCategory(event.target.value); resetResults(); }}>
+    <option value="">{food ? t("Mọi danh mục") : t("Tất cả")}</option>
     {categories.data?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
   </select>;
   const toolbar = <div className="menu-toolbar">
-    {buffet && <div className="menu-buffet-switch" role="group" aria-label="Thực đơn buffet">
-      <button className="plain" type="button" aria-pressed={buffetSection === 'included'} onClick={() => chooseBuffetSection('included')}>Trong gói</button>
-      <button className="plain" type="button" aria-pressed={buffetSection === 'extra'} onClick={() => chooseBuffetSection('extra')}>Gọi thêm (+ phí)</button>
+    {buffet && <div className="menu-buffet-switch" role="group" aria-label={t("Thực đơn buffet")}>
+      <button className="plain" type="button" aria-pressed={buffetSection === 'included'} onClick={() => chooseBuffetSection('included')}>{t("Trong gói")}</button>
+      <button className="plain" type="button" aria-pressed={buffetSection === 'extra'} onClick={() => chooseBuffetSection('extra')}>{t("Gọi thêm (+ phí)")}</button>
     </div>}
     <div className="menu-filters">
       <label className="menu-search"><Search size={15} aria-hidden="true"/><input type="search"
-        aria-label={food ? 'Tìm món' : 'Tìm sản phẩm'} placeholder={food ? 'Tìm món' : 'Tìm sản phẩm'}
+        aria-label={food ? t("Tìm món") : t("Tìm sản phẩm")} placeholder={food ? t("Tìm món") : t("Tìm sản phẩm")}
         value={q} onChange={event => { setQ(event.target.value); resetResults(); }} maxLength={100} autoComplete="off"/></label>
       {categorySelect}
     </div>
     {cartLink}
   </div>;
-  const catalog = <Panel className="pos-catalog no-print" title={food ? 'Thực đơn' : 'Chọn sản phẩm'} action={toolbar}>
-    {atTable && !initialTable && !table && <p className="muted">Chọn bàn hoặc Mang về để bắt đầu gọi món.</p>}
-    {productType === 'RETAIL' && <form onSubmit={scan}><div className="actions scan-controls"><label>Quét mã vạch hoặc SKU<input name="scan" maxLength={80} autoComplete="off"
-      disabled={!canSelectItems} placeholder="Đặt con trỏ ở đây rồi quét" required/></label>
-      <button className="button" disabled={!canSelectItems}>Thêm vào giỏ</button></div></form>}
-    {scanMessage && <p className={scanMessage.error ? 'error' : 'success'} role={scanMessage.error ? 'alert' : 'status'}>{scanMessage.text}</p>}
+  const catalog = <Panel className="pos-catalog no-print" title={food ? t("Thực đơn") : t("Chọn sản phẩm")} action={toolbar}>
+    {atTable && !initialTable && !table && <p className="muted">{t("Chọn bàn hoặc Mang về để bắt đầu gọi món.")}</p>}
+    {productType === 'RETAIL' && <form onSubmit={scan}><div className="actions scan-controls"><label>{t("Quét mã vạch hoặc SKU")}<input name="scan" maxLength={80} autoComplete="off"
+      disabled={!canSelectItems} placeholder={t("Đặt con trỏ ở đây rồi quét")} required/></label>
+      <button className="button" disabled={!canSelectItems}>{t("Thêm vào giỏ")}</button></div></form>}
+    {scanMessage && <p className={scanMessage.error ? 'error' : 'success'} role={scanMessage.error ? 'alert' : 'status'}>{t(scanMessage.text)}</p>}
     <State query={food && isFetchNextPageError ? { isLoading: false, error: null } : productQuery} empty={products?.length === 0}/>
     {serviceCounter && productQuery.isSuccess && products?.length === 0 && !q && !category && (role === 'OWNER' || role === 'MANAGER') &&
-      <Link className="plain" href="/dashboard/company?tab=products">Đăng bán hàng từ kho</Link>}
+      <Link className="plain" href="/dashboard/company?tab=products">{t("Đăng bán hàng từ kho")}</Link>}
     {dish && <BusinessDialog key={dish.variant.id} title={`${dish.product.name}${dish.variant.attributes?.size ? ` · ${dish.variant.attributes.size}` : ''}`}
       close={() => setDish(undefined)} closeLabel="Hủy">
     <form onSubmit={event => submit(event, form => {
@@ -272,43 +276,43 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
       const selected = form.getAll('modifier').map(String);
       for (const group of dish.product.modifierGroups) {
         const count = group.options.filter(option => selected.includes(option.id)).length;
-        if (count < group.minSelect || count > group.maxSelect) { setDishError(`Hãy chọn từ ${group.minSelect} đến ${group.maxSelect} mục ở ${group.name}.`); return; }
+        if (count < group.minSelect || count > group.maxSelect) { setDishError(t("Hãy chọn từ {0} đến {1} mục ở {2}.", group.minSelect, group.maxSelect, group.name)); return; }
       }
       add(dish.product, dish.variant, selected); setDish(undefined);
     })}>
       {dish.product.modifierGroups.map(group => <fieldset key={group.id}><legend>{group.name} · {group.minSelect}–{group.maxSelect}</legend>
         {group.options.map(option => <label className="check" key={option.id}><input name="modifier" type="checkbox" value={option.id}/>
           {option.name}{option.additionalPrice > 0 && ` + ${currency.format(option.additionalPrice)}`}</label>)}</fieldset>)}
-      {dishError && <p className="error" role="alert">{dishError}</p>}
-      <button className="button" disabled={!canSelectItems}>Thêm món</button>
+      {dishError && <p className="error" role="alert">{t(dishError)}</p>}
+      <button className="button" disabled={!canSelectItems}>{t("Thêm món")}</button>
     </form></BusinessDialog>}
     <div className="product-grid">{products?.map(item => <article className="product-tile" key={item.id}>
       {item.images[0] && <img src={item.images[0]} alt="" loading="lazy"/>}<strong>{item.name}</strong>
       {item.variants.map((variant, index) => <button type="button" className="plain" disabled={!canSelectItems || variant.paused} key={variant.id} onClick={() => choose(item, variant)}>
         <span>{productType === 'FOOD' ? foodVariantLabel(variant, index) : [variant.sku, variant.attributes?.size, variant.attributes?.color].filter(Boolean).join(' ')}</span>
-        <strong>{isIncluded(item.id, item.buffetExtra) ? 'Trong gói buffet' : currency.format(salePrice(variant))}</strong>
+        <strong>{isIncluded(item.id, item.buffetExtra) ? t("Trong gói buffet") : currency.format(salePrice(variant))}</strong>
         {!variant.paused && <Plus size={19} aria-hidden="true"/>}
-        {variant.paused && <small>{productType === 'FOOD' ? 'Hết món' : item.stock !== undefined && item.stock < 1000 ? 'Hết hàng' : 'Tạm ngừng bán'}</small>}</button>)}
+        {variant.paused && <small>{productType === 'FOOD' ? t("Hết món") : item.stock !== undefined && item.stock < 1000 ? t("Hết hàng") : t("Tạm ngừng bán")}</small>}</button>)}
     </article>)}</div>
     {food ? hasNextPage && <div className="menu-load-more" ref={more}>
-      {isFetchingNextPage && <small role="status">Đang tải thêm món…</small>}
-      {isFetchNextPageError && <p className="error" role="alert">Chưa tải được các món tiếp theo.</p>}
+      {isFetchingNextPage && <small role="status">{t("Đang tải thêm món…")}</small>}
+      {isFetchNextPageError && <p className="error" role="alert">{t("Chưa tải được các món tiếp theo.")}</p>}
       {(!canObserve || isFetchNextPageError) && <button className="plain" type="button" disabled={isFetching}
-        onClick={() => void fetchNextPage({ cancelRefetch: false })}>{isFetchNextPageError ? 'Thử lại' : 'Tải thêm món'}</button>}
+        onClick={() => void fetchNextPage({ cancelRefetch: false })}>{isFetchNextPageError ? t("Thử lại") : t("Tải thêm món")}</button>}
     </div> : <Pager page={page} full={products?.length === 50} onChange={next => {
       setPage(next);
       menu.current?.scrollTo({ top: 0 });
     }}/>}
   </Panel>;
 
-  const cartPanel = <Panel id={takeaway ? undefined : 'pos-current-cart'} className="pos-cart no-print" title={food ? 'Món đang chọn' : 'Giỏ hàng'}>
+  const cartPanel = <Panel id={takeaway ? undefined : 'pos-current-cart'} className="pos-cart no-print" title={food ? t("Món đang chọn") : t("Giỏ hàng")}>
     {atTable && <><State query={tables}/>
-      {initialTable && tables.isSuccess && !table && <p className="error">Bàn này không có ở chi nhánh đang chọn.</p>}
-      {!initialTable && tables.isSuccess && !tables.data.tables.length && <p className="muted">Chi nhánh chưa có bàn để nhận đơn.</p>}
+      {initialTable && tables.isSuccess && !table && <p className="error">{t("Bàn này không có ở chi nhánh đang chọn.")}</p>}
+      {!initialTable && tables.isSuccess && !tables.data.tables.length && <p className="muted">{t("Chi nhánh chưa có bàn để nhận đơn.")}</p>}
       {staleTable && tables.data && <p className="notice">
-        {table?.sessionId ? 'Bàn đã có lượt phục vụ khác. Về sơ đồ bàn để mở lượt hiện tại.' : 'Lượt này đã kết thúc. Mở Món đã gọi để xem hóa đơn.'}
+        {table?.sessionId ? t("Bàn đã có lượt phục vụ khác. Về sơ đồ bàn để mở lượt hiện tại.") : t("Lượt này đã kết thúc. Mở Món đã gọi để xem hóa đơn.")}
       </p>}
-      {tableClosedForOrders && <p className="notice">Bàn đã chốt hóa đơn.</p>}
+      {tableClosedForOrders && <p className="notice">{t("Bàn đã chốt hóa đơn.")}</p>}
       {table && !table.sessionId && !staleTable && <form onSubmit={event => submit(event, form => {
         if (packageId && !selectedPackage) return;
         const buffet = selectedPackage ? { packageId: selectedPackage.id, adults: amount(form, 'adults'), children: amount(form, 'children') } : undefined;
@@ -316,66 +320,66 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
           if (result) { setSelectedTable({ id: tableId, session: result.id }); setBuffetSection('included'); resetResults(); }
         });
       })}>
-        {(packages.length > 0 || packageId) && <label>Hình thức phục vụ<select value={packageId} onChange={event => setPackageId(event.target.value)}>
-          <option value="">Gọi món theo giá thực đơn</option>
-          {packageId && !selectedPackage && <option value={packageId} disabled>Gói đã ngừng dùng</option>}
+        {(packages.length > 0 || packageId) && <label>{t("Hình thức phục vụ")}<select value={packageId} onChange={event => setPackageId(event.target.value)}>
+          <option value="">{t("Gọi món theo giá thực đơn")}</option>
+          {packageId && !selectedPackage && <option value={packageId} disabled>{t("Gói đã ngừng dùng")}</option>}
           {packages.map(pack => <option key={pack.id} value={pack.id}>{pack.name}</option>)}
         </select></label>}
         {selectedPackage && <div className="form-grid form-grid-business">
-          <label>Người lớn · {currency.format(selectedPackage.adultPrice)}/khách<input name="adults" type="number" min={0} max={1000} defaultValue={table.reservation?.guests ?? 1} required/></label>
-          <label>Trẻ em · {currency.format(selectedPackage.childPrice)}/khách<input name="children" type="number" min={0} max={1000} defaultValue={0} required/></label>
+          <label>{t("Người lớn ·")} {currency.format(selectedPackage.adultPrice)}{t("/khách")}<input name="adults" type="number" min={0} max={1000} defaultValue={table.reservation?.guests ?? 1} required/></label>
+          <label>{t("Trẻ em ·")} {currency.format(selectedPackage.childPrice)}{t("/khách")}<input name="children" type="number" min={0} max={1000} defaultValue={0} required/></label>
         </div>}
-        <button className="button" disabled={action.pending || scanPending || (!!packageId && !selectedPackage)}>{table.reserved ? 'Đón khách đặt trước' : 'Mở lượt phục vụ'}</button>
+        <button className="button" disabled={action.pending || scanPending || (!!packageId && !selectedPackage)}>{table.reserved ? t("Đón khách đặt trước") : t("Mở lượt phục vụ")}</button>
       </form>}</>}
     <div className="pos-cart-items">
-    {cart.length === 0 && <p className="muted">{productType === 'FOOD' ? 'Chọn món từ thực đơn để bắt đầu.' : 'Chọn sản phẩm để bắt đầu.'}</p>}
+    {cart.length === 0 && <p className="muted">{productType === 'FOOD' ? t("Chọn món từ thực đơn để bắt đầu.") : t("Chọn sản phẩm để bắt đầu.")}</p>}
       {cart.map(item => <div className="list-row" key={item.key}><div><strong>{item.product}</strong>
-        <small>{productType === 'RETAIL' && `${item.variant.sku} · `}{isIncluded(item.productId, item.buffetExtra) && cartUnitPrice(item) === 0 ? 'Trong gói buffet' : currency.format(cartUnitPrice(item))}</small>{item.options && <small>{item.options}</small>}</div><div className="actions">
-        <input className="quantity" type="number" min="1" max="1000" aria-label={`Số lượng ${productType === 'FOOD' ? item.product : item.variant.sku}`} value={item.quantity}
+        <small>{productType === 'RETAIL' && `${item.variant.sku} · `}{isIncluded(item.productId, item.buffetExtra) && cartUnitPrice(item) === 0 ? t("Trong gói buffet") : currency.format(cartUnitPrice(item))}</small>{item.options && <small>{item.options}</small>}</div><div className="actions">
+        <input className="quantity" type="number" min="1" max="1000" aria-label={t("Số lượng {0}", productType === 'FOOD' ? item.product : item.variant.sku)} value={item.quantity}
           disabled={action.pending} onChange={event => setCart(items => items.map(line => line === item
             ? { ...line, quantity: Math.max(1, Math.min(1000, Math.floor(Number(event.target.value)))) } : line))}/>
-        <button className="plain" disabled={action.pending} onClick={() => setCart(items => items.filter(line => line !== item))}>Bỏ</button>
+        <button className="plain" disabled={action.pending} onClick={() => setCart(items => items.filter(line => line !== item))}>{t("Bỏ")}</button>
       </div></div>)}
     </div>
-    {productType !== 'FOOD' && !staffMode && <label>Khách hàng<select value={customer} onChange={event => setCustomer(event.target.value)}><option value="">Khách lẻ</option>
+    {productType !== 'FOOD' && !staffMode && <label>{t("Khách hàng")}<select value={customer} onChange={event => setCustomer(event.target.value)}><option value="">{t("Khách lẻ")}</option>
       {customers.data?.map(item => <option key={item.id} value={item.id}>{item.name} · {item.phone}</option>)}</select></label>}
-    {!food && canDiscount && <label>Giảm giá (đ)<input value={discount} onChange={event => setDiscount(Number(event.target.value))}
+    {!food && canDiscount && <label>{t("Giảm giá (đ)")}<input value={discount} onChange={event => setDiscount(Number(event.target.value))}
       type="number" min="0" max={subtotal} step="1" disabled={action.pending || !!promotionId}/></label>}
     {!food && <>
       <RetailPromotionSelect offers={offers} selected={promotionId} disabled={action.pending || !pricing.data}
         onChange={id => { setPromotionId(id); if (id) setDiscount(0); }}/>
       <State query={pricing}/>
-      {promotionError && <p className="error" role="alert">Ưu đãi đã chọn không còn áp dụng cho giỏ hàng. Hãy chọn lại.</p>}
+      {promotionError && <p className="error" role="alert">{t("Ưu đãi đã chọn không còn áp dụng cho giỏ hàng. Hãy chọn lại.")}</p>}
       {!!reduction && <div className="list-row"><span>{promotion?.name ?? 'Giảm giá'}</span><strong>−{currency.format(reduction)}</strong></div>}
-      {!!tax && <div className="list-row"><span>Thuế</span><strong>{currency.format(tax)}</strong></div>}
+      {!!tax && <div className="list-row"><span>{t("Thuế")}</span><strong>{currency.format(tax)}</strong></div>}
     </>}
-    {(!buffet || subtotal > 0) && <div className="list-row pos-total"><strong>{buffet ? 'Tạm tính phụ thu' : atTable ? 'Tạm tính món đang chọn' : 'Tổng tiền'}</strong><strong>{currency.format(total)}</strong></div>}
+    {(!buffet || subtotal > 0) && <div className="list-row pos-total"><strong>{buffet ? t("Tạm tính phụ thu") : atTable ? t("Tạm tính món đang chọn") : t("Tổng tiền")}</strong><strong>{currency.format(total)}</strong></div>}
     {food ? <div className="actions business-filters">
-      <button className="button" disabled={!canCheckout} onClick={() => void checkout(false)}>{takeaway ? 'Gửi đơn mang về' : 'Gửi món vào bàn'}</button>
-      {atTable && !table && <Link className="plain" href="/dashboard/tables">Về sơ đồ bàn</Link>}
+      <button className="button" disabled={!canCheckout} onClick={() => void checkout(false)}>{takeaway ? t("Gửi đơn mang về") : t("Gửi món vào bàn")}</button>
+      {atTable && !table && <Link className="plain" href="/dashboard/tables">{t("Về sơ đồ bàn")}</Link>}
     </div> : <form onSubmit={event => submit(event, () => {
       const button = (event.nativeEvent as SubmitEvent).submitter;
       void checkout(button?.getAttribute('value') !== 'pending');
     })}>
       <AutoPrintSwitch/>
       <div className="actions business-filters"><button className="button" disabled={!canCheckout}
-        value="cash">Thu tiền mặt</button>
-        <button className="plain" disabled={!canCheckout} value="pending">Tạo đơn chờ thanh toán</button></div>
+        value="cash">{t("Thu tiền mặt")}</button>
+        <button className="plain" disabled={!canCheckout} value="pending">{t("Tạo đơn chờ thanh toán")}</button></div>
     </form>}
-    {action.feedback}{productType !== 'FOOD' && <Link className="plain" href="/dashboard/orders">{serviceCounter ? 'Mở đơn bán hàng' : 'Mở đơn hàng'}</Link>}
+    {action.feedback}{productType !== 'FOOD' && <Link className="plain" href="/dashboard/orders">{serviceCounter ? t("Mở đơn bán hàng") : t("Mở đơn hàng")}</Link>}
   </Panel>;
 
-  const servicePicker = food && <section className="card table-service service-mode-picker no-print" aria-label="Hình thức phục vụ">
-    <label>Phục vụ<select value={takeaway ? 'takeaway' : tableId} disabled={unsentItems}
+  const servicePicker = food && <section className="card table-service service-mode-picker no-print" aria-label={t("Hình thức phục vụ")}>
+    <label>{t("Phục vụ")}<select value={takeaway ? 'takeaway' : tableId} disabled={unsentItems}
       onChange={event => void selectService(event.target.value)}>
-      <option value="" disabled={!!currentSession}>Chọn bàn</option>
-      <option value="takeaway" disabled={atTable && tableClosedForOrders}>Mang về</option>
+      <option value="" disabled={!!currentSession}>{t("Chọn bàn")}</option>
+      <option value="takeaway" disabled={atTable && tableClosedForOrders}>{t("Mang về")}</option>
       {tables.data?.tables.map(item => <option key={item.id} value={item.id}
         disabled={takeaway && !!currentSession && (tableClosedForOrders || !!item.sessionId || !!item.reserved)}>
-        {item.name} · {tableState(item, tables.data.sessions.find(service => service.id === item.sessionId)).label}</option>)}
+        {item.name} · {t(tableState(item, tables.data.sessions.find(service => service.id === item.sessionId)).label)}</option>)}
     </select></label>
-    {takeaway && viewedSession && <Link className="plain" href={takeawayMenuHref(undefined, true)}>Đơn mang về</Link>}
-    {takeaway && currentSession && <span className="badge">{tableClosedForOrders ? 'Chờ thanh toán' : 'Đơn mang về đang mở'}</span>}
+    {takeaway && viewedSession && <Link className="plain" href={takeawayMenuHref(undefined, true)}>{t("Đơn mang về")}</Link>}
+    {takeaway && currentSession && <span className="badge">{tableClosedForOrders ? t("Chờ thanh toán") : t("Đơn mang về đang mở")}</span>}
     {serviceChange.feedback}
   </section>;
 
@@ -384,7 +388,7 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
     {table && <TableService key={table.id} table={table} service={currentSession ? tableSession : undefined} tables={tables.data?.tables ?? []}
       currentSession={currentSession} unsentItems={unsentItems} onClose={() => router.replace('/dashboard/tables')}/>}
     <div className="columns pos-desk">
-      <div ref={menu} className="order-menu" role="region" aria-label="Thực đơn gọi món" tabIndex={0}>{catalog}</div>
+      <div ref={menu} className="order-menu" role="region" aria-label={t("Thực đơn gọi món")} tabIndex={0}>{catalog}</div>
       <TableOrders key={`${tableId}:${viewedSession}`} session={viewedSession || undefined} unsentItems={unsentItems}
         initiallyOpen={takeaway || !!activeService?.checkoutBillId || (!!viewedSession && staleTable)} takeaway={takeaway}
         service={activeService} quantity={quantity}>{cartPanel}</TableOrders>
@@ -394,14 +398,14 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
   if (takeaway) return <div className="counter-workspace food-counter">
     {servicePicker}
     <div className="columns pos-desk">
-      <div ref={menu} className="order-menu" role="region" aria-label="Thực đơn mang về" tabIndex={0}>{catalog}</div>
+      <div ref={menu} className="order-menu" role="region" aria-label={t("Thực đơn mang về")} tabIndex={0}>{catalog}</div>
       <div className="pos-counter-side" id="pos-current-cart">
-        <div className="table-order-tabs card no-print" role="group" aria-label="Đơn mang về">
+        <div className="table-order-tabs card no-print" role="group" aria-label={t("Đơn mang về")}>
           <button type="button" className="plain" aria-pressed={!showTakeawayOrders} onClick={() => setShowTakeawayOrders(false)}>
-            Đơn mới {quantity > 0 && <span className="table-order-count">{quantity}</span>}
+            {t("Đơn mới")} {quantity > 0 && <span className="table-order-count">{quantity}</span>}
           </button>
           <button type="button" className="plain" aria-pressed={showTakeawayOrders}
-            onClick={() => setShowTakeawayOrders(true)}>Đơn đã gửi</button>
+            onClick={() => setShowTakeawayOrders(true)}>{t("Đơn đã gửi")}</button>
         </div>
         {showTakeawayOrders ? <TakeawayOrders sessions={takeaways.data ?? []} tables={tables.data?.tables ?? []}/> : cartPanel}
       </div>
@@ -410,16 +414,16 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
 
   return <div className="counter-workspace">
     <div className="columns pos-desk">
-      <div ref={menu} className="order-menu" role="region" aria-label="Danh sách sản phẩm" tabIndex={0}>{catalog}</div>
+      <div ref={menu} className="order-menu" role="region" aria-label={t("Danh sách sản phẩm")} tabIndex={0}>{catalog}</div>
       <div className="pos-counter-side">{cartPanel}
-        {receipt && <Panel title="Hóa đơn vừa thanh toán" className="print-receipt">
-          <p>Mã hóa đơn {receipt.bill.id}</p>
+        {receipt && <Panel title={t("Hóa đơn vừa thanh toán")} className="print-receipt">
+          <p>{t("Mã hóa đơn")} {receipt.bill.id}</p>
           {receipt.order.items.map(item => <div className="list-row" key={item.id}>{item.name} × {item.quantity} <strong>{currency.format(item.quantity * item.unitPrice)}</strong></div>)}
           {!!receipt.order.discountAmount && <p>{receipt.order.promotionName ?? 'Giảm giá'} · {currency.format(receipt.order.discountAmount)}</p>}
-          {!!receipt.order.taxAmount && <p>Thuế {currency.format(receipt.order.taxAmount)}</p>}
-          <strong>Tổng tiền {currency.format(receipt.order.totalAmount)}</strong>
-          <button className="button no-print" onClick={() => void printReceipt()}>In hóa đơn</button>
-          {printError && <p className="error no-print" role="alert">Không mở được trình in. Bấm In hóa đơn để thử lại.</p>}
+          {!!receipt.order.taxAmount && <p>{t("Thuế")} {currency.format(receipt.order.taxAmount)}</p>}
+          <strong>{t("Tổng tiền")} {currency.format(receipt.order.totalAmount)}</strong>
+          <button className="button no-print" onClick={() => void printReceipt()}>{t("In hóa đơn")}</button>
+          {printError && <p className="error no-print" role="alert">{t("Không mở được trình in. Bấm In hóa đơn để thử lại.")}</p>}
         </Panel>}
       </div>
     </div>

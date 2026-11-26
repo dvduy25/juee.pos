@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import Link from 'next/link';
 import { ArrowRight, Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -17,6 +18,7 @@ const googleMessages: Record<string, string> = {
 };
 
 function GoogleAccess({ from }: { from: 'login' | 'register' }) {
+  const { t } = useLanguage();
   const [available, setAvailable] = useState(false);
   const [next, setNext] = useState('');
   const [status, setStatus] = useState('');
@@ -38,14 +40,14 @@ function GoogleAccess({ from }: { from: 'login' | 'register' }) {
   if (!available && !Object.hasOwn(googleMessages, status)) return null;
   const registering = from === 'register';
   const params = new URLSearchParams({ from, origin, ...(next && { next }) });
-  const divider = <div className="access-divider"><span>{registering ? 'hoặc đăng ký bằng email' : 'hoặc'}</span></div>;
+  const divider = <div className="access-divider"><span>{registering ? t("hoặc đăng ký bằng email") : t("hoặc")}</span></div>;
   return <div className={registering ? 'access-provider access-provider-first' : 'access-provider'}>
-    {Object.hasOwn(googleMessages, status) && <p className="error access-feedback" role="alert">{googleMessages[status]}</p>}
+    {Object.hasOwn(googleMessages, status) && <p className="error access-feedback" role="alert">{t(googleMessages[status])}</p>}
     {available && <>
       {!registering && divider}
       <a className="access-google" href={'/api/v1/auth/google/start?' + params} referrerPolicy="no-referrer">
         <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" height="18" alt="" referrerPolicy="no-referrer"/>
-        {registering ? 'Đăng ký bằng Google' : 'Tiếp tục với Google'}
+        {registering ? t("Đăng ký bằng Google") : t("Tiếp tục với Google")}
       </a>
       {registering && divider}
     </>}
@@ -55,6 +57,7 @@ function GoogleAccess({ from }: { from: 'login' | 'register' }) {
 function PasswordField({ name, label, registering, hint, invalid, onInput }: {
   name: string; label: string; registering?: boolean; hint?: string; invalid?: boolean; onInput?: () => void;
 }) {
+  const { t } = useLanguage();
   const [visible, setVisible] = useState(false);
   return <div className="access-field access-password-field"><label htmlFor={name}>{label}</label>
     <span className="access-password">
@@ -62,18 +65,19 @@ function PasswordField({ name, label, registering, hint, invalid, onInput }: {
         autoComplete={registering ? 'new-password' : 'current-password'} minLength={12} maxLength={128} required
         aria-describedby={hint ? `${name}-hint` : invalid ? 'confirm-error' : undefined}
         aria-invalid={invalid || undefined} onInput={onInput}/>
-      <button className="access-eye" type="button" aria-label={`${visible ? 'Ẩn' : 'Hiện'} ${label.toLowerCase()}`}
+      <button className="access-eye" type="button" aria-label={`${visible ? t('Ẩn') : t('Hiện')} ${label.toLowerCase()}`}
         onClick={() => setVisible(!visible)}>
         {visible ? <EyeOff size={18} aria-hidden="true"/> : <Eye size={18} aria-hidden="true"/>}
       </button>
     </span>
     {hint && <small id={`${name}-hint`}>{hint}</small>}
-    {invalid && <small id="confirm-error" className="access-field-error" role="alert">Hai mật khẩu chưa khớp.</small>}
+    {invalid && <small id="confirm-error" className="access-field-error" role="alert">{t("Hai mật khẩu chưa khớp.")}</small>}
   </div>;
 }
 
 function PhoneField() {
-  return <label className="access-field">Số điện thoại
+  const { t } = useLanguage();
+  return <label className="access-field">{t("Số điện thoại")}
     <input name="phone" type="tel" autoComplete="tel" maxLength={32} placeholder="09xx xxx xxx" required/>
   </label>;
 }
@@ -117,8 +121,9 @@ function useAuthSubmit() {
 function AccessSubmit({ pending, coolingDown, label, working }: {
   pending: boolean; coolingDown: boolean; label: string; working: string;
 }) {
+  const { t } = useLanguage();
   return <button className="button access-submit" disabled={pending || coolingDown}>
-    {pending ? working : coolingDown ? 'Vui lòng chờ…' : label}
+    {pending ? working : coolingDown ? t("Vui lòng chờ…") : label}
     {pending ? <LoaderCircle className="access-spinner" size={18} aria-hidden="true"/> : <ArrowRight size={18} aria-hidden="true"/>}
   </button>;
 }
@@ -132,6 +137,7 @@ function loginDestination() {
 }
 
 export function CustomerLogin() {
+  const { t } = useLanguage();
   const { run, error, pending, coolingDown } = useAuthSubmit();
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -143,26 +149,27 @@ export function CustomerLogin() {
     });
   }
 
-  return <AuthScene interactive title="Đăng nhập" description="Vào cửa hàng của bạn trên JUEE POS.">
-    {error && <p className="error access-feedback" role="alert">{error}</p>}
+  return <AuthScene interactive title={t("Đăng nhập")} description={t("Vào cửa hàng của bạn trên JUEE POS.")}>
+    {error && <p className="error access-feedback" role="alert">{t(error)}</p>}
     <form className="access-form" method="post" onSubmit={submit}>
       <fieldset disabled={pending} aria-busy={pending}>
         <label className="access-field">Email<input name="email" type="email" autoComplete="username" maxLength={254}
           placeholder="ban@cuahang.vn" required/></label>
-        <PasswordField name="password" label="Mật khẩu"/>
+        <PasswordField name="password" label={t("Mật khẩu")}/>
         <div className="access-help">
-          <Link href="/forgot-password">Quên mật khẩu?</Link>
-          <Link href="/verify-email">Xác minh email</Link>
+          <Link href="/forgot-password">{t("Quên mật khẩu?")}</Link>
+          <Link href="/verify-email">{t("Xác minh email")}</Link>
         </div>
       </fieldset>
-      <AccessSubmit pending={pending} coolingDown={coolingDown} label="Đăng nhập" working="Đang đăng nhập…"/>
+      <AccessSubmit pending={pending} coolingDown={coolingDown} label={t("Đăng nhập")} working={t("Đang đăng nhập…")}/>
     </form>
     <GoogleAccess from="login"/>
-    <p className="access-footer">Chưa có tài khoản? <Link href="/register">Đăng ký</Link></p>
+    <p className="access-footer">{t("Chưa có tài khoản?")} <Link href="/register">{t("Đăng ký")}</Link></p>
   </AuthScene>;
 }
 
 export function CustomerRegister() {
+  const { t } = useLanguage();
   const { run, error, pending, coolingDown } = useAuthSubmit();
   const [confirmationError, setConfirmationError] = useState(false);
   const [created, setCreated] = useState(false);
@@ -199,30 +206,31 @@ export function CustomerRegister() {
     });
   }
 
-  return <AuthScene interactive title="Tạo tài khoản" description="Chuẩn bị số điện thoại để hoàn tất đăng ký.">
-    {created && <p className="success access-feedback" role="status">Đã tạo tài khoản.</p>}
-    {error && <p className="error access-feedback" role="alert">{error}</p>}
+  return <AuthScene interactive title={t("Tạo tài khoản")} description={t("Chuẩn bị số điện thoại để hoàn tất đăng ký.")}>
+    {created && <p className="success access-feedback" role="status">{t("Đã tạo tài khoản.")}</p>}
+    {error && <p className="error access-feedback" role="alert">{t(error)}</p>}
     {!created && <GoogleAccess from="register"/>}
-    {created ? <Link className="button access-submit" href="/login">Đến trang đăng nhập <ArrowRight size={18} aria-hidden="true"/></Link> :
+    {created ? <Link className="button access-submit" href="/login">{t("Đến trang đăng nhập")} <ArrowRight size={18} aria-hidden="true"/></Link> :
       <form className="access-form" method="post" onSubmit={submit}>
         <fieldset disabled={pending} aria-busy={pending}>
-          <label className="access-field">Họ và tên<input name="name" autoComplete="name" maxLength={120} placeholder="Nguyễn Văn An"
-            pattern={'.*\\S.*'} title="Nhập họ và tên." required/></label>
+          <label className="access-field">{t("Họ và tên")}<input name="name" autoComplete="name" maxLength={120} placeholder="Nguyễn Văn An"
+            pattern={'.*\\S.*'} title={t("Nhập họ và tên.")} required/></label>
           <label className="access-field">Email<input name="email" type="email" autoComplete="username" maxLength={254}
             placeholder="ban@cuahang.vn" required/></label>
           <PhoneField/>
-          <PasswordField name="password" label="Mật khẩu" registering hint="Ít nhất 12 ký tự."
+          <PasswordField name="password" label={t("Mật khẩu")} registering hint={t("Ít nhất 12 ký tự.")}
             onInput={() => setConfirmationError(false)}/>
-          <PasswordField name="confirm" label="Nhập lại mật khẩu" registering invalid={confirmationError}
+          <PasswordField name="confirm" label={t("Nhập lại mật khẩu")} registering invalid={confirmationError}
             onInput={() => setConfirmationError(false)}/>
         </fieldset>
-        <AccessSubmit pending={pending} coolingDown={coolingDown} label="Đăng ký" working="Đang tạo tài khoản…"/>
+        <AccessSubmit pending={pending} coolingDown={coolingDown} label={t("Đăng ký")} working={t("Đang tạo tài khoản…")}/>
       </form>}
-    {!created && <p className="access-footer">Đã có tài khoản? <Link href="/login">Đăng nhập</Link></p>}
+    {!created && <p className="access-footer">{t("Đã có tài khoản?")} <Link href="/login">{t("Đăng nhập")}</Link></p>}
   </AuthScene>;
 }
 
 export function GoogleRegistration() {
+  const { t } = useLanguage();
   const { run, pending, error, coolingDown } = useAuthSubmit();
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -234,12 +242,12 @@ export function GoogleRegistration() {
     });
   }
 
-  return <AuthScene interactive title="Hoàn tất đăng ký Google" description="Nhập số điện thoại của bạn để tạo tài khoản JUEE POS.">
-    {error && <p className="error access-feedback" role="alert">{error}</p>}
+  return <AuthScene interactive title={t("Hoàn tất đăng ký Google")} description={t("Nhập số điện thoại của bạn để tạo tài khoản JUEE POS.")}>
+    {error && <p className="error access-feedback" role="alert">{t(error)}</p>}
     <form className="access-form" method="post" onSubmit={submit}>
       <fieldset disabled={pending} aria-busy={pending}><PhoneField/></fieldset>
-      <AccessSubmit pending={pending} coolingDown={coolingDown} label="Tạo tài khoản" working="Đang tạo tài khoản…"/>
+      <AccessSubmit pending={pending} coolingDown={coolingDown} label={t("Tạo tài khoản")} working={t("Đang tạo tài khoản…")}/>
     </form>
-    <p className="access-footer"><Link href="/register">Về đăng ký</Link></p>
+    <p className="access-footer"><Link href="/register">{t("Về đăng ký")}</Link></p>
   </AuthScene>;
 }

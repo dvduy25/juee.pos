@@ -1,5 +1,7 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
+import { LanguageSwitch } from '@/components/language-switch';
 import { useRef, type PointerEvent, type ReactNode } from 'react';
 import { Layers3 } from 'lucide-react';
 import { FullscreenButton } from '@/components/fullscreen-button';
@@ -10,6 +12,7 @@ export function AuthScene({ title, description, interactive = false, children }:
   interactive?: boolean;
   children: ReactNode;
 }) {
+  const { homeHref, t } = useLanguage();
   const lastPointer = useRef<{ x: number; y: number; direction: number }>(null);
 
   function moveCursorEffect(event: PointerEvent<HTMLElement>) {
@@ -40,10 +43,10 @@ export function AuthScene({ title, description, interactive = false, children }:
     onPointerLeave={interactive ? event => { lastPointer.current = null; delete event.currentTarget.dataset.pointer; } : undefined}>
     {interactive && <span className="access-cursor" aria-hidden="true"><span className="access-cursor-glow"/></span>}
     <header className="access-header">
-      <a href="/" className="access-brand" aria-label="JUEE POS, về trang giới thiệu">
+      <a href={homeHref} className="access-brand" aria-label={t("JUEE POS, về trang giới thiệu")}>
         <span><Layers3 size={22} aria-hidden="true"/></span>JUEE POS
       </a>
-      <FullscreenButton/>
+      <div className="access-header-tools"><LanguageSwitch/><FullscreenButton/></div>
     </header>
     <section className="access-card" aria-labelledby="access-title">
       <div className="access-title">

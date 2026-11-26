@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useState } from 'react';
 import { LocateFixed, MapPin } from 'lucide-react';
 import { currentPosition } from '@/lib/location';
@@ -14,6 +15,7 @@ export function readBranchLocation(form: FormData): BranchLocation | undefined {
 }
 
 export function BranchLocationFields({ location, required = false }: { location?: BranchLocation; required?: boolean }) {
+  const { t } = useLanguage();
   const [latitude, setLatitude] = useState(location?.latitude.toString() ?? '');
   const [longitude, setLongitude] = useState(location?.longitude.toString() ?? '');
   const [radius, setRadius] = useState(location?.radiusMeters.toString() ?? '100');
@@ -44,23 +46,23 @@ export function BranchLocationFields({ location, required = false }: { location?
   }
 
   return <fieldset className="branch-location">
-    <legend><MapPin size={16} aria-hidden="true"/> Vị trí chi nhánh</legend>
-    <p className="muted">Ghim tại cửa hàng bằng vị trí hiện tại hoặc nhập tọa độ. Bán kính tính từ ghim dùng để kiểm tra khách gọi món QR.</p>
+    <legend><MapPin size={16} aria-hidden="true"/> {t("Vị trí chi nhánh")}</legend>
+    <p className="muted">{t("Ghim tại cửa hàng bằng vị trí hiện tại hoặc nhập tọa độ. Bán kính tính từ ghim dùng để kiểm tra khách gọi món QR.")}</p>
     <div className="form-grid form-grid-business">
-      <label>Vĩ độ<input name="latitude" type="number" step="any" min={-90} max={90} required={required}
+      <label>{t("Vĩ độ")}<input name="latitude" type="number" step="any" min={-90} max={90} required={required}
         value={latitude} onChange={event => { setLatitude(event.target.value); setMap(''); }}/></label>
-      <label>Kinh độ<input name="longitude" type="number" step="any" min={-180} max={180} required={required}
+      <label>{t("Kinh độ")}<input name="longitude" type="number" step="any" min={-180} max={180} required={required}
         value={longitude} onChange={event => { setLongitude(event.target.value); setMap(''); }}/></label>
-      <label>Bán kính (m)<input name="radiusMeters" type="number" min={20} max={2000} step={1} required
+      <label>{t("Bán kính (m)")}<input name="radiusMeters" type="number" min={20} max={2000} step={1} required
         value={radius} onChange={event => { setRadius(event.target.value); setMap(''); }}/></label>
     </div>
     <div className="actions business-filters">
       <button className="plain" type="button" onClick={() => void locate()} disabled={pending}><LocateFixed size={17} aria-hidden="true"/>
-        {pending ? 'Đang lấy vị trí…' : 'Ghim vị trí hiện tại'}</button>
+        {pending ? t("Đang lấy vị trí…") : t("Ghim vị trí hiện tại")}</button>
       <button className="plain" type="button" onClick={preview} disabled={!validPin || pending || Math.abs(lat) >= 85 || meters < 20 || meters > 2000}>
-        Xem ghim trên bản đồ</button>
+        {t("Xem ghim trên bản đồ")}</button>
     </div>
-    {map && <iframe className="branch-location-map" title="Ghim vị trí chi nhánh trên OpenStreetMap" src={map} loading="lazy"/>}
-    {error && <p className="error" role="alert">{error}</p>}
+    {map && <iframe className="branch-location-map" title={t("Ghim vị trí chi nhánh trên OpenStreetMap")} src={map} loading="lazy"/>}
+    {error && <p className="error" role="alert">{t(error)}</p>}
   </fieldset>;
 }

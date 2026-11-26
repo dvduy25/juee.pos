@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
@@ -22,36 +23,40 @@ import { HotelSettings } from './hotel-settings';
 import { CancellationHistory } from './cancellations';
 import { companySection } from './navigation';
 
-const tabLoading = () => <div className="skeleton" role="status" aria-label="Đang tải nội dung"/>;
-const Reports = dynamic(() => import('@/features/dashboard/reports').then(module => module.Reports), { loading: tabLoading });
-const OwnerPerformance = dynamic(() => import('./owner-performance').then(module => module.OwnerPerformance), { loading: tabLoading });
-const Catalog = dynamic(() => import('./catalog').then(module => module.Catalog), { loading: tabLoading });
-const Categories = dynamic(() => import('./catalog').then(module => module.Categories), { loading: tabLoading });
-const RetailCatalog = dynamic(() => import('./catalog').then(module => module.RetailCatalog), { loading: tabLoading });
-const Accounting = dynamic(() => import('./finance').then(module => module.Accounting), { loading: tabLoading });
-const Cashbook = dynamic(() => import('./finance').then(module => module.Cashbook), { loading: tabLoading });
-const Promotions = dynamic(() => import('./finance').then(module => module.Promotions), { loading: tabLoading });
-const Purchases = dynamic(() => import('./finance').then(module => module.Purchases), { loading: tabLoading });
-const StaffWorkspace = dynamic(() => import('./staff-work').then(module => module.StaffWorkspace), { loading: tabLoading });
-const InventoryAi = dynamic(() => import('./inventory-ai').then(module => module.InventoryAi), { loading: tabLoading });
-const TaxDeclarations = dynamic(() => import('./tax-declarations').then(module => module.TaxDeclarations), { loading: tabLoading });
+function TabLoading() {
+  const { t } = useLanguage();
+  return <div className="skeleton" role="status" aria-label={t("Đang tải nội dung")}/>;
+}
+const Reports = dynamic(() => import('@/features/dashboard/reports').then(module => module.Reports), { loading: TabLoading });
+const OwnerPerformance = dynamic(() => import('./owner-performance').then(module => module.OwnerPerformance), { loading: TabLoading });
+const Catalog = dynamic(() => import('./catalog').then(module => module.Catalog), { loading: TabLoading });
+const Categories = dynamic(() => import('./catalog').then(module => module.Categories), { loading: TabLoading });
+const RetailCatalog = dynamic(() => import('./catalog').then(module => module.RetailCatalog), { loading: TabLoading });
+const Accounting = dynamic(() => import('./finance').then(module => module.Accounting), { loading: TabLoading });
+const Cashbook = dynamic(() => import('./finance').then(module => module.Cashbook), { loading: TabLoading });
+const Promotions = dynamic(() => import('./finance').then(module => module.Promotions), { loading: TabLoading });
+const Purchases = dynamic(() => import('./finance').then(module => module.Purchases), { loading: TabLoading });
+const StaffWorkspace = dynamic(() => import('./staff-work').then(module => module.StaffWorkspace), { loading: TabLoading });
+const InventoryAi = dynamic(() => import('./inventory-ai').then(module => module.InventoryAi), { loading: TabLoading });
+const TaxDeclarations = dynamic(() => import('./tax-declarations').then(module => module.TaxDeclarations), { loading: TabLoading });
 
 export function CompanyDashboard({ requested }: { requested?: string }) {
+  const { t } = useLanguage();
   const { company, role, staffMode, branches, branch } = useBusiness();
-  if (!company || staffMode) return <p className="error" role="alert">Hãy dùng tài khoản chủ doanh nghiệp hoặc quản lý được giao chi nhánh.</p>;
-  if (requested === 'owner-performance' && role !== 'OWNER') return <p className="error" role="alert">Chỉ chủ doanh nghiệp được xem báo cáo tổng hợp.</p>;
+  if (!company || staffMode) return <p className="error" role="alert">{t("Hãy dùng tài khoản chủ doanh nghiệp hoặc quản lý được giao chi nhánh.")}</p>;
+  if (requested === 'owner-performance' && role !== 'OWNER') return <p className="error" role="alert">{t("Chỉ chủ doanh nghiệp được xem báo cáo tổng hợp.")}</p>;
   const { id: current, label } = companySection(requested, branch.mode, true, role);
   const photoAction = (role === 'OWNER' || role === 'MANAGER') && (current === 'menu' || current === 'purchases');
   return <div className="company-dashboard">
-    <header className="company-title"><h1>{label}</h1>{photoAction &&
+    <header className="company-title"><h1>{t(label)}</h1>{photoAction &&
       <Link href={`/dashboard/company?tab=warehouse-ai&document=${current === 'menu' ? 'menu' : 'receive'}`} className="plain">
-        <Camera size={17} aria-hidden="true"/>{current === 'menu' ? 'Nhập thực đơn từ ảnh' : 'Nhập hàng từ ảnh'}
+        <Camera size={17} aria-hidden="true"/>{current === 'menu' ? t("Nhập thực đơn từ ảnh") : t("Nhập hàng từ ảnh")}
       </Link>}</header>
     {current === 'overview' && <CompanyOverview/>}
     {current === 'branches' && <BranchSettings member={company.membership} branches={branches} onCreate={company.createBusiness} embedded/>}
     {current === 'products' && <RetailCatalog key={branch.id}/>}
     {current === 'menu' && <div className="company-catalog">
-      <p className="muted">Thực đơn dùng chung trong doanh nghiệp. Định lượng nguyên liệu, giá riêng và tình trạng bán áp dụng tại <strong>{branch.name}</strong>.</p>
+      <p className="muted">{t("Thực đơn dùng chung trong doanh nghiệp. Định lượng nguyên liệu, giá riêng và tình trạng bán áp dụng tại")} <strong>{branch.name}</strong>.</p>
       <Catalog type="FOOD"/>
     </div>}
     {current === 'categories' && <Categories/>}
@@ -80,33 +85,34 @@ export function CompanyDashboard({ requested }: { requested?: string }) {
 }
 
 function CompanyOverview() {
+  const { t } = useLanguage();
   const { company, tenantId, branches, branch } = useBusiness();
   const [period, setPeriod] = useState('today');
   const query = useData<Revenue>(`/company/revenue?period=${period}`, 15000);
   return <>
-    <Panel title="Doanh thu theo chi nhánh">
-      <div className="actions business-filters"><label>Kỳ báo cáo<select value={period} onChange={event => setPeriod(event.target.value)}>
-        <option value="today">Hôm nay</option><option value="month">Tháng này</option>
+    <Panel title={t("Doanh thu theo chi nhánh")}>
+      <div className="actions business-filters"><label>{t("Kỳ báo cáo")}<select value={period} onChange={event => setPeriod(event.target.value)}>
+        <option value="today">{t("Hôm nay")}</option><option value="month">{t("Tháng này")}</option>
       </select></label></div>
       <State query={query}/>
       {query.data && <RevenueDetails report={query.data}/>}
     </Panel>
     <div className="columns">
-      <Panel title="Doanh nghiệp của bạn">
+      <Panel title={t("Doanh nghiệp của bạn")}>
         {company?.businesses.map(item => <div className="list-row" key={item.tenant.id}>
           <div className="company-entity"><Building2 size={17} aria-hidden="true"/><div><strong>{item.tenant.name}</strong>
-            <small>{roleNames[item.role] ?? item.role}</small></div></div>
-          {tenantId === item.tenant.id ? <span className="badge">Đang xem</span> :
-            <button className="plain" type="button" onClick={() => company.selectBusiness(item.tenant.id)}>Chọn doanh nghiệp</button>}
+            <small>{t(roleNames[item.role] ?? item.role)}</small></div></div>
+          {tenantId === item.tenant.id ? <span className="badge">{t("Đang xem")}</span> :
+            <button className="plain" type="button" onClick={() => company.selectBusiness(item.tenant.id)}>{t("Chọn doanh nghiệp")}</button>}
         </div>)}
       </Panel>
-      <Panel title={`Cửa hàng và chi nhánh · ${branches.length}`}>
-        {branches.map(item => <div className="list-row" key={item.id}><div><strong>{item.name}</strong><small>{branchNames[item.mode]}</small></div>
-          <div className="actions business-filters">{branch.id === item.id && <span className="badge">Đang chọn</span>}
+      <Panel title={t("Cửa hàng và chi nhánh · {0}", branches.length)}>
+        {branches.map(item => <div className="list-row" key={item.id}><div><strong>{item.name}</strong><small>{t(branchNames[item.mode])}</small></div>
+          <div className="actions business-filters">{branch.id === item.id && <span className="badge">{t("Đang chọn")}</span>}
             <button type="button" className="plain" onClick={() => company?.selectBranch(item.id, '/dashboard/company?tab=warehouse')}>Xem kho</button>
           </div>
         </div>)}
-        <Link href="/dashboard/company?tab=branches" className="plain">Cài đặt cửa hàng và chi nhánh</Link>
+        <Link href="/dashboard/company?tab=branches" className="plain">{t("Cài đặt cửa hàng và chi nhánh")}</Link>
       </Panel>
     </div>
   </>;
@@ -116,15 +122,16 @@ type Amounts = { gross: number; refunded: number; revenue: number };
 type Revenue = Amounts & { branches: (Pick<Branch, 'id' | 'name' | 'mode'> & Amounts)[] };
 
 function RevenueDetails({ report }: { report: Revenue }) {
+  const { t } = useLanguage();
   return <>
     <div className="company-metrics">
-      <div><small>Doanh thu thuần</small><strong>{currency.format(report.revenue)}</strong></div>
-      <div><small>Đã thu</small><strong>{currency.format(report.gross)}</strong></div>
-      <div><small>Đã hoàn</small><strong>{currency.format(report.refunded)}</strong></div>
+      <div><small>{t("Doanh thu thuần")}</small><strong>{currency.format(report.revenue)}</strong></div>
+      <div><small>{t("Đã thu")}</small><strong>{currency.format(report.gross)}</strong></div>
+      <div><small>{t("Đã hoàn")}</small><strong>{currency.format(report.refunded)}</strong></div>
     </div>
     <div className="company-table-wrap"><table className="company-table">
-      <thead><tr><th scope="col">Chi nhánh</th><th scope="col">Đã thu</th><th scope="col">Đã hoàn</th><th scope="col">Doanh thu thuần</th></tr></thead>
-      <tbody>{report.branches.map(item => <tr key={item.id}><th scope="row">{item.name}<small>{branchNames[item.mode]}</small></th>
+      <thead><tr><th scope="col">{t("Chi nhánh")}</th><th scope="col">{t("Đã thu")}</th><th scope="col">{t("Đã hoàn")}</th><th scope="col">{t("Doanh thu thuần")}</th></tr></thead>
+      <tbody>{report.branches.map(item => <tr key={item.id}><th scope="row">{item.name}<small>{t(branchNames[item.mode])}</small></th>
         <td>{currency.format(item.gross)}</td><td>{currency.format(item.refunded)}</td><td><strong>{currency.format(item.revenue)}</strong></td></tr>)}</tbody>
     </table></div>
   </>;

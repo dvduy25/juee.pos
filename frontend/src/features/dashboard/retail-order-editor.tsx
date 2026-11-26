@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { BusinessDialog } from '@/components/business-dialog';
@@ -21,6 +22,7 @@ const maxLines = 50;
 const maxQuantity = 1000;
 
 export function RetailOrderEditor({ order, onClose, onSaved }: { order: RetailOrderForEdit; onClose: () => void; onSaved: (total: number) => void }) {
+  const { t } = useLanguage();
   const [draft, setDraft] = useState<DraftLine[]>(() => order.items.map(({ id, ...item }) => ({ ...item, lineId: id })));
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState('');
@@ -52,7 +54,7 @@ export function RetailOrderEditor({ order, onClose, onSaved }: { order: RetailOr
     });
   }
 
-  return <BusinessDialog title={`Sửa đơn ${order.id.slice(-8).toUpperCase()}`} close={onClose} pending={action.pending}>
+  return <BusinessDialog title={t("Sửa đơn {0}", order.id.slice(-8).toUpperCase())} close={onClose} pending={action.pending}>
     <form onSubmit={event => {
       event.preventDefault();
       if (!canSave) return;
@@ -64,47 +66,47 @@ export function RetailOrderEditor({ order, onClose, onSaved }: { order: RetailOr
         else { void pricing.refetch(); if (adding) void products.refetch(); }
       });
     }}>
-      {order.billId && <p className="muted">Hóa đơn chưa thu tiền sẽ cập nhật theo đơn. Mã QR chuyển khoản đã tạo sẽ hết hiệu lực.</p>}
-      {!draft.length && <p className="muted">Thêm ít nhất một sản phẩm để lưu đơn.</p>}
+      {order.billId && <p className="muted">{t("Hóa đơn chưa thu tiền sẽ cập nhật theo đơn. Mã QR chuyển khoản đã tạo sẽ hết hiệu lực.")}</p>}
+      {!draft.length && <p className="muted">{t("Thêm ít nhất một sản phẩm để lưu đơn.")}</p>}
       <div className="retail-edit-lines">{draft.map((item, index) => <div className="list-row retail-edit-line" key={item.lineId ?? item.variantId}>
         <div><strong>{item.name}</strong><small>{item.sku ? `${item.sku} · ` : ''}{currency.format(item.unitPrice)}</small></div>
-        <label>Số lượng<input type="number" min={1} max={maxQuantity} step={1} required value={item.quantity || ''} disabled={action.pending}
-          aria-label={`Số lượng ${item.name}`} onChange={event => {
+        <label>{t("Số lượng")}<input type="number" min={1} max={maxQuantity} step={1} required value={item.quantity || ''} disabled={action.pending}
+          aria-label={t("Số lượng {0}", item.name)} onChange={event => {
             const quantity = Number(event.target.value);
             setDraft(items => items.map((line, position) => position === index ? { ...line, quantity } : line));
           }}/></label>
         <button type="button" className="plain" disabled={action.pending} onClick={() => setDraft(items => items.filter((_, position) => position !== index))}
-          aria-label={`Bỏ ${item.name}`}>Bỏ</button>
+          aria-label={t("Bỏ {0}", item.name)}>{t("Bỏ")}</button>
       </div>)}</div>
       <button type="button" className="plain" aria-expanded={adding} onClick={() => setAdding(value => !value)}>
-        <Plus size={16} aria-hidden="true"/> {adding ? 'Đóng danh sách sản phẩm' : 'Thêm sản phẩm'}
+        <Plus size={16} aria-hidden="true"/> {adding ? t("Đóng danh sách sản phẩm") : t("Thêm sản phẩm")}
       </button>
-      {adding && <section className="retail-edit-products" aria-label="Sản phẩm thêm vào đơn">
-        <label>Tìm tên hoặc SKU<input type="search" value={search} maxLength={100}
+      {adding && <section className="retail-edit-products" aria-label={t("Sản phẩm thêm vào đơn")}>
+        <label>{t("Tìm tên hoặc SKU")}<input type="search" value={search} maxLength={100}
           onChange={event => { setSearch(event.target.value); setPage(1); }}/></label>
         <State query={products} empty={products.data?.length === 0}/>
         <div className="retail-edit-results">{products.data?.flatMap(product => product.variants.map(variant => <div className="list-row" key={variant.id}>
           <div>{product.name}<small>{variant.sku} · {currency.format(salePrice(variant))}</small></div>
           <button type="button" className="plain" disabled={action.pending || !!variant.paused || draft.length >= maxLines}
-            onClick={() => add(product, variant)}>{variant.paused ? 'Chưa khả dụng' : 'Thêm'}</button>
+            onClick={() => add(product, variant)}>{variant.paused ? t("Chưa khả dụng") : t("Thêm")}</button>
         </div>))}</div>
         <Pager page={page} full={products.data?.length === 50} onChange={setPage}/>
       </section>}
       <div className="columns">
         <RetailPromotionSelect offers={offers} selected={promotionSelection} disabled={action.pending || !pricing.data}
           onChange={id => { setPromotionSelection(id); if (id) setDiscount(0); }}/>
-        <label>Giảm giá thủ công (đ)<input type="number" min={0} max={Math.min(subtotal, 1_000_000_000_000)} step={1} value={discount}
+        <label>{t("Giảm giá thủ công (đ)")}<input type="number" min={0} max={Math.min(subtotal, 1_000_000_000_000)} step={1} value={discount}
           onChange={event => setDiscount(Number(event.target.value))} disabled={action.pending || !!promotionSelection}/></label>
       </div>
       <State query={pricing}/>
       {quantitiesValid && promotionSelection && !offer && pricing.data &&
-        <p className="error" role="status">Ưu đãi cũ không áp dụng cho đơn này. Hãy chọn lại hoặc bỏ ưu đãi.</p>}
+        <p className="error" role="status">{t("Ưu đãi cũ không áp dụng cho đơn này. Hãy chọn lại hoặc bỏ ưu đãi.")}</p>}
       {valid && <dl className="bill-amounts">
-        <div><dt>Tạm tính</dt><dd>{currency.format(subtotal)}</dd></div><div><dt>Giảm giá</dt><dd>{currency.format(reduction)}</dd></div>
-        <div><dt>Thuế</dt><dd>{currency.format(tax)}</dd></div><div className="bill-due"><dt>Tổng tiền mới</dt><dd>{currency.format(total)}</dd></div>
+        <div><dt>{t("Tạm tính")}</dt><dd>{currency.format(subtotal)}</dd></div><div><dt>{t("Giảm giá")}</dt><dd>{currency.format(reduction)}</dd></div>
+        <div><dt>{t("Thuế")}</dt><dd>{currency.format(tax)}</dd></div><div className="bill-due"><dt>{t("Tổng tiền mới")}</dt><dd>{currency.format(total)}</dd></div>
       </dl>}
       {action.feedback}
-      <button className="button" disabled={!canSave || action.pending}>{action.pending ? 'Đang lưu…' : 'Lưu thay đổi'}</button>
+      <button className="button" disabled={!canSave || action.pending}>{action.pending ? t("Đang lưu…") : t("Lưu thay đổi")}</button>
     </form>
   </BusinessDialog>;
 }

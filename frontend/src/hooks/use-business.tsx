@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useRef, useState } from 'react';
 import type { Branch, Membership, WorkspaceMode } from '@/types/business';
@@ -21,6 +22,7 @@ export function useData<T>(path: string, interval?: number, enabled = true) {
 }
 
 export function useAction() {
+  const { t } = useLanguage();
   const { root } = useBusiness();
   const client = useQueryClient();
   const [pending, setPending] = useState(false);
@@ -49,6 +51,6 @@ export function useAction() {
     } finally { active.current = false; setPending(false); }
   }
 
-  return { send, pending, feedback: <>{error && <p className="error" role="alert">{error}</p>}{notice && <p className="success" role="status">{notice}</p>}</> };
+  return { send, pending, feedback: <>{error && <p className="error" role="alert">{t(error)}</p>}{notice && <p className="success" role="status">{t(notice)}</p>}</> };
 }
 

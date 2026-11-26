@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import Link from 'next/link';
 import { redirect, usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -51,6 +52,7 @@ export function BusinessWorkspace({ children }: { children: ReactNode }) {
 }
 
 function BusinessLayout(props: WorkspaceLayoutProps) {
+  const { t } = useLanguage();
   const pathname = usePathname();
   const router = useRouter();
   const companySecurity = pathname === '/dashboard/company/security';
@@ -119,39 +121,39 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
       (!staffMode || allowedSections.includes(key)));
     if (!visible.length) return null;
     return <div className="desk-nav-group" key={group.label}>
-      <p>{group.label}</p><div>{visible.map(key => {
+      <p>{t(group.label)}</p><div>{visible.map(key => {
         const Icon = navigation[key].icon;
         const title = sectionTitle(key, mode);
-        return <Link key={key} href={dashboardHref(key)} title={title}
+        return <Link key={key} href={dashboardHref(key)} title={t(title)}
           aria-current={section === key ? 'page' : undefined}
           onClick={() => {
             if (branch.mode === 'HYBRID' && mode !== preferred) chooseHybridMode(mode);
-          }}><Icon size={18}/><span>{title}</span></Link>;
+          }}><Icon size={18}/><span>{t(title)}</span></Link>;
       })}</div>
     </div>;
   }) : !staffMode && member && canView('subscription', member.role) ?
-    <div className="desk-nav-group"><div><Link href={managementHref('subscription')}><Store size={18}/> <span>Gói dịch vụ</span></Link></div></div> : null;
+    <div className="desk-nav-group"><div><Link href={managementHref('subscription')}><Store size={18}/> <span>{t("Gói dịch vụ")}</span></Link></div></div> : null;
 
   const picker = !security && member && !staffMode && <div className="branch-picker-selects">
-    <label><Building2 size={14} aria-hidden="true"/><span>Doanh nghiệp</span>
+    <label><Building2 size={14} aria-hidden="true"/><span>{t("Doanh nghiệp")}</span>
       <select value={member.tenant.id} onChange={event => requestBranchChange(event.target.value)}>
         {selectable?.map(item => <option key={item.tenant.id} value={item.tenant.id}>{item.tenant.name}</option>)}
       </select>
       <ChevronDown className="branch-picker-arrow" size={14} aria-hidden="true"/>
     </label>
-    {!!branches.data?.length && <label><Store size={14} aria-hidden="true"/><span>Chi nhánh</span>
+    {!!branches.data?.length && <label><Store size={14} aria-hidden="true"/><span>{t("Chi nhánh")}</span>
       <select value={branch?.id ?? ''} onChange={event => requestBranchChange(member.tenant.id, event.target.value)}>
-        {!branch && <option value="" disabled>Chọn chi nhánh</option>}
+        {!branch && <option value="" disabled>{t("Chọn chi nhánh")}</option>}
         {branches.data?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
       </select>
       <ChevronDown className="branch-picker-arrow" size={14} aria-hidden="true"/>
     </label>}
   </div>;
-  const modePicker = !security && !company && branch?.mode === 'HYBRID' && active && <div className="mode-switch" aria-label="Mô hình bán hàng">
+  const modePicker = !security && !company && branch?.mode === 'HYBRID' && active && <div className="mode-switch" aria-label={t("Mô hình bán hàng")}>
     {(['RETAIL', 'RESTAURANT'] as const).map(item => {
       const Icon = item === 'RETAIL' ? Store : Utensils;
       return <button key={item} type="button" aria-pressed={mode === item} onClick={() => chooseHybridMode(item, true)}>
-        <Icon size={17}/>{branchNames[item]}
+        <Icon size={17}/>{t(branchNames[item])}
       </button>;
     })}
   </div>;
@@ -163,12 +165,12 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
   const accountSecurityHref = staffMode || security ? undefined : !member ? '/dashboard/security' :
     member.role === 'MANAGER' || !active ? '/dashboard/company/security' : undefined;
   if (company && !loading && !error && (staffMode || !member)) return <CompanyLayout {...props} mode={mode} picker={null} navigation={null}>
-    <section className="card desk-empty"><h1>Quản lý doanh nghiệp</h1>
-      <p>Hãy dùng tài khoản chủ doanh nghiệp hoặc tài khoản quản lý được giao chi nhánh.</p>
+    <section className="card desk-empty"><h1>{t("Quản lý doanh nghiệp")}</h1>
+      <p>{t("Hãy dùng tài khoản chủ doanh nghiệp hoặc tài khoản quản lý được giao chi nhánh.")}</p>
       <div className="actions business-filters">
-        <Link className="button" href="/dashboard">Về chi nhánh</Link>
+        <Link className="button" href="/dashboard">{t("Về chi nhánh")}</Link>
         {!staffMode && availableBusinesses()}
-        <button className="plain" type="button" onClick={props.onLogout}>Đổi tài khoản</button>
+        <button className="plain" type="button" onClick={props.onLogout}>{t("Đổi tài khoản")}</button>
       </div>
     </section>
     {branchDialog}
@@ -178,8 +180,8 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
     if (member && canView('company', member.role)) redirect('/dashboard/company/security');
     return <Layout {...props} mode={mode} tenant={member?.tenant.name} role={member?.role} picker={null} navigation={nav}>
       <div className="desk-page-title">
-        <div className="desk-crumb"><Link href="/dashboard">Về chi nhánh</Link></div>
-        <h1>Bảo mật tài khoản cá nhân</h1>
+        <div className="desk-crumb"><Link href="/dashboard">{t("Về chi nhánh")}</Link></div>
+        <h1>{t("Bảo mật tài khoản cá nhân")}</h1>
       </div>
       <AccountSecurity/>
     </Layout>;
@@ -192,18 +194,18 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
     workMode={!company && canSwitch && <WorkModeControl key={String(staffMode)} staffMode={staffMode} tenantId={tenantId} branchId={branch?.id}
       description={employeeDescription(mode)} hasPassword={props.user.hasPassword !== false}
       onChange={scope => { props.onWorkModeChange(scope); router.replace(scope && !allowedSections.includes('overview') ? dashboardHref(allowedSections[0]) : '/dashboard'); }}/> }>
-    {error && <p className="error" role="alert">{error.message}</p>}
-    {loading ? <div className="skeleton" aria-label="Đang tải cửa hàng"/> :
+    {error && <p className="error" role="alert">{t(error.message)}</p>}
+    {loading ? <div className="skeleton" aria-label={t("Đang tải cửa hàng")}/> :
       !error && (companySecurity ? props.children : selectedScope && (!member || !branch) ?
-        <section className="card desk-empty"><h1>Chi nhánh chưa được cấp quyền</h1>
-          <p>Chọn chi nhánh được giao hoặc đăng nhập bằng tài khoản chủ doanh nghiệp hay quản lý của chi nhánh cần vào.</p>
+        <section className="card desk-empty"><h1>{t("Chi nhánh chưa được cấp quyền")}</h1>
+          <p>{t("Chọn chi nhánh được giao hoặc đăng nhập bằng tài khoản chủ doanh nghiệp hay quản lý của chi nhánh cần vào.")}</p>
           <div className="actions business-filters">{!staffMode && availableBusinesses()}
-            <button className="button" type="button" onClick={props.onLogout}>Đổi tài khoản</button></div>
+            <button className="button" type="button" onClick={props.onLogout}>{t("Đổi tài khoản")}</button></div>
         </section> : member ? <BranchContext member={member} branch={branch} branches={branches.data ?? []} mode={mode}
         active={active} staffMode={staffMode} onCreate={member.role === 'OWNER' ? () => setCreating(true) : undefined}
         company={company && !staffMode ? { businesses: selectable ?? [], selectBusiness: id => requestBranchChange(id),
           selectBranch: (id, destination) => requestBranchChange(member.tenant.id, id, destination) } : undefined}>{props.children}</BranchContext> :
-        <p className="error" role="alert">Bạn chưa được cấp quyền vào chi nhánh này.</p>)}
+        <p className="error" role="alert">{t("Bạn chưa được cấp quyền vào chi nhánh này.")}</p>)}
     {branchDialog}
   </Layout>;
 }
@@ -212,18 +214,19 @@ function BranchContext({ member, branch, branches, mode, children, active, staff
   member: Membership; branch?: Branch; branches: Branch[]; mode: WorkspaceMode; children: ReactNode;
   active: boolean; staffMode: boolean; onCreate?: () => void; company?: CompanySelection;
 }) {
+  const { t } = useLanguage();
   if (!staffMode && !active && canView('subscription', member.role)) {
     if (!company) redirect(managementHref('subscription'));
     return <section>
-      <div className="desk-page-title"><h1>Gói dịch vụ</h1></div>
+      <div className="desk-page-title"><h1>{t("Gói dịch vụ")}</h1></div>
       <StoreSubscription key={member.tenant.id} member={member}/>
     </section>;
   }
-  if (!active) return <p className="error" role="alert">Cửa hàng đang bị tạm ngừng truy cập. Hãy liên hệ quản trị viên JUEE POS.</p>;
+  if (!active) return <p className="error" role="alert">{t("Cửa hàng đang bị tạm ngừng truy cập. Hãy liên hệ quản trị viên JUEE POS.")}</p>;
   if (!staffMode && !branch) {
     return <BranchSettings key={member.tenant.id} member={member} branches={branches} onCreate={onCreate}/>;
   }
-  if (!branch) return <p className="error" role="alert">Bạn chưa được cấp quyền vào chi nhánh này.</p>;
+  if (!branch) return <p className="error" role="alert">{t("Bạn chưa được cấp quyền vào chi nhánh này.")}</p>;
   return <BusinessContext.Provider key={`${branch.id}:${mode}:${staffMode}`} value={{ tenantId: member.tenant.id,
     branch, branches, membership: member, active, role: member.role, mode, staffMode, root: `/tenants/${member.tenant.id}/branches/${branch.id}`,
     company: company && { ...company, membership: member, createBusiness: onCreate } }}>
@@ -232,6 +235,7 @@ function BranchContext({ member, branch, branches, mode, children, active, staff
 }
 
 export function BusinessDashboard({ section = 'overview', bill }: { section?: string; bill?: string }) {
+  const { t } = useLanguage();
   const { mode, role, branch, staffMode } = useBusiness();
   if (section === 'staff-work' || section === 'registers') {
     redirect(!staffMode && canView('company', role) ? managementHref('staff') : '/dashboard');
@@ -241,7 +245,7 @@ export function BusinessDashboard({ section = 'overview', bill }: { section?: st
     if (!staffMode && canView('company', role) && canView(managementTab, role)) {
       redirect(managementHref(managementTab));
     }
-    return <p className="error" role="alert">Tài khoản này chưa được cấp quyền quản lý mục này.</p>;
+    return <p className="error" role="alert">{t("Tài khoản này chưa được cấp quyền quản lý mục này.")}</p>;
   }
   if (section === 'orders' && usesTables(mode)) {
     redirect(canView('tables', role) ? '/dashboard/tables' : '/dashboard');
@@ -250,17 +254,17 @@ export function BusinessDashboard({ section = 'overview', bill }: { section?: st
   if (staffMode && !allowedSections.includes(section as Section)) section = allowedSections[0];
   if (section === 'overview' && mode === 'HOTEL') section = 'hotel-rooms';
   if (section === 'overview' && mode === 'TICKETS') section = 'ticket-sales';
-  if (!Object.hasOwn(navigation, section)) return <p role="alert" className="error">Không tìm thấy mục này.</p>;
+  if (!Object.hasOwn(navigation, section)) return <p role="alert" className="error">{t("Không tìm thấy mục này.")}</p>;
   const key = section as Section;
   if (key === 'overview') return usesTables(mode) ? <RestaurantHome/> : usesMemberships(mode) ? <MemberCheckIn/> : <RetailHome/>;
   const View = views[key];
   if (!View || !canView(key, role, branch.mode) || !modesFor(key).includes(mode)) return <section className="card desk-empty">
-    <h1>{sectionTitle(key, mode)}</h1><p>Mục này không khả dụng với chi nhánh hoặc quyền truy cập hiện tại.</p>
-    <Link className="button" href="/dashboard">Về tổng quan</Link>
+    <h1>{t(sectionTitle(key, mode))}</h1><p>{t("Mục này không khả dụng với chi nhánh hoặc quyền truy cập hiện tại.")}</p>
+    <Link className="button" href="/dashboard">{t("Về tổng quan")}</Link>
   </section>;
   const hotelDesk = key === 'hotel-rooms' || key === 'hotel-bookings' || key === 'hotel-calendar';
   return <div className="service-workspace">
-    {!hotelDesk && key !== 'kitchen' && <div className="desk-page-title"><h1>{sectionTitle(key, mode)}</h1></div>}
+    {!hotelDesk && key !== 'kitchen' && <div className="desk-page-title"><h1>{t(sectionTitle(key, mode))}</h1></div>}
     {key === 'payments' ? <Bills key={bill} initialBill={bill}/> : <View/>}
   </div>;
 }

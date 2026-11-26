@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import Link from 'next/link';
 import { ArrowRight, BedDouble, CalendarClock, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Clock3, DoorOpen, LogIn, Plus, Printer, Search, Sparkles, UsersRound } from 'lucide-react';
 import { useState } from 'react';
@@ -33,19 +34,20 @@ function bookingNotice(booking: Booking) {
 }
 
 function HotelDeskHeader({ view, create }: { view: typeof hotelViews[number]['key']; create: () => void }) {
+  const { t } = useLanguage();
   const { branch } = useBusiness();
   return <header className="hotel-desk-header">
     <div className="hotel-desk-intro">
       <div>
         <p className="hotel-branch"><BedDouble size={16} aria-hidden="true"/> {branch.name}</p>
-        <h1>Quầy lễ tân</h1>
+        <h1>{t("Quầy lễ tân")}</h1>
         <p className="hotel-desk-date">{upcomingDate.format(new Date())}</p>
       </div>
-      <button type="button" className="button" onClick={create}><Plus size={18} aria-hidden="true"/> Đăng ký lưu trú</button>
+      <button type="button" className="button" onClick={create}><Plus size={18} aria-hidden="true"/> {t("Đăng ký lưu trú")}</button>
     </div>
-    <nav className="hotel-desk-nav" aria-label="Quầy lễ tân">
+    <nav className="hotel-desk-nav" aria-label={t("Quầy lễ tân")}>
       {hotelViews.map(({ key, label, icon: Icon }) => <Link key={key} href={`/dashboard/hotel-${key}`}
-        aria-current={view === key ? 'page' : undefined}><Icon size={17} aria-hidden="true"/> {label}</Link>)}
+        aria-current={view === key ? 'page' : undefined}><Icon size={17} aria-hidden="true"/> {t(label)}</Link>)}
     </nav>
   </header>;
 }
@@ -53,6 +55,7 @@ function HotelDeskHeader({ view, create }: { view: typeof hotelViews[number]['ke
 type ReservationStart = { roomId?: string; arrival?: ArrivalMode };
 
 export function HotelRooms() {
+  const { t } = useLanguage();
   const query = useData<Room[]>('/hotel-rooms', 8000);
   const [queue, setQueue] = useState<'TODAY' | 'DEPARTURES'>('TODAY');
   const tasks = useData<Booking[]>(`/hotel-bookings?status=${queue}`, 8000);
@@ -83,56 +86,56 @@ export function HotelRooms() {
 
   return <div className="hotel-desk">
     <HotelDeskHeader view="rooms" create={() => create({})}/>
-    <div className="hotel-status-summary" aria-label="Tình trạng phòng">
+    <div className="hotel-status-summary" aria-label={t("Tình trạng phòng")}>
       {counters.map(({ key, title, icon: Icon, count }) => <button type="button" key={key} data-state={key}
         aria-pressed={filter === key} onClick={() => setFilter(filter === key ? '' : key)}>
         <span className="hotel-state-icon"><Icon size={20} aria-hidden="true"/></span>
-        <span><small>{title}</small><strong>{query.data ? count : '—'}</strong></span>
+        <span><small>{t(title)}</small><strong>{query.data ? count : '—'}</strong></span>
       </button>)}
     </div>
     <div className="hotel-feedback">{action.feedback}{notice && <p className="success" role="status">{notice}</p>}</div>
     <div className="hotel-desk-columns">
       <section className="card hotel-board" aria-labelledby="hotel-board-title">
         <header className="hotel-panel-header">
-          <h2 id="hotel-board-title">Sơ đồ phòng <span>{query.data ? `${visible.length}/${rooms.length}` : ''}</span></h2>
-          <label className="hotel-search"><span className="sr-only">Tìm phòng</span><Search size={16} aria-hidden="true"/>
-            <input type="search" placeholder="Tìm phòng hoặc tên khách" maxLength={120} value={search}
+          <h2 id="hotel-board-title">{t("Sơ đồ phòng")} <span>{query.data ? `${visible.length}/${rooms.length}` : ''}</span></h2>
+          <label className="hotel-search"><span className="sr-only">{t("Tìm phòng")}</span><Search size={16} aria-hidden="true"/>
+            <input type="search" placeholder={t("Tìm phòng hoặc tên khách")} maxLength={120} value={search}
               onChange={event => setSearch(event.target.value)}/></label>
         </header>
-        {!!rooms.length && <StatusFilters label="Lọc theo trạng thái phòng" value={filter} onChange={setFilter}
+        {!!rooms.length && <StatusFilters label={t("Lọc theo trạng thái phòng")} value={filter} onChange={setFilter}
           items={roomFilters.map(item => ({ ...item, count: item.key ? rooms.filter(room => room.state === item.key).length : rooms.length }))}/>}
         <State query={query}/>
-        {query.isSuccess && !rooms.length && <p className="hotel-empty">Chi nhánh chưa có phòng.</p>}
-        {!!rooms.length && !visible.length && <p className="hotel-empty">Không tìm thấy phòng phù hợp.</p>}
+        {query.isSuccess && !rooms.length && <p className="hotel-empty">{t("Chi nhánh chưa có phòng.")}</p>}
+        {!!rooms.length && !visible.length && <p className="hotel-empty">{t("Không tìm thấy phòng phù hợp.")}</p>}
         <div className="hotel-room-grid">
           {visible.map(({ room, state }) => {
             const guest = room.occupiedBy;
-            return <article className="hotel-room-card" data-state={state} key={room.id} aria-label={`Phòng ${room.code}`}>
+            return <article className="hotel-room-card" data-state={state} key={room.id} aria-label={t("Phòng {0}", room.code)}>
               <header className="hotel-room-header">
                 <span className="hotel-state-icon"><BedDouble size={19} aria-hidden="true"/></span>
-                <div><h3>{room.code}</h3><small>{room.category} · {room.capacity} khách</small></div>
+                <div><h3>{room.code}</h3><small>{room.category} · {room.capacity} {t("khách")}</small></div>
               </header>
               <div className="hotel-room-body">
-                <span className="hotel-state-chip">{roomFilters.find(item => item.key === state)?.label}</span>
+                <span className="hotel-state-chip">{t(roomFilters.find(item => item.key === state)?.label)}</span>
                 {guest ? <div className="hotel-room-detail"><strong>{guest.guestName}</strong>
-                  <small>{guest.dueAt ? `${guest.overdue ? 'Quá hạn từ' : 'Trả dự kiến'} ${date(guest.dueAt)}` :
-                    bookingTypes[guest.bookingType ?? 'NIGHTLY']}</small>
+                  <small>{guest.dueAt ? `${guest.overdue ? t('Quá hạn từ') : t('Trả dự kiến')} ${date(guest.dueAt)}` :
+                    t(bookingTypes[guest.bookingType ?? 'NIGHTLY'])}</small>
                 </div> : <div className="hotel-room-rates">
-                  {room.hourlyRate != null && <span><strong>{currency.format(room.hourlyRate)}</strong><small>Giờ đầu</small></span>}
-                  {room.nightlyRate != null && <span><strong>{currency.format(room.nightlyRate)}</strong><small>Mỗi đêm</small></span>}
+                  {room.hourlyRate != null && <span><strong>{currency.format(room.hourlyRate)}</strong><small>{t("Giờ đầu")}</small></span>}
+                  {room.nightlyRate != null && <span><strong>{currency.format(room.nightlyRate)}</strong><small>{t("Mỗi đêm")}</small></span>}
                 </div>}
               </div>
               {room.state !== 'MAINTENANCE' && <footer className="hotel-room-actions">
                 {guest ? <>
-                  <button className="button" type="button" onClick={() => setDeparting({ id: guest.id, guestName: guest.guestName, roomCode: room.code })}>Trả phòng</button>
-                  <button className="plain" type="button" onClick={() => setFolio(guest.id)}>Tiền phòng</button>
-                  <button className="plain" type="button" onClick={() => create({ roomId: room.id, arrival: 'ADVANCE' })}>Đặt trước</button>
+                  <button className="button" type="button" onClick={() => setDeparting({ id: guest.id, guestName: guest.guestName, roomCode: room.code })}>{t("Trả phòng")}</button>
+                  <button className="plain" type="button" onClick={() => setFolio(guest.id)}>{t("Tiền phòng")}</button>
+                  <button className="plain" type="button" onClick={() => create({ roomId: room.id, arrival: 'ADVANCE' })}>{t("Đặt trước")}</button>
                 </> : <>
                   {room.state === 'READY' && <button className="button" type="button" onClick={() => create({ roomId: room.id, arrival: 'NOW' })}>Check-in</button>}
                   {room.state === 'CLEANING' && <button className="button" type="button" disabled={action.pending}
                     onClick={() => { setNotice(''); void action.send(`/hotel-rooms/${room.id}/ready`, undefined,
-                      { message: `Phòng ${room.code} đã sẵn sàng.` }); }}>Dọn xong</button>}
-                  <button className="plain" type="button" onClick={() => create({ roomId: room.id, arrival: 'ADVANCE' })}>Đặt trước</button>
+                      { message: `Phòng ${room.code} đã sẵn sàng.` }); }}>{t("Dọn xong")}</button>}
+                  <button className="plain" type="button" onClick={() => create({ roomId: room.id, arrival: 'ADVANCE' })}>{t("Đặt trước")}</button>
                 </>}
               </footer>}
             </article>;
@@ -140,13 +143,13 @@ export function HotelRooms() {
         </div>
       </section>
       <aside className="card hotel-queue" aria-labelledby="hotel-queue-title">
-        <header className="hotel-panel-header"><h2 id="hotel-queue-title"><CalendarClock size={18} aria-hidden="true"/> Công việc hôm nay</h2></header>
-        <div className="hotel-queue-tabs" role="group" aria-label="Xem công việc">
-          <button type="button" className="plain" aria-pressed={queue === 'TODAY'} onClick={() => setQueue('TODAY')}>Khách đến</button>
-          <button type="button" className="plain" aria-pressed={queue === 'DEPARTURES'} onClick={() => setQueue('DEPARTURES')}>Quá giờ</button>
+        <header className="hotel-panel-header"><h2 id="hotel-queue-title"><CalendarClock size={18} aria-hidden="true"/> {t("Công việc hôm nay")}</h2></header>
+        <div className="hotel-queue-tabs" role="group" aria-label={t("Xem công việc")}>
+          <button type="button" className="plain" aria-pressed={queue === 'TODAY'} onClick={() => setQueue('TODAY')}>{t("Khách đến")}</button>
+          <button type="button" className="plain" aria-pressed={queue === 'DEPARTURES'} onClick={() => setQueue('DEPARTURES')}>{t("Quá giờ")}</button>
         </div>
         <State query={tasks}/>
-        {tasks.isSuccess && !tasks.data.length && <p className="hotel-empty">{queue === 'TODAY' ? 'Chưa có khách chờ đến.' : 'Không có phòng quá giờ.'}</p>}
+        {tasks.isSuccess && !tasks.data.length && <p className="hotel-empty">{queue === 'TODAY' ? t("Chưa có khách chờ đến.") : t("Không có phòng quá giờ.")}</p>}
         <ul className="hotel-queue-list">
           {tasks.data?.slice(0, 6).map(booking => <li key={booking.id}>
             <span className="hotel-queue-room">{booking.roomCode}</span>
@@ -159,7 +162,7 @@ export function HotelRooms() {
               onClick={() => setDeparting(booking)}><ArrowRight size={17} aria-hidden="true"/></button>}
           </li>)}
         </ul>
-        <Link className="plain hotel-queue-link" href="/dashboard/hotel-bookings">Xem danh sách đặt phòng <ArrowRight size={16} aria-hidden="true"/></Link>
+        <Link className="plain hotel-queue-link" href="/dashboard/hotel-bookings">{t("Xem danh sách đặt phòng")} <ArrowRight size={16} aria-hidden="true"/></Link>
       </aside>
     </div>
     {reservation && <ReserveRoom initialRoomId={reservation.roomId} initialArrival={reservation.arrival}
@@ -171,6 +174,7 @@ export function HotelRooms() {
 }
 
 export function HotelBookings() {
+  const { t } = useLanguage();
   const { role } = useBusiness();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('OPEN');
@@ -186,55 +190,55 @@ export function HotelBookings() {
   const today = hotelDay();
   return <div className="hotel-desk"><HotelDeskHeader view="bookings" create={() => {
     setNotice(''); setReserving(true);
-  }}/><Panel title="Danh sách đặt phòng" className="hotel-history">
-    {desk.data && <StatusFilters label="Công việc lễ tân hôm nay" value={status} onChange={next => { setStatus(next); setPage(1); }}
+  }}/><Panel title={t("Danh sách đặt phòng")} className="hotel-history">
+    {desk.data && <StatusFilters label={t("Công việc lễ tân hôm nay")} value={status} onChange={next => { setStatus(next); setPage(1); }}
       items={[
         { key: 'ARRIVALS', label: 'Chờ nhận phòng', count: desk.data.arrivals },
         { key: 'DEPARTURES', label: 'Quá giờ', count: desk.data.departures },
         { key: 'CHECKED_IN', label: 'Đang lưu trú', count: desk.data.occupied },
       ]}/>}
     <div className="hotel-history-controls">
-      <label>Trạng thái<select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}>
-        <option value="OPEN">Đặt chỗ và lưu trú đang mở</option>
-        <option value="TODAY">Khách đến hôm nay</option>
-        <option value="ARRIVALS">Chờ nhận phòng</option><option value="DEPARTURES">Quá giờ</option>
-        {Object.entries(bookingStates).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+      <label>{t("Trạng thái")}<select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}>
+        <option value="OPEN">{t("Đặt chỗ và lưu trú đang mở")}</option>
+        <option value="TODAY">{t("Khách đến hôm nay")}</option>
+        <option value="ARRIVALS">{t("Chờ nhận phòng")}</option><option value="DEPARTURES">{t("Quá giờ")}</option>
+        {Object.entries(bookingStates).map(([code, label]) => <option key={code} value={code}>{t(label)}</option>)}
       </select></label>
-      <label>Tìm đặt phòng<input type="search" value={search} maxLength={120} placeholder="Tên khách, điện thoại hoặc phòng"
+      <label>{t("Tìm đặt phòng")}<input type="search" value={search} maxLength={120} placeholder={t("Tên khách, điện thoại hoặc phòng")}
         onChange={event => { setSearch(event.target.value); setPage(1); }}/></label>
     </div>
     <State query={query} empty={query.data?.length === 0}/>{action.feedback}
     {notice && <p className="success" role="status">{notice}</p>}
     <div className="hotel-history-list">{query.data?.map(booking => <article className="hotel-history-item" key={booking.id}>
       <div className="hotel-history-guest"><span className="hotel-queue-room">{booking.roomCode}</span><div><strong>{booking.guestName}</strong>
-        <small>{bookingWindow(booking)} · {booking.guestCount} khách{booking.phone ? ` · ${booking.phone}` : ''}</small>
-        <small>{bookingTypes[booking.bookingType ?? 'NIGHTLY']}{booking.packageName && ` · ${booking.packageName}`}</small>
-        {booking.dueAt && booking.status !== 'CHECKED_OUT' && <small>Hạn trả {date(booking.dueAt)}</small>}
-        {booking.checkedInAt && <small>Nhận phòng {date(booking.checkedInAt)}</small>}
-        {booking.paidAt && booking.paymentMethod && <small>Đã thu {date(booking.paidAt)} · {paymentMethodLabels[booking.paymentMethod]}</small>}
+        <small>{bookingWindow(booking)} · {booking.guestCount} {t("khách")}{booking.phone ? ` · ${booking.phone}` : ''}</small>
+        <small>{t(bookingTypes[booking.bookingType ?? 'NIGHTLY'])}{booking.packageName && ` · ${booking.packageName}`}</small>
+        {booking.dueAt && booking.status !== 'CHECKED_OUT' && <small>{t("Hạn trả")} {date(booking.dueAt)}</small>}
+        {booking.checkedInAt && <small>{t("Nhận phòng")} {date(booking.checkedInAt)}</small>}
+        {booking.paidAt && booking.paymentMethod && <small>{t("Đã thu")} {date(booking.paidAt)} · {t(paymentMethodLabels[booking.paymentMethod])}</small>}
         {booking.note && <small>{booking.note}</small>}
-        {booking.closedReason && <small>Lý do: {booking.closedReason}</small>}
+        {booking.closedReason && <small>{t("Lý do:")} {booking.closedReason}</small>}
       </div></div>
       <div className="hotel-history-amount" data-state={booking.overdue ? 'overdue' : booking.status === 'CHECKED_IN' ? 'occupied' :
         booking.status === 'RESERVED' ? 'reserved' : undefined}>
         <span className="hotel-state-chip">{booking.overdue ? `Quá giờ · ${booking.overdueHours} giờ tính phí` : bookingStates[booking.status]}</span>
         <strong>{currency.format(booking.amount)}</strong>
-        {booking.status === 'CHECKED_IN' && <small>Tạm tính</small>}
+        {booking.status === 'CHECKED_IN' && <small>{t("Tạm tính")}</small>}
       </div>
       <div className="hotel-history-actions">
         {(booking.status === 'CHECKED_IN' || booking.status === 'CHECKED_OUT') &&
-          <button type="button" className="plain" onClick={() => setFolio(booking.id)}>Chi tiết tiền phòng</button>}
+          <button type="button" className="plain" onClick={() => setFolio(booking.id)}>{t("Chi tiết tiền phòng")}</button>}
         {(booking.status === 'CHECKED_IN' || booking.status === 'RESERVED') &&
-          <button type="button" className="plain" onClick={() => setEditing(booking)}>Sửa đặt phòng</button>}
+          <button type="button" className="plain" onClick={() => setEditing(booking)}>{t("Sửa đặt phòng")}</button>}
         {canCheckIn(booking) &&
           <button type="button" className="button"
           disabled={action.pending} onClick={() => { setNotice(''); void action.send(`/hotel-bookings/${booking.id}/arrive`, undefined, { message: 'Đã nhận phòng.' }); }}>
-          Nhận phòng
+          {t("Nhận phòng")}
         </button>}
-        {booking.status === 'RESERVED' && managesHotel(role) && <button type="button" className="plain" onClick={() => setTransition({ booking, type: 'cancel' })}>Hủy đặt</button>}
+        {booking.status === 'RESERVED' && managesHotel(role) && <button type="button" className="plain" onClick={() => setTransition({ booking, type: 'cancel' })}>{t("Hủy đặt")}</button>}
         {booking.status === 'RESERVED' && (booking.endsAt ? Date.parse(booking.endsAt) <= Date.now() : today > booking.startsOn) && managesHotel(role) &&
-          <button type="button" className="plain" onClick={() => setTransition({ booking, type: 'no-show' })}>Khách không đến</button>}
-        {booking.status === 'CHECKED_IN' && <button type="button" className="button" onClick={() => setTransition({ booking, type: 'depart' })}>Thu tiền và trả phòng</button>}
+          <button type="button" className="plain" onClick={() => setTransition({ booking, type: 'no-show' })}>{t("Khách không đến")}</button>}
+        {booking.status === 'CHECKED_IN' && <button type="button" className="button" onClick={() => setTransition({ booking, type: 'depart' })}>{t("Thu tiền và trả phòng")}</button>}
       </div>
     </article>)}</div>
     <Pager page={page} full={query.data?.length === 50} onChange={setPage}/>
@@ -255,6 +259,7 @@ type DepartureBooking = Pick<Booking, 'id' | 'roomCode' | 'guestName'>;
 function BookingTransition({ booking, type, close, saved }: {
   booking: DepartureBooking | Booking; type: 'depart' | 'cancel' | 'no-show'; close: () => void; saved: (message: string) => void;
 }) {
+  const { t } = useLanguage();
   const action = useAction();
   const departure = type === 'depart';
   const quote = useData<Booking>(`/hotel-bookings/${booking.id}`, 5000, departure);
@@ -274,35 +279,37 @@ function BookingTransition({ booking, type, close, saved }: {
       });
     })}>
       {departure ? <><State query={quote}/>{current && <HotelCharges booking={current}/>}<ServicePaymentField/></> :
-        <label>Lý do<input name="reason" maxLength={120} required/></label>}
-      <button type="submit" className="button" disabled={action.pending || (departure && (current?.status !== 'CHECKED_IN' || quote.isError))}>{departure ? 'Xác nhận đã thu và trả phòng' : label}</button>
+        <label>{t("Lý do")}<input name="reason" maxLength={120} required/></label>}
+      <button type="submit" className="button" disabled={action.pending || (departure && (current?.status !== 'CHECKED_IN' || quote.isError))}>{departure ? t("Xác nhận đã thu và trả phòng") : label}</button>
     </form>{action.feedback}
   </BusinessDialog>;
 }
 
 function HotelCharges({ booking, remove }: { booking: Booking; remove?: (id: string) => void }) {
+  const { t } = useLanguage();
   const base = bookingBase(booking);
   return <div>
-    {booking.checkedInAt && <p className="muted">Nhận {date(booking.checkedInAt)}{booking.checkedOutAt && ` · Trả ${date(booking.checkedOutAt)}`}</p>}
-    {booking.overdue && booking.dueAt && <p className="badge warning">Quá giờ trả phòng · Hạn {date(booking.dueAt)}</p>}
-    <div className="list-row"><span>Tiền phòng · {base.label}</span><strong>{currency.format(base.total)}</strong></div>
+    {booking.checkedInAt && <p className="muted">{t("Nhận")} {date(booking.checkedInAt)}{booking.checkedOutAt && ` · Trả ${date(booking.checkedOutAt)}`}</p>}
+    {booking.overdue && booking.dueAt && <p className="badge warning">{t("Quá giờ trả phòng · Hạn")} {date(booking.dueAt)}</p>}
+    <div className="list-row"><span>{t("Tiền phòng ·")} {t(base.label)}</span><strong>{currency.format(base.total)}</strong></div>
     {booking.bookingType === 'HOURLY' && booking.hourlyNextRate != null && <small>
-      Giờ đầu {currency.format(booking.hourlyRate ?? 0)} · Mỗi giờ tiếp theo {currency.format(booking.nextHourRate ?? booking.hourlyNextRate)}
+      {t("Giờ đầu")} {currency.format(booking.hourlyRate ?? 0)} {t("· Mỗi giờ tiếp theo")} {currency.format(booking.nextHourRate ?? booking.hourlyNextRate)}
     </small>}
     {!!booking.overdueHours && <div className="list-row">
-      <span>Phí quá giờ · {booking.overdueHours} giờ × {currency.format(booking.nextHourRate ?? 0)}</span>
+      <span>{t("Phí quá giờ ·")} {booking.overdueHours} {t("giờ ×")} {currency.format(booking.nextHourRate ?? 0)}</span>
       <strong>{currency.format(booking.overdueAmount ?? 0)}</strong>
     </div>}
     {booking.charges?.map(charge => <div className="list-row" key={charge.id}>
       <div><strong>{charge.name}</strong><small>{charge.quantity} × {currency.format(charge.unitPrice)}</small></div>
       <div className="actions"><strong>{currency.format(charge.quantity * charge.unitPrice)}</strong>
-        {remove && <button type="button" className="plain" aria-label={`Bỏ phụ phí ${charge.name}`} onClick={() => remove(charge.id)}>Bỏ</button>}</div>
+        {remove && <button type="button" className="plain" aria-label={`Bỏ phụ phí ${charge.name}`} onClick={() => remove(charge.id)}>{t("Bỏ")}</button>}</div>
     </div>)}
-    <div className="list-row pos-total"><span>{booking.paidAt ? 'Đã thu' : 'Tổng cần thu'}</span><strong>{currency.format(booking.amount)}</strong></div>
+    <div className="list-row pos-total"><span>{booking.paidAt ? t("Đã thu") : t("Tổng cần thu")}</span><strong>{currency.format(booking.amount)}</strong></div>
   </div>;
 }
 
 function HotelFolio({ id, close }: { id: string; close: () => void }) {
+  const { t } = useLanguage();
   const { branch, role } = useBusiness();
   const path = `/hotel-bookings/${id}`;
   const query = useData<Booking>(path, 8000);
@@ -314,7 +321,7 @@ function HotelFolio({ id, close }: { id: string; close: () => void }) {
     flushSync(() => setPrinting(true));
     try { await printReceipt(); } finally { setPrinting(false); }
   }
-  return <BusinessDialog title={booking ? `Tiền phòng ${booking.roomCode}` : 'Tiền phòng'} close={close} pending={action.pending || printing}>
+  return <BusinessDialog title={booking ? `Tiền phòng ${booking.roomCode}` : t("Tiền phòng")} close={close} pending={action.pending || printing}>
     <State query={query}/>
     {booking && <>
       <p>{booking.guestName} · {bookingWindow(booking)}</p>
@@ -322,14 +329,14 @@ function HotelFolio({ id, close }: { id: string; close: () => void }) {
         void action.send(`${path}/charges/${chargeId}`, undefined, { method: 'DELETE', message: 'Đã bỏ phụ phí.' });
       } : undefined}/>
       {booking.paidAt && booking.paymentMethod && <>
-        <p className="muted">{date(booking.paidAt)} · {paymentMethodLabels[booking.paymentMethod]}</p>
-        <button type="button" className="plain" disabled={printing} onClick={() => void print()}><Printer size={17}/> In phiếu thu</button>
+        <p className="muted">{date(booking.paidAt)} · {t(paymentMethodLabels[booking.paymentMethod])}</p>
+        <button type="button" className="plain" disabled={printing} onClick={() => void print()}><Printer size={17}/> {t("In phiếu thu")}</button>
         {printing && createPortal(<article className="print-receipt bill-print">
-          <strong>{branch.name} · PHIẾU THU TIỀN PHÒNG</strong>
-          <p>Phòng {booking.roomCode} · {booking.guestName}</p>
+          <strong>{branch.name} {t("· PHIẾU THU TIỀN PHÒNG")}</strong>
+          <p>{t("Phòng")} {booking.roomCode} · {booking.guestName}</p>
           <p>{bookingWindow(booking)}</p>
           <HotelCharges booking={booking}/>
-          <p>{date(booking.paidAt)} · {paymentMethodLabels[booking.paymentMethod]}</p>
+          <p>{date(booking.paidAt)} · {t(paymentMethodLabels[booking.paymentMethod])}</p>
         </article>, document.body)}
       </>}
     </>}
@@ -337,16 +344,17 @@ function HotelFolio({ id, close }: { id: string; close: () => void }) {
       void action.send(`${path}/charges`, { name: value(form, 'name'), quantity: amount(form, 'quantity'),
         unitPrice: amount(form, 'unitPrice') }, { idempotent: true, reset: element, message: 'Đã thêm phụ phí.' });
     })}>
-      <label>Dịch vụ hoặc phụ phí<input name="name" maxLength={120} required/></label>
-      <div className="columns"><label>Số lượng<input type="number" name="quantity" min={1} max={1000} defaultValue={1} required/></label>
-        <label>Đơn giá (đ)<input type="number" name="unitPrice" min={1} max={1000000000000} required/></label></div>
-      <button type="submit" className="button" disabled={action.pending}>Thêm phụ phí</button>
+      <label>{t("Dịch vụ hoặc phụ phí")}<input name="name" maxLength={120} required/></label>
+      <div className="columns"><label>{t("Số lượng")}<input type="number" name="quantity" min={1} max={1000} defaultValue={1} required/></label>
+        <label>{t("Đơn giá (đ)")}<input type="number" name="unitPrice" min={1} max={1000000000000} required/></label></div>
+      <button type="submit" className="button" disabled={action.pending}>{t("Thêm phụ phí")}</button>
     </form>}
     {action.feedback}
   </BusinessDialog>;
 }
 
 export function HotelCalendar() {
+  const { t } = useLanguage();
   const [day, setDay] = useState(() => hotelDay());
   const [details, setDetails] = useState<string>();
   const [reserving, setReserving] = useState(false);
@@ -361,30 +369,30 @@ export function HotelCalendar() {
   }
   return <div className="hotel-desk"><HotelDeskHeader view="calendar" create={() => { setNotice(''); setReserving(true); }}/>
     {notice && <p className="success" role="status">{notice}</p>}
-    <Panel title="Lịch phòng 7 ngày" className="hotel-schedule">
+    <Panel title={t("Lịch phòng 7 ngày")} className="hotel-schedule">
     <div className="actions hotel-calendar-tools">
       <button type="button" className="plain" onClick={() => setDay(new Date(Date.parse(day) - 7 * dayMs).toISOString().slice(0, 10))}>
-        <ChevronLeft size={16} aria-hidden="true"/> Tuần trước</button>
-      <label>Xem từ ngày<input type="date" value={day} onChange={event => { if (event.target.value) setDay(event.target.value); }}/></label>
-      <button type="button" className="plain" onClick={() => setDay(hotelDay())}>Hôm nay</button>
+        <ChevronLeft size={16} aria-hidden="true"/> {t("Tuần trước")}</button>
+      <label>{t("Xem từ ngày")}<input type="date" value={day} onChange={event => { if (event.target.value) setDay(event.target.value); }}/></label>
+      <button type="button" className="plain" onClick={() => setDay(hotelDay())}>{t("Hôm nay")}</button>
       <button type="button" className="plain" onClick={() => setDay(new Date(Date.parse(day) + 7 * dayMs).toISOString().slice(0, 10))}>
-        Tuần sau <ChevronRight size={16} aria-hidden="true"/></button>
+        {t("Tuần sau")} <ChevronRight size={16} aria-hidden="true"/></button>
     </div>
     <State query={query} empty={query.data?.rooms.length === 0}/>
-    {!!query.data?.rooms.length && <div className="hotel-calendar-scroll" tabIndex={0} role="region" aria-label="Lịch phòng bảy ngày">
+    {!!query.data?.rooms.length && <div className="hotel-calendar-scroll" tabIndex={0} role="region" aria-label={t("Lịch phòng bảy ngày")}>
       <table className="hotel-calendar">
-        <thead><tr><th scope="col">Phòng</th>{days.map(date => <th scope="col" key={date} data-today={date === hotelDay()}>
+        <thead><tr><th scope="col">{t("Phòng")}</th>{days.map(date => <th scope="col" key={date} data-today={date === hotelDay()}>
           <small>{new Intl.DateTimeFormat('vi-VN', { weekday: 'short', timeZone: 'UTC' }).format(new Date(date))}</small>
           {calendarDate(date).slice(0, 5)}</th>)}</tr></thead>
         <tbody>{query.data.rooms.map(room => <tr key={room.id}>
-          <th scope="row"><strong>{room.code}</strong><small>{room.category} · {roomStates[room.state]}</small></th>
+          <th scope="row"><strong>{room.code}</strong><small>{room.category} · {t(roomStates[room.state])}</small></th>
           {days.map(date => <td key={date}>{byRoom.get(room.id)?.filter(booking => booking.startsOn <= date && (booking.status === 'CHECKED_OUT' ? date <= booking.occupiedUntil :
             date <= booking.endsOn || date <= booking.occupiedUntil))
             .map(booking => <button type="button" className={`hotel-calendar-stay ${date === booking.endsOn && date !== booking.startsOn ? 'hotel-calendar-departure' : ''}`}
               key={booking.id} data-overdue={booking.overdue || undefined} data-status={booking.status} onClick={() => setDetails(booking.id)}>
               <strong>{booking.guestName}</strong>
-              <small>{booking.overdue && date >= booking.endsOn ? 'Quá giờ trả phòng' :
-                booking.status === 'CHECKED_OUT' && date === booking.occupiedUntil ? 'Đã trả phòng' : booking.startsAt && !booking.endsAt ?
+              <small>{booking.overdue && date >= booking.endsOn ? t("Quá giờ trả phòng") :
+                booking.status === 'CHECKED_OUT' && date === booking.occupiedUntil ? t("Đã trả phòng") : booking.startsAt && !booking.endsAt ?
                 bookingStates[booking.status] : booking.startsAt && booking.endsAt && date === booking.startsOn && date === booking.endsOn ?
                 `${vietnamLocalTime(booking.startsAt).slice(11)} – ${vietnamLocalTime(booking.endsAt).slice(11)}` :
                 date === booking.endsOn ? `Trả phòng dự kiến${booking.endsAt ? ` · ${vietnamLocalTime(booking.endsAt).slice(11)}` : ''}` :

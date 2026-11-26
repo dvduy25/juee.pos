@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import Link from 'next/link';
 import { useRef, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -13,6 +14,7 @@ export function BranchAccessDialog({ member, requestedBranch, email, hasPassword
   member: Membership; requestedBranch?: string; email: string; hasPassword: boolean; close: () => void; changeAccount: () => void;
   onConfirmed: (scope: BranchSelection) => void;
 }) {
+  const { t } = useLanguage();
   const tenantId = member.tenant.id;
   const permitted = member.role === 'OWNER' || member.role === 'MANAGER';
   const branches = useQuery({ queryKey: ['branches', tenantId, false], enabled: permitted,
@@ -44,21 +46,21 @@ export function BranchAccessDialog({ member, requestedBranch, email, hasPassword
     }
   }
 
-  return <BusinessDialog title="Xác nhận chuyển chi nhánh" close={close} pending={pending}>
+  return <BusinessDialog title={t("Xác nhận chuyển chi nhánh")} close={close} pending={pending}>
     <p className="scope-dialog-business">{member.tenant.name}</p>
-    {permitted ? <State query={branches}/> : <p>Hãy dùng tài khoản chủ doanh nghiệp hoặc quản lý được giao chi nhánh này.</p>}
-    {permitted && branches.isSuccess && !branch && <p className="notice">Tài khoản này chưa được cấp quyền vào chi nhánh đã chọn.</p>}
-    {permitted && branch && !hasPassword && <p className="notice"><Link href="/dashboard/company/security" onClick={close}>Đặt mật khẩu</Link> để xác nhận chuyển chi nhánh.</p>}
+    {permitted ? <State query={branches}/> : <p>{t("Hãy dùng tài khoản chủ doanh nghiệp hoặc quản lý được giao chi nhánh này.")}</p>}
+    {permitted && branches.isSuccess && !branch && <p className="notice">{t("Tài khoản này chưa được cấp quyền vào chi nhánh đã chọn.")}</p>}
+    {permitted && branch && !hasPassword && <p className="notice"><Link href="/dashboard/company/security" onClick={close}>{t("Đặt mật khẩu")}</Link> {t("để xác nhận chuyển chi nhánh.")}</p>}
     {permitted && branch && hasPassword && <form onSubmit={confirm}>
-      {requestedBranch ? <p>Chi nhánh <strong>{branch.name}</strong></p> :
-        <label>Chi nhánh<select value={branch.id} onChange={event => { setSelection(event.target.value); setError(''); }}>
+      {requestedBranch ? <p>{t("Chi nhánh")} <strong>{branch.name}</strong></p> :
+        <label>{t("Chi nhánh")}<select value={branch.id} onChange={event => { setSelection(event.target.value); setError(''); }}>
           {branches.data?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select></label>}
-      <label>Tài khoản đang đăng nhập<input name="email" type="email" value={email} readOnly autoComplete="username"/></label>
-      <label>Mật khẩu<input name="password" type="password" required minLength={12} maxLength={128} autoComplete="current-password"/></label>
-      {error && <p className="error" role="alert">{error}</p>}
-      <button className="button" type="submit" disabled={pending}>{pending ? 'Đang xác nhận…' : 'Vào chi nhánh'}</button>
+      <label>{t("Tài khoản đang đăng nhập")}<input name="email" type="email" value={email} readOnly autoComplete="username"/></label>
+      <label>{t("Mật khẩu")}<input name="password" type="password" required minLength={12} maxLength={128} autoComplete="current-password"/></label>
+      {error && <p className="error" role="alert">{t(error)}</p>}
+      <button className="button" type="submit" disabled={pending}>{pending ? t("Đang xác nhận…") : t("Vào chi nhánh")}</button>
     </form>}
-    <button className="plain" type="button" disabled={pending} onClick={changeAccount}>Đăng nhập tài khoản khác</button>
+    <button className="plain" type="button" disabled={pending} onClick={changeAccount}>{t("Đăng nhập tài khoản khác")}</button>
   </BusinessDialog>;
 }

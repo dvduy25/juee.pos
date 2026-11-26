@@ -1,3 +1,6 @@
+'use client';
+
+import { useLanguage } from '@/i18n/language';
 import { currency } from '@/lib/format';
 
 type RetailOffer = { id: string; code: string; name: string; kind: 'PERCENT' | 'FIXED'; value: number; minimum: number; productIds?: string[] };
@@ -20,12 +23,13 @@ export function eligibleRetailOffers(offers: RetailOffer[] | undefined, lines: C
 export function RetailPromotionSelect({ offers, selected, onChange, disabled }: {
   offers: EligibleOffer[]; selected: string; onChange: (value: string) => void; disabled?: boolean;
 }) {
+  const { t } = useLanguage();
   const current = offers.find(offer => offer.id === selected || offer.code === selected);
-  return <label>Khuyến mãi
+  return <label>{t("Khuyến mãi")}
     <select value={current?.id ?? selected} disabled={disabled} onChange={event => onChange(event.target.value)}>
-      <option value="">{offers.length ? 'Không áp dụng' : 'Chưa có ưu đãi phù hợp'}</option>
-      {!current && selected && <option value={selected} disabled>Ưu đãi cũ không còn áp dụng</option>}
-      {offers.map(offer => <option key={offer.id} value={offer.id}>{offer.name} · giảm {currency.format(offer.reduction)}</option>)}
+      <option value="">{offers.length ? t("Không áp dụng") : t("Chưa có ưu đãi phù hợp")}</option>
+      {!current && selected && <option value={selected} disabled>{t("Ưu đãi cũ không còn áp dụng")}</option>}
+      {offers.map(offer => <option key={offer.id} value={offer.id}>{offer.name} {t("· giảm")} {currency.format(offer.reduction)}</option>)}
     </select>
   </label>;
 }

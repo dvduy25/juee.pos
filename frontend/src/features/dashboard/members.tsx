@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -49,48 +50,51 @@ function visitMethod(visit: Visit) {
 function MemberVisitRows({ visits, onDetails, highlight = false, showLatestProgress = false }: {
   visits: Visit[]; onDetails: (visit: Visit) => void; highlight?: boolean; showLatestProgress?: boolean;
 }) {
+  const { t } = useLanguage();
   return visits.map((visit, index) => {
     const showProgress = !!visit.progress && (highlight || (showLatestProgress && index === 0));
     return <div className="list-row service-list-row member-list-row" key={visit.id}>
       <div className="member-identity">
         <MemberPhoto memberId={visit.memberId} version={visit.photoVersion} large={highlight}/>
         <div><strong>{visit.memberName}</strong><small>{[visitMethod(visit), visit.planName].filter(Boolean).join(' · ')}</small>
-          {!showProgress && typeof visit.remaining === 'number' && <small>Còn {visit.remaining} lượt sau check-in</small>}</div>
+          {!showProgress && typeof visit.remaining === 'number' && <small>{t("Còn")} {visit.remaining} {t("lượt sau check-in")}</small>}</div>
       </div>
       <div className="member-visit-time"><time dateTime={visit.createdAt}>{date(visit.createdAt)}</time>
-        <button type="button" className="plain" aria-label={`Xem thông tin ${visit.memberName}`} onClick={() => onDetails(visit)}>Xem thông tin</button></div>
+        <button type="button" className="plain" aria-label={t("Xem thông tin {0}", visit.memberName)} onClick={() => onDetails(visit)}>{t("Xem thông tin")}</button></div>
       {showProgress && <dl className="member-visit-details member-progress"><VisitProgressFields progress={visit.progress} remaining={visit.remaining}/></dl>}
     </div>;
   });
 }
 
 function MemberVisitDetails({ visit, close }: { visit: Visit; close: () => void }) {
+  const { t } = useLanguage();
   const profile = useData<Member>(`/members/${visit.memberId}`);
   const removed = profile.error instanceof ApiError && profile.error.status === 404;
   const member = removed ? undefined : profile.data;
   const enrollment = member?.enrollment;
   const expiry = enrollment?.expiresOn ?? member?.expiresOn;
   const photoVersion = removed ? undefined : member ? member.photo?.version : visit.photoVersion;
-  return <BusinessDialog title="Thông tin check-in" close={close}>
+  return <BusinessDialog title={t("Thông tin check-in")} close={close}>
     <div className="member-identity"><MemberPhoto memberId={visit.memberId} version={photoVersion} large/>
-      <div><strong>{member?.name ?? visit.memberName}</strong>{member && <p>Mã hội viên <code>{member.code}</code></p>}</div>
+      <div><strong>{member?.name ?? visit.memberName}</strong>{member && <p>{t("Mã hội viên")} <code>{member.code}</code></p>}</div>
     </div>
     <dl className="member-visit-details">
-      <dt>Giờ check-in</dt><dd><time dateTime={visit.createdAt}>{date(visit.createdAt)}</time></dd>
-      <dt>Phương thức</dt><dd>{visitMethod(visit)}</dd>
-      {visit.planName && <><dt>Gói lúc check-in</dt><dd>{visit.planName}</dd></>}
+      <dt>{t("Giờ check-in")}</dt><dd><time dateTime={visit.createdAt}>{date(visit.createdAt)}</time></dd>
+      <dt>{t("Phương thức")}</dt><dd>{t(visitMethod(visit))}</dd>
+      {visit.planName && <><dt>{t("Gói lúc check-in")}</dt><dd>{visit.planName}</dd></>}
       <VisitProgressFields progress={visit.progress} remaining={visit.remaining}/>
-      {member && <><dt>Số điện thoại</dt><dd>{member.phone}</dd>
-        <dt>Gói hiện tại</dt><dd>{enrollment?.planName ?? member.plan ?? 'Chưa có gói'}</dd>
-        {expiry && expiry !== visit.progress?.expiresOn && <><dt>Hạn gói hiện tại</dt><dd>{expiry.split('-').reverse().join('/')}</dd></>}
-        <dt>Trạng thái hội viên</dt><dd>{statusLabels[member.accessStatus]}</dd>
+      {member && <><dt>{t("Số điện thoại")}</dt><dd>{member.phone}</dd>
+        <dt>{t("Gói hiện tại")}</dt><dd>{enrollment?.planName ?? member.plan ?? 'Chưa có gói'}</dd>
+        {expiry && expiry !== visit.progress?.expiresOn && <><dt>{t("Hạn gói hiện tại")}</dt><dd>{expiry.split('-').reverse().join('/')}</dd></>}
+        <dt>{t("Trạng thái hội viên")}</dt><dd>{t(statusLabels[member.accessStatus])}</dd>
       </>}
     </dl>
-    {removed ? <p className="muted">Hồ sơ hội viên đã được xoá.</p> : <State query={profile}/>}
+    {removed ? <p className="muted">{t("Hồ sơ hội viên đã được xoá.")}</p> : <State query={profile}/>}
   </BusinessDialog>;
 }
 
 export function MemberCheckIn() {
+  const { t } = useLanguage();
   const { role } = useBusiness();
   const allowed = receptionAllowed(role);
   const stats = useData<MemberList>('/members', 5000, allowed);
@@ -108,23 +112,23 @@ export function MemberCheckIn() {
   const latest = last && !recent.some(visit => visit.id === last.id) && (!recent[0] || last.createdAt >= recent[0].createdAt)
     ? [last, ...recent] : recent;
   const code = useRef<HTMLInputElement>(null);
-  if (!allowed) return <p className="error">Bạn không có quyền check-in hội viên.</p>;
+  if (!allowed) return <p className="error">{t("Bạn không có quyền check-in hội viên.")}</p>;
   return <div className="service-workspace">
     <div className="desk-page-title"><h1>Check-in</h1>
       <div className="actions service-tools">
         {stats.data && <div className="service-totals">
-          <span>Hội viên đủ điều kiện <strong>{stats.data.activeMembers}</strong></span>
-          <span>Lượt vào hôm nay <strong>{stats.data.visitsToday}</strong></span>
+          <span>{t("Hội viên đủ điều kiện")} <strong>{stats.data.activeMembers}</strong></span>
+          <span>{t("Lượt vào hôm nay")} <strong>{stats.data.visitsToday}</strong></span>
         </div>}
         <button type="button" className="button" onClick={() => { setRegistration(''); setAddingMember(true); }}>
-          <Plus size={17} aria-hidden="true"/> Thêm hội viên
+          <Plus size={17} aria-hidden="true"/> {t("Thêm hội viên")}
         </button>
       </div>
     </div>
     {registration && <p className="notice success" role="status">{registration}</p>}
-    <div className="service-split service-entry"><Panel title="Quét hoặc nhập mã" className="service-side">
+    <div className="service-split service-entry"><Panel title={t("Quét hoặc nhập mã")} className="service-side">
       <State query={settings}/>
-      {settings.isSuccess && !selectedMethod && <p className="notice">Check-in đang tạm tắt tại phòng.</p>}
+      {settings.isSuccess && !selectedMethod && <p className="notice">{t("Check-in đang tạm tắt tại phòng.")}</p>}
       {selectedMethod && <form onSubmit={event => submit(event, (form, element) => {
         setLast(undefined);
         void action.send<Visit>('/member-check-ins', { method: selectedMethod, code: value(form, 'code') },
@@ -134,19 +138,19 @@ export function MemberCheckIn() {
           if (!result) code.current?.select();
         });
       })}>
-        <label>Phương thức<select value={selectedMethod} onChange={event => { setMethod(event.target.value as Method); code.current?.focus(); }}>
-          {permitted.map(key => <option key={key} value={key}>{methods[key]}</option>)}
+        <label>{t("Phương thức")}<select value={selectedMethod} onChange={event => { setMethod(event.target.value as Method); code.current?.focus(); }}>
+          {permitted.map(key => <option key={key} value={key}>{t(methods[key])}</option>)}
         </select></label>
-        <label>{selectedMethod === 'MEMBER_CODE' ? 'Mã hội viên' : selectedMethod === 'CARD' ? 'Mã thẻ' : 'Mã định danh trên máy'}
+        <label>{selectedMethod === 'MEMBER_CODE' ? t("Mã hội viên") : selectedMethod === 'CARD' ? t("Mã thẻ") : t("Mã định danh trên máy")}
           <input ref={code} name="code" autoComplete="off" autoCapitalize="off" spellCheck={false} maxLength={80} required/>
         </label>
         <button type="submit" className="button" disabled={action.pending}><ScanLine size={17}/> Check-in</button>
       </form>}{action.feedback}
       {last && <MemberVisitRows visits={[last]} onDetails={setDetails} highlight/>}
-    </Panel><Panel title="Lượt vào gần đây">
+    </Panel><Panel title={t("Lượt vào gần đây")}>
       <State query={visits} empty={visits.data?.length === 0}/>
       <MemberVisitRows visits={latest.slice(0, 6)} onDetails={setDetails} showLatestProgress={latest[0]?.id !== last?.id}/>
-      <Link className="plain" href="/dashboard/member-visits">Xem lịch sử</Link>
+      <Link className="plain" href="/dashboard/member-visits">{t("Xem lịch sử")}</Link>
     </Panel></div>
     {addingMember && <MemberProfile close={() => setAddingMember(false)} onCreated={member => {
       setAddingMember(false);
@@ -157,6 +161,7 @@ export function MemberCheckIn() {
 }
 
 export function MemberDirectory({ management = false }: { management?: boolean }) {
+  const { t } = useLanguage();
   const { role } = useBusiness();
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
@@ -170,19 +175,19 @@ export function MemberDirectory({ management = false }: { management?: boolean }
   const members = useData<MemberList>(`/members?page=${page}&q=${encodeURIComponent(q)}${status ? `&status=${status}` : ''}`, 10000);
   const profile = useData<Member>(`/members/${editId}`, 10000, canEdit && !!editId);
   const edit = profile.data ?? members.data?.members.find(member => member.id === editId);
-  return <div className={canEdit && edit ? 'service-split' : ''}><Panel title="Danh sách hội viên" action={<div className="actions service-tools">
+  return <div className={canEdit && edit ? 'service-split' : ''}><Panel title={t("Danh sách hội viên")} action={<div className="actions service-tools">
     <label className="menu-search"><Search size={15} aria-hidden="true"/>
-      <input type="search" aria-label="Tìm hội viên" placeholder="Tên, số điện thoại hoặc mã" value={q} maxLength={120}
+      <input type="search" aria-label={t("Tìm hội viên")} placeholder={t("Tên, số điện thoại hoặc mã")} value={q} maxLength={120}
         onChange={event => { setQ(event.target.value); setPage(1); }}/>
     </label>
-    {!management && role === 'OWNER' && <Link className="plain" href="/dashboard/company?tab=members">Quản lý hội viên</Link>}
+    {!management && role === 'OWNER' && <Link className="plain" href="/dashboard/company?tab=members">{t("Quản lý hội viên")}</Link>}
     {receptionAllowed(role) && <button type="button" className="button" onClick={() => { setEditId(undefined); setNotice(''); setCreating(true); }}>
-      <Plus size={17} aria-hidden="true"/> Thêm hội viên
+      <Plus size={17} aria-hidden="true"/> {t("Thêm hội viên")}
     </button>}
     </div>}>
-    <label>Trạng thái gói<select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}>
-      <option value="">Tất cả trạng thái</option>
-      {Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+    <label>{t("Trạng thái gói")}<select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}>
+      <option value="">{t("Tất cả trạng thái")}</option>
+      {Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{t(label)}</option>)}
     </select></label>
     {notice && <p className="success" role="status">{notice}</p>}
     <State query={members} empty={members.data?.members.length === 0}/>
@@ -195,12 +200,12 @@ export function MemberDirectory({ management = false }: { management?: boolean }
         <small>{enrollment?.planName ?? item.plan ?? 'Chưa có gói'}
           {expiry && ` · Đến ${expiry.split('-').reverse().join('/')}`}
           {enrollment?.kind === 'VISITS' && ` · Còn ${enrollment.remaining ?? 0} lượt`}</small></div></div>
-        <div className="actions member-row-actions"><span className={`badge ${item.accessStatus === 'ACTIVE' ? '' : 'warning'}`}>{statusLabels[item.accessStatus]}</span>
+        <div className="actions member-row-actions"><span className={`badge ${item.accessStatus === 'ACTIVE' ? '' : 'warning'}`}>{t(statusLabels[item.accessStatus])}</span>
           <button type="button" className="plain" aria-haspopup="dialog" aria-label={`Xem chi tiết hội viên ${item.name}`}
-            onClick={() => setDetailsId(item.id)}>Xem chi tiết</button>
-          {canEdit && <><button type="button" className="plain" onClick={() => setEditId(item.id)}>Chỉnh sửa</button>
+            onClick={() => setDetailsId(item.id)}>{t("Xem chi tiết")}</button>
+          {canEdit && <><button type="button" className="plain" onClick={() => setEditId(item.id)}>{t("Chỉnh sửa")}</button>
             <button type="button" className="plain member-delete" aria-label={`Xoá hội viên ${item.name}`}
-              onClick={() => { setNotice(''); setDeleting(item); }}>Xoá</button></>}</div>
+              onClick={() => { setNotice(''); setDeleting(item); }}>{t("Xoá")}</button></>}</div>
       </div>;
     })}
     <Pager page={page} full={members.data?.members.length === 50} onChange={setPage}/>
@@ -227,32 +232,33 @@ export function MemberDirectory({ management = false }: { management?: boolean }
 }
 
 function MemberDetails({ memberId, close }: { memberId: string; close: () => void }) {
+  const { t } = useLanguage();
   const profile = useData<Member>(`/members/${memberId}`);
   const member = profile.isSuccess ? profile.data : undefined;
   const enrollment = member?.enrollment;
   const expiry = enrollment?.expiresOn ?? member?.expiresOn;
   const freeze = member?.accessStatus === 'FROZEN' ? member.freeze : undefined;
 
-  return <BusinessDialog title="Chi tiết hội viên" close={close}>
+  return <BusinessDialog title={t("Chi tiết hội viên")} close={close}>
     <State query={profile}/>
     {member && <>
       <div className="member-identity member-profile-heading">
         <MemberPhoto memberId={member.id} version={member.photo?.version} large/>
         <div><h3>{member.name}</h3><span className={`badge ${member.accessStatus === 'ACTIVE' ? '' : 'warning'}`}>
-          {statusLabels[member.accessStatus]}
+          {t(statusLabels[member.accessStatus])}
         </span></div>
       </div>
       <dl className="member-profile-details">
-        <dt>Mã hội viên</dt><dd><code>{member.code}</code></dd>
-        <dt>Số điện thoại</dt><dd>{member.phone}</dd>
-        {member.createdAt && <><dt>Ngày đăng ký</dt><dd><time dateTime={member.createdAt}>{date(member.createdAt)}</time></dd></>}
-        <dt>Gói hiện tại</dt><dd>{enrollment?.planName ?? member.plan ?? 'Chưa có gói'}</dd>
-        {enrollment?.startsOn && <><dt>Ngày bắt đầu gói</dt><dd><MemberDate day={enrollment.startsOn}/></dd></>}
-        {(expiry || enrollment?.kind === 'VISITS') && <><dt>Hạn gói</dt><dd>{expiry ? <MemberDate day={expiry}/> : 'Không có ngày hết hạn'}</dd></>}
-        {enrollment?.kind === 'VISITS' && <><dt>Số lượt còn lại</dt><dd>{enrollment.remaining ?? 0} lượt</dd></>}
+        <dt>{t("Mã hội viên")}</dt><dd><code>{member.code}</code></dd>
+        <dt>{t("Số điện thoại")}</dt><dd>{member.phone}</dd>
+        {member.createdAt && <><dt>{t("Ngày đăng ký")}</dt><dd><time dateTime={member.createdAt}>{date(member.createdAt)}</time></dd></>}
+        <dt>{t("Gói hiện tại")}</dt><dd>{enrollment?.planName ?? member.plan ?? 'Chưa có gói'}</dd>
+        {enrollment?.startsOn && <><dt>{t("Ngày bắt đầu gói")}</dt><dd><MemberDate day={enrollment.startsOn}/></dd></>}
+        {(expiry || enrollment?.kind === 'VISITS') && <><dt>{t("Hạn gói")}</dt><dd>{expiry ? <MemberDate day={expiry}/> : t("Không có ngày hết hạn")}</dd></>}
+        {enrollment?.kind === 'VISITS' && <><dt>{t("Số lượt còn lại")}</dt><dd>{enrollment.remaining ?? 0} {t("lượt")}</dd></>}
         {freeze && <>
-          <dt>Ngày mở lại sau bảo lưu</dt><dd><MemberDate day={freeze.resumesOn}/></dd>
-          {freeze.reason && <><dt>Lý do bảo lưu</dt><dd>{freeze.reason}</dd></>}
+          <dt>{t("Ngày mở lại sau bảo lưu")}</dt><dd><MemberDate day={freeze.resumesOn}/></dd>
+          {freeze.reason && <><dt>{t("Lý do bảo lưu")}</dt><dd>{freeze.reason}</dd></>}
         </>}
       </dl>
     </>}
@@ -264,42 +270,44 @@ function MemberDate({ day }: { day: string }) {
 }
 
 function MemberFreeze({ member }: { member: Member }) {
+  const { t } = useLanguage();
   const action = useAction();
   const frozen = member.accessStatus === 'FROZEN';
   const tomorrow = vietnamLocalTime(Date.now() + 86_400_000).slice(0, 10);
   const canResume = !!member.freeze && member.freeze.resumesOn >= tomorrow;
   if (!canResume && member.accessStatus !== 'ACTIVE') return null;
-  return <Panel title="Bảo lưu gói">
+  return <Panel title={t("Bảo lưu gói")}>
     {canResume && member.freeze ? <>
-      <p>{frozen ? 'Đang bảo lưu.' : 'Hội viên đang bị tắt quyền check-in.'} Ngày mở lại theo lịch {member.freeze.resumesOn.split('-').reverse().join('/')}.
+      <p>{frozen ? t("Đang bảo lưu.") : t("Hội viên đang bị tắt quyền check-in.")} {t("Ngày mở lại theo lịch")} {member.freeze.resumesOn.split('-').reverse().join('/')}.
         {member.freeze.reason && ` Lý do: ${member.freeze.reason}`}</p>
       <button type="button" className="plain" disabled={action.pending} onClick={() =>
-        void action.send(`/members/${member.id}/resume`, undefined, { message: 'Đã kết thúc bảo lưu.' })}>Kết thúc bảo lưu</button>
+        void action.send(`/members/${member.id}/resume`, undefined, { message: 'Đã kết thúc bảo lưu.' })}>{t("Kết thúc bảo lưu")}</button>
     </> : <form onSubmit={event => submit(event, (form, element) => void action.send(`/members/${member.id}/freeze`, {
       resumesOn: value(form, 'resumesOn'), reason: value(form, 'reason'),
     }, { reset: element, message: 'Đã bảo lưu gói.' }))}>
-      <p className="muted">Bắt đầu hôm nay. Gói có hạn sẽ được cộng số ngày bảo lưu.</p>
-      <div className="columns"><label>Ngày mở lại<input type="date" name="resumesOn" min={tomorrow} required/></label>
-        <label>Lý do<input name="reason" maxLength={120} required/></label></div>
-      <button type="submit" className="plain" disabled={action.pending}>Bảo lưu</button>
+      <p className="muted">{t("Bắt đầu hôm nay. Gói có hạn sẽ được cộng số ngày bảo lưu.")}</p>
+      <div className="columns"><label>{t("Ngày mở lại")}<input type="date" name="resumesOn" min={tomorrow} required/></label>
+        <label>{t("Lý do")}<input name="reason" maxLength={120} required/></label></div>
+      <button type="submit" className="plain" disabled={action.pending}>{t("Bảo lưu")}</button>
     </form>}{action.feedback}
   </Panel>;
 }
 
 type MemberHistoryPayment = { id: string; amount: number; method: PaymentMethod; paidAt: string; planName: string };
 function MemberHistory({ memberId }: { memberId: string }) {
+  const { t } = useLanguage();
   const [kind, setKind] = useState<'payments' | 'visits'>('visits');
   const [page, setPage] = useState(1);
   const query = useData<(Visit | MemberHistoryPayment)[]>(`/members/${memberId}/history?kind=${kind}&page=${page}`);
-  return <Panel title="Lịch sử hội viên">
-    <label>Loại lịch sử<select value={kind} onChange={event => {
+  return <Panel title={t("Lịch sử hội viên")}>
+    <label>{t("Loại lịch sử")}<select value={kind} onChange={event => {
       setKind(event.target.value === 'payments' ? 'payments' : 'visits');
       setPage(1);
-    }}><option value="visits">Check-in</option><option value="payments">Thu tiền gói</option></select></label>
+    }}><option value="visits">Check-in</option><option value="payments">{t("Thu tiền gói")}</option></select></label>
     <State query={query} empty={query.data?.length === 0}/>
     {query.data?.map(item => <div key={item.id} className="list-row">
       <div><strong>{item.planName ?? 'Gói hội viên'}</strong>
-        <small>{'paidAt' in item ? `${date(item.paidAt)} · ${paymentMethodLabels[item.method]}` : `${date(item.createdAt)} · ${visitMethod(item)}`}</small>
+        <small>{'paidAt' in item ? `${date(item.paidAt)} · ${t(paymentMethodLabels[item.method])}` : `${date(item.createdAt)} · ${visitMethod(item)}`}</small>
       </div>
       {'amount' in item && <strong>{currency.format(item.amount)}</strong>}
     </div>)}
@@ -308,13 +316,14 @@ function MemberHistory({ memberId }: { memberId: string }) {
 }
 
 function MemberDeleteDialog({ member, close, onDeleted }: { member: Member; close: () => void; onDeleted: () => void }) {
+  const { t } = useLanguage();
   const { root } = useBusiness();
   const client = useQueryClient();
   const action = useAction();
   const path = `/members/${member.id}`;
-  return <BusinessDialog title="Xoá hội viên" close={close} pending={action.pending} closeLabel="Huỷ">
-    <p>Xoá hồ sơ của <strong>{member.name}</strong> (<code>{member.code}</code>)?</p>
-    <p className="muted">Hội viên sẽ mất quyền check-in. Các lượt check-in đã ghi nhận vẫn có trong lịch sử.</p>
+  return <BusinessDialog title={t("Xoá hội viên")} close={close} pending={action.pending} closeLabel="Huỷ">
+    <p>{t("Xoá hồ sơ của")} <strong>{member.name}</strong> (<code>{member.code}</code>)?</p>
+    <p className="muted">{t("Hội viên sẽ mất quyền check-in. Các lượt check-in đã ghi nhận vẫn có trong lịch sử.")}</p>
     {action.feedback}
     <button type="button" className="button member-delete-confirm" disabled={action.pending} onClick={async () => {
       const result = await action.send(path, undefined, { method: 'DELETE' });
@@ -322,11 +331,12 @@ function MemberDeleteDialog({ member, close, onDeleted }: { member: Member; clos
       client.removeQueries({ queryKey: ['member-photo', root, member.id] });
       client.removeQueries({ queryKey: ['business', root, path], exact: true });
       onDeleted();
-    }}>{action.pending ? 'Đang xoá…' : 'Xoá hội viên'}</button>
+    }}>{action.pending ? t("Đang xoá…") : t("Xoá hội viên")}</button>
   </BusinessDialog>;
 }
 
 function MemberProfile({ member, close, onCreated }: { member?: Member; close: () => void; onCreated?: (member: Member) => void }) {
+  const { t } = useLanguage();
   const { role, mode } = useBusiness();
   const action = useAction();
   const plans = useData<Plan[]>('/member-plans', undefined, !member);
@@ -336,7 +346,7 @@ function MemberProfile({ member, close, onCreated }: { member?: Member; close: (
   const price = selectedPlan?.price ?? 0;
   const planLabel = mode === 'POOL' ? 'Gói bơi' : 'Gói tập';
   const content = <>
-    {member && <p>Mã hội viên <code>{member.code}</code></p>}
+    {member && <p>{t("Mã hội viên")} <code>{member.code}</code></p>}
     <form onSubmit={event => submit(event, form => {
       if (!member && !selectedPlan) return;
       const image = form.get('image');
@@ -354,28 +364,29 @@ function MemberProfile({ member, close, onCreated }: { member?: Member; close: (
         else if (!result && !member) void plans.refetch();
       });
     })}>
-      <label>Họ tên<input name="name" defaultValue={member?.name} maxLength={120} required/></label>
-      <label>Số điện thoại<input name="phone" type="tel" autoComplete="off" defaultValue={member?.phone} maxLength={16} required/></label>
+      <label>{t("Họ tên")}<input name="name" defaultValue={member?.name} maxLength={120} required/></label>
+      <label>{t("Số điện thoại")}<input name="phone" type="tel" autoComplete="off" defaultValue={member?.phone} maxLength={16} required/></label>
       <MemberPhotoField key={member?.photo?.version ?? 'new-photo'} member={member}/>
       {!member && <><State query={plans}/>
-        {plans.isSuccess && !activePlans.length && <p>Chưa có gói đang hoạt động tại chi nhánh. {role === 'OWNER' &&
-          <Link href="/dashboard/company?tab=member-plans">Tạo gói trong Quản lý doanh nghiệp</Link>}</p>}
-        {!!activePlans.length && <label>{planLabel}<select name="planId" value={planId} onChange={event => setPlanId(event.target.value)} required>
-          <option value="" disabled>Chọn gói</option>
+        {plans.isSuccess && !activePlans.length && <p>{t("Chưa có gói đang hoạt động tại chi nhánh.")} {role === 'OWNER' &&
+          <Link href="/dashboard/company?tab=member-plans">{t("Tạo gói trong Quản lý doanh nghiệp")}</Link>}</p>}
+        {!!activePlans.length && <label>{t(planLabel)}<select name="planId" value={planId} onChange={event => setPlanId(event.target.value)} required>
+          <option value="" disabled>{t("Chọn gói")}</option>
           {activePlans.map(plan => <option key={plan.id} value={plan.id}>{plan.name} · {planUnits(plan)} · {planPrice(plan)}</option>)}
         </select></label>}
-        {price > 0 && <><p>Phải thu <strong>{currency.format(price)}</strong></p><ServicePaymentField/></>}
+        {price > 0 && <><p>{t("Phải thu")} <strong>{currency.format(price)}</strong></p><ServicePaymentField/></>}
       </>}
-      {member && <label className="check"><input name="active" type="checkbox" defaultChecked={member.active}/> Cho phép check-in</label>}
-      <button className="button" disabled={action.pending || (!member && !selectedPlan)}>{member ? 'Lưu hồ sơ' :
-        price > 0 ? 'Xác nhận đã thu và thêm hội viên' : 'Thêm hội viên'}</button>
+      {member && <label className="check"><input name="active" type="checkbox" defaultChecked={member.active}/> {t("Cho phép check-in")}</label>}
+      <button className="button" disabled={action.pending || (!member && !selectedPlan)}>{member ? t("Lưu hồ sơ") :
+        price > 0 ? t("Xác nhận đã thu và thêm hội viên") : t("Thêm hội viên")}</button>
     </form>{action.feedback}
   </>;
-  return member ? <Panel title={member.name} action={<button type="button" className="plain" onClick={close}>Đóng hồ sơ</button>}>{content}</Panel> :
-    <BusinessDialog title="Thêm hội viên" close={close} pending={action.pending}>{content}</BusinessDialog>;
+  return member ? <Panel title={member.name} action={<button type="button" className="plain" onClick={close}>{t("Đóng hồ sơ")}</button>}>{content}</Panel> :
+    <BusinessDialog title={t("Thêm hội viên")} close={close} pending={action.pending}>{content}</BusinessDialog>;
 }
 
 function MemberPhotoField({ member }: { member?: Member }) {
+  const { t } = useLanguage();
   const [file, setFile] = useState<File>();
   const [image, setImage] = useState('');
   const [error, setError] = useState('');
@@ -387,25 +398,26 @@ function MemberPhotoField({ member }: { member?: Member }) {
     return () => URL.revokeObjectURL(url);
   }, [file]);
   return <>
-    {image && <img className="member-photo" src={image} alt="Ảnh hội viên"/>}
+    {image && <img className="member-photo" src={image} alt={t("Ảnh hội viên")}/>}
     {!image && member && version && <MemberPhoto memberId={member.id} version={version} large/>}
-    <label>{version ? 'Đổi ảnh hội viên' : 'Ảnh hội viên'}
+    <label>{version ? t("Đổi ảnh hội viên") : t("Ảnh hội viên")}
       <input name="image" type="file" accept="image/jpeg,image/png,image/webp" required={!member} onChange={event => {
         const input = event.currentTarget;
         const selected = input.files?.[0];
-        const message = selected && selected.size > 4 * 1024 * 1024 ? 'Tệp ảnh vượt quá 4 MB.' :
-          selected && !selected.size ? 'Tệp ảnh trống.' : '';
+        const message = selected && selected.size > 4 * 1024 * 1024 ? t("Tệp ảnh vượt quá 4 MB.") :
+          selected && !selected.size ? t("Tệp ảnh trống.") : '';
         input.setCustomValidity(message);
         setError(message);
         setFile(message ? undefined : selected);
       }}/>
-      <small>JPG, PNG hoặc WebP, tối đa 4 MB.</small>
+      <small>{t("JPG, PNG hoặc WebP, tối đa 4 MB.")}</small>
     </label>
-    {error && <p className="error" role="alert">{error}</p>}
+    {error && <p className="error" role="alert">{t(error)}</p>}
   </>;
 }
 
 function MemberEnrollment({ member }: { member: Member }) {
+  const { t } = useLanguage();
   const { role } = useBusiness();
   const plans = useData<Plan[]>('/member-plans');
   const action = useAction();
@@ -414,59 +426,61 @@ function MemberEnrollment({ member }: { member: Member }) {
   const selectedPlan = activePlans.find(plan => plan.id === planId);
   const price = selectedPlan?.price ?? 0;
   const frozen = !!member.freeze && member.freeze.resumesOn > vietnamLocalTime().slice(0, 10);
-  return <Panel title="Gán hoặc gia hạn gói">
+  return <Panel title={t("Gán hoặc gia hạn gói")}>
     {member.enrollment && <CurrentMemberPayment memberId={member.id} enrollment={member.enrollment} assigning={action.pending}/>}
     <State query={plans}/>
-    {plans.isSuccess && !activePlans.length && <p>Chưa có gói đang hoạt động tại chi nhánh. {role === 'OWNER' &&
-      <Link href="/dashboard/company?tab=member-plans">Tạo gói trong Quản lý doanh nghiệp</Link>}</p>}
-    {frozen && <p className="muted">Kết thúc bảo lưu để đổi hoặc gia hạn gói.</p>}
+    {plans.isSuccess && !activePlans.length && <p>{t("Chưa có gói đang hoạt động tại chi nhánh.")} {role === 'OWNER' &&
+      <Link href="/dashboard/company?tab=member-plans">{t("Tạo gói trong Quản lý doanh nghiệp")}</Link>}</p>}
+    {frozen && <p className="muted">{t("Kết thúc bảo lưu để đổi hoặc gia hạn gói.")}</p>}
     {!frozen && !!activePlans.length && <form key={member.id} onSubmit={event => submit(event, (form, element) => {
       if (!selectedPlan) return;
       void action.send(`/members/${member.id}/plan`, { planId, payment: planPayment(price, form) }, { idempotent: true, reset: element,
         message: price > 0 ? `Đã cập nhật gói và ghi nhận ${currency.format(price)}.` : 'Đã cập nhật gói hội viên.' })
         .then(result => { if (!result) void plans.refetch(); });
     })}>
-      <label>Gói hội viên<select name="plan" value={selectedPlan?.id ?? ''} onChange={event => setPlanId(event.target.value)} required>
-        <option value="">Chọn gói</option>
+      <label>{t("Gói hội viên")}<select name="plan" value={selectedPlan?.id ?? ''} onChange={event => setPlanId(event.target.value)} required>
+        <option value="">{t("Chọn gói")}</option>
         {activePlans.map(plan => <option key={plan.id} value={plan.id}>{plan.name} · {planUnits(plan)} · {planPrice(plan)}</option>)}
       </select></label>
-      <small>Cùng gói sẽ nối hạn hoặc cộng lượt. Đổi gói sẽ thay gói hiện tại.</small>
-      {price > 0 && <><p>Phải thu <strong>{currency.format(price)}</strong></p><ServicePaymentField/></>}
+      <small>{t("Cùng gói sẽ nối hạn hoặc cộng lượt. Đổi gói sẽ thay gói hiện tại.")}</small>
+      {price > 0 && <><p>{t("Phải thu")} <strong>{currency.format(price)}</strong></p><ServicePaymentField/></>}
       <button className="button" disabled={action.pending || !selectedPlan}>{price > 0 ?
-        'Xác nhận đã thu và cập nhật gói' : 'Gán / Gia hạn'}</button>
+        t("Xác nhận đã thu và cập nhật gói") : t("Gán / Gia hạn")}</button>
     </form>}{action.feedback}
   </Panel>;
 }
 
 function CurrentMemberPayment({ memberId, enrollment, assigning }: { memberId: string; enrollment: Enrollment; assigning: boolean }) {
+  const { t } = useLanguage();
   const action = useAction();
   const amount = enrollment.price;
   if (typeof amount !== 'number') return null;
-  if (!amount) return <p>Gói hiện tại miễn phí.</p>;
-  if (enrollment.paymentId) return <p className="success">Đã ghi nhận {currency.format(amount)} cho gói hiện tại.</p>;
+  if (!amount) return <p>{t("Gói hiện tại miễn phí.")}</p>;
+  if (enrollment.paymentId) return <p className="success">{t("Đã ghi nhận")} {currency.format(amount)} {t("cho gói hiện tại.")}</p>;
   const now = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 16);
   return <details className="business-details" key={enrollment.chargeId ?? enrollment.planId}>
-    <summary>Ghi nhận tiền đã thu cho gói hiện tại</summary>
+    <summary>{t("Ghi nhận tiền đã thu cho gói hiện tại")}</summary>
     <p>{enrollment.planName} · <strong>{currency.format(amount)}</strong></p>
-    <p className="muted">Dùng cho khoản đã nhận và chưa có trong Sổ quỹ. Ghi đúng thời điểm nhận tiền để tính vào kỳ báo cáo tương ứng.</p>
+    <p className="muted">{t("Dùng cho khoản đã nhận và chưa có trong Sổ quỹ. Ghi đúng thời điểm nhận tiền để tính vào kỳ báo cáo tương ứng.")}</p>
     <form onSubmit={event => submit(event, form => {
       const paidAt = new Date(`${value(form, 'paidAt')}+07:00`);
       if (!Number.isFinite(paidAt.getTime())) return;
       void action.send(`/members/${memberId}/plan-payment`, { chargeId: enrollment.chargeId ?? null, expectedAmount: amount,
         method: value(form, 'paymentMethod'), paidAt: paidAt.toISOString() }, { idempotent: true });
     })}>
-      <label>Thời điểm đã thu (giờ Việt Nam)<input type="datetime-local" name="paidAt" max={now} defaultValue={now} required/></label>
+      <label>{t("Thời điểm đã thu (giờ Việt Nam)")}<input type="datetime-local" name="paidAt" max={now} defaultValue={now} required/></label>
       <ServicePaymentField/>
-      <button className="button" disabled={action.pending || assigning}>Xác nhận đã thu</button>
+      <button className="button" disabled={action.pending || assigning}>{t("Xác nhận đã thu")}</button>
     </form>
     {action.feedback}
   </details>;
 }
 
 function MemberCredentials({ memberId }: { memberId: string }) {
+  const { t } = useLanguage();
   const codes = useData<{ method: CredentialMethod; code: string }[]>(`/members/${memberId}/credentials`);
   const action = useAction();
-  return <Panel title="Liên kết thẻ và máy nhận diện">
+  return <Panel title={t("Liên kết thẻ và máy nhận diện")}>
     <State query={codes}/>
     {codes.isSuccess && (Object.entries(credentials) as [CredentialMethod, string][]).map(([method, name]) => {
       const stored = codes.data.find(item => item.method === method)?.code;
@@ -475,20 +489,21 @@ function MemberCredentials({ memberId }: { memberId: string }) {
           { method: 'PATCH', message: 'Đã lưu liên kết.' });
       })}>
         <label>{name}<input name="code" defaultValue={stored} maxLength={80} required autoComplete="off" spellCheck={false}
-          placeholder={method === 'CARD' ? 'Quét thẻ hoặc nhập mã tự đặt' : 'Mã hồ sơ trên máy nhận diện'}/></label>
-        <div className="actions"><button className="button" disabled={action.pending}>Liên kết</button>
+          placeholder={method === 'CARD' ? t("Quét thẻ hoặc nhập mã tự đặt") : t("Mã hồ sơ trên máy nhận diện")}/></label>
+        <div className="actions"><button className="button" disabled={action.pending}>{t("Liên kết")}</button>
           {stored && <button className="plain" type="button" disabled={action.pending} onClick={() => void action.send(
-            `/members/${memberId}/credentials`, { method, code: null }, { method: 'PATCH', message: 'Đã gỡ liên kết.' })}>Gỡ</button>}</div>
+            `/members/${memberId}/credentials`, { method, code: null }, { method: 'PATCH', message: 'Đã gỡ liên kết.' })}>{t("Gỡ")}</button>}</div>
       </form>;
     })}{action.feedback}
   </Panel>;
 }
 
 export function MemberVisits() {
+  const { t } = useLanguage();
   const [page, setPage] = useState(1);
   const [details, setDetails] = useState<Visit>();
   const visits = useData<Visit[]>(`/member-visits?page=${page}`, 5000);
-  return <Panel title="Lịch sử check-in">
+  return <Panel title={t("Lịch sử check-in")}>
     <State query={visits} empty={visits.data?.length === 0}/><MemberVisitRows visits={visits.data ?? []} onDetails={setDetails}/>
     <Pager page={page} full={visits.data?.length === 50} onChange={setPage}/>
     {details && <MemberVisitDetails visit={details} close={() => setDetails(undefined)}/>}

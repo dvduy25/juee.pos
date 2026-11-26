@@ -1,10 +1,12 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Check, ClipboardList, Coffee, LocateFixed, MapPin, Minus, Plus, Search, ShoppingBag, Utensils, X } from 'lucide-react';
 import { api, ApiError, requestKey } from '@/services/api-client';
 import { currency, date } from '@/lib/format';
 import { Pager } from '@/components/business-ui';
+import { LanguageSwitch } from '@/components/language-switch';
 import { FullscreenButton } from '@/components/fullscreen-button';
 import { BuffetCharge } from '@/components/buffet-charge';
 import { salePrice } from '@/lib/sale-price';
@@ -31,6 +33,7 @@ function DishImage({ product }: { product: Product }) {
 }
 
 function DishDetails({ product, add, close, disabled, included }: { product: Product; add: (item: CartLine) => void; close: () => void; disabled: boolean; included: boolean }) {
+  const { t } = useLanguage();
   const dialog = useRef<HTMLDialogElement>(null);
   const [error, setError] = useState('');
   const [variantId, setVariantId] = useState(product.variants.find(item => !item.paused)?.id ?? '');
@@ -54,7 +57,7 @@ function DishDetails({ product, add, close, disabled, included }: { product: Pro
     for (const group of groups) {
       const selected = group.options.filter(option => modifierIds.includes(option.id));
       if (selected.length < group.minSelect || selected.length > group.maxSelect) {
-        setError(`Hãy chọn từ ${group.minSelect} đến ${group.maxSelect} mục ở nhóm ${group.name}.`);
+        setError(t("Hãy chọn từ {0} đến {1} mục ở nhóm {2}.", group.minSelect, group.maxSelect, group.name));
         return;
       }
     }
@@ -64,36 +67,46 @@ function DishDetails({ product, add, close, disabled, included }: { product: Pro
     close();
   }
   return <dialog ref={dialog} className="guest-dish-dialog card" aria-labelledby="guest-dish-name" onCancel={event => { event.preventDefault(); close(); }}>
-    <div className="guest-section-head"><h2 id="guest-dish-name">{product.name}</h2><button className="icon" type="button" onClick={close} aria-label="Đóng tùy chọn món"><X size={21}/></button></div>
+    <div className="guest-section-head"><h2 id="guest-dish-name">{product.name}</h2><button className="icon" type="button" onClick={close} aria-label={t("Đóng tùy chọn món")}><X size={21}/></button></div>
     {product.description && <p className="muted">{product.description}</p>}
     <form onSubmit={submit}>
-      {product.variants.length > 1 && <label>Phiên bản<select value={variantId} onChange={event => { setVariantId(event.target.value); setQuantity(1); }}>
-        {product.variants.map((item, index) => <option disabled={item.paused} key={item.id} value={item.id}>{foodVariantLabel(item, index)}{!included && ` · ${currency.format(salePrice(item))}`}{item.paused ? ' · Hết món' : ''}</option>)}
+      {product.variants.length > 1 && <label>{t("Phiên bản")}<select value={variantId} onChange={event => { setVariantId(event.target.value); setQuantity(1); }}>
+        {product.variants.map((item, index) => <option disabled={item.paused} key={item.id} value={item.id}>{foodVariantLabel(item, index)}{!included && ` · ${currency.format(salePrice(item))}`}{item.paused ? t("· Hết món") : ''}</option>)}
       </select></label>}
-      {groups.map(group => <fieldset key={group.id}><legend>{group.name}</legend><small>Chọn {group.minSelect === group.maxSelect ? group.maxSelect : `${group.minSelect}–${group.maxSelect}`}</small>
+      {groups.map(group => <fieldset key={group.id}><legend>{group.name}</legend><small>{t("Chọn")} {group.minSelect === group.maxSelect ? group.maxSelect : `${group.minSelect}–${group.maxSelect}`}</small>
         {group.options.map(option => <label className="check guest-option" key={option.id}><input type="checkbox" checked={modifierIds.includes(option.id)}
           onChange={event => {
             const checked = event.target.checked;
             setError('');
             setModifierIds(current => checked ? [...current, option.id] : current.filter(id => id !== option.id));
           }}/><span>{option.name}</span>{option.additionalPrice > 0 && <span>+ {currency.format(option.additionalPrice)}</span>}</label>)}</fieldset>)}
-      <label>Ghi chú<input name="note" maxLength={500} placeholder="Ví dụ ít đá"/></label>
-      {error && <p className="error" role="alert">{error}</p>}
+      <label>{t("Ghi chú")}<input name="note" maxLength={500} placeholder={t("Ví dụ ít đá")}/></label>
+      {error && <p className="error" role="alert">{t(error)}</p>}
       <div className="guest-dish-footer"><Quantity quantity={quantity} change={setQuantity}/>
-        <button className="button" disabled={disabled || !variant || variant.paused}>Thêm món{(!included || unitPrice > 0) && ` · ${currency.format(unitPrice * quantity)}`}</button></div>
+        <button className="button" disabled={disabled || !variant || variant.paused}>{t("Thêm món")}{(!included || unitPrice > 0) && ` · ${currency.format(unitPrice * quantity)}`}</button></div>
     </form>
   </dialog>;
 }
 
 function Quantity({ quantity, change, disabled = false, max = 50 }: { quantity: number; change: (value: number) => void; disabled?: boolean; max?: number }) {
+  const { t } = useLanguage();
   return <div className="guest-quantity">
-    <button type="button" className="plain" aria-label="Giảm số lượng" disabled={disabled || quantity <= 1} onClick={() => change(quantity - 1)}><Minus size={16}/></button>
-    <span aria-label="Số lượng">{quantity}</span>
-    <button type="button" className="plain" aria-label="Tăng số lượng" disabled={disabled || quantity >= max} onClick={() => change(quantity + 1)}><Plus size={16}/></button>
+    <button type="button" className="plain" aria-label={t("Giảm số lượng")} disabled={disabled || quantity <= 1} onClick={() => change(quantity - 1)}><Minus size={16}/></button>
+    <span aria-label={t("Số lượng")}>{quantity}</span>
+    <button type="button" className="plain" aria-label={t("Tăng số lượng")} disabled={disabled || quantity >= max} onClick={() => change(quantity + 1)}><Plus size={16}/></button>
   </div>;
 }
 
+export function InvalidTable() {
+  const { t } = useLanguage();
+  return <main className="landing"><div className="guest-content">
+    <LanguageSwitch/>
+    <h1>{t("Mã bàn không hợp lệ")}</h1><p>{t("Hãy quét lại mã QR tại bàn.")}</p>
+  </div></main>;
+}
+
 export function GuestOrder({ tenantId, tableToken }: { tenantId: string; tableToken: string }) {
+  const { language, t } = useLanguage();
   const [menu, setMenu] = useState<Menu>();
   const [session, setSession] = useState<Session>();
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -254,112 +267,112 @@ export function GuestOrder({ tenantId, tableToken }: { tenantId: string; tableTo
   const included = !!menu?.buffet && menu.section === 'included';
   const selected = menu?.products.find(product => product.id === selectedId);
   const qr = payment?.qr;
-  const feedback = <>{error && <p className="error" role="alert">{error}</p>}{notice && <p className="success" role="status">{notice}</p>}</>;
+  const feedback = <>{error && <p className="error" role="alert">{t(error)}</p>}{notice && <p className="success" role="status">{t(notice)}</p>}</>;
 
   return <main className="landing guest-order-page" data-theme={menu?.mode === 'CAFE' ? 'CAFE' : 'RESTAURANT'}><div className="guest-content">
     <header className="guest-header"><div className="guest-top">
       <div className="guest-venue"><span className="guest-venue-icon">{menu?.mode === 'CAFE' ? <Coffee size={22} aria-hidden="true"/> : <Utensils size={22} aria-hidden="true"/>}</span>
         <div><strong>{menu?.tenant ?? 'JUEE POS'}</strong>{menu && <small>{menu.branch}</small>}</div></div>
-      <FullscreenButton/></div>
-      <div className="guest-heading"><div><h1>{menu ? `Thực đơn · ${menu.table}` : 'Thực đơn tại bàn'}</h1>
+      <div className="access-header-tools"><LanguageSwitch/><FullscreenButton/></div></div>
+      <div className="guest-heading"><div><h1>{menu ? t("Thực đơn · {0}", menu.table) : t("Thực đơn tại bàn")}</h1>
         {menu?.buffetName && <p className="muted">{menu.buffetName}</p>}</div>
         <div className="actions business-filters">
-          {canOrder && (verified ? <span className="guest-verified"><Check size={16} aria-hidden="true"/> Đã xác nhận bàn</span> :
+          {canOrder && (verified ? <span className="guest-verified"><Check size={16} aria-hidden="true"/> {t("Đã xác nhận bàn")}</span> :
             <button type="button" className="plain guest-locate" onClick={() => void join()} disabled={busy}>
-              <LocateFixed size={17} aria-hidden="true"/> Xác nhận vị trí</button>)}
+              <LocateFixed size={17} aria-hidden="true"/> {t("Xác nhận vị trí")}</button>)}
           {session && <button className="plain" type="button" aria-haspopup="dialog" onClick={() => setOrdersOpen(true)}>
-            <ClipboardList size={17} aria-hidden="true"/> Món đã gọi{orders.length > 0 && <span className="badge">{orders.length}</span>}</button>}
+            <ClipboardList size={17} aria-hidden="true"/> {t("Món đã gọi")}{orders.length > 0 && <span className="badge">{orders.length}</span>}</button>}
         </div>
       </div>
-      {menu?.orderState === 'UNCONFIGURED' && <p className="guest-location-note"><MapPin size={16} aria-hidden="true"/> Chi nhánh chưa bật gọi món qua vị trí. Vui lòng gọi nhân viên.</p>}
-      {menu?.orderState === 'WAITING' && <p className="guest-location-note">Bàn chưa mở lượt. Bạn có thể xem thực đơn và gọi nhân viên mở bàn.</p>}
-      {billFinalized && <p className="guest-location-note">Lượt này đã chốt hóa đơn. Mở Món đã gọi để xem và thanh toán.</p>}
+      {menu?.orderState === 'UNCONFIGURED' && <p className="guest-location-note"><MapPin size={16} aria-hidden="true"/> {t("Chi nhánh chưa bật gọi món qua vị trí. Vui lòng gọi nhân viên.")}</p>}
+      {menu?.orderState === 'WAITING' && <p className="guest-location-note">{t("Bàn chưa mở lượt. Bạn có thể xem thực đơn và gọi nhân viên mở bàn.")}</p>}
+      {billFinalized && <p className="guest-location-note">{t("Lượt này đã chốt hóa đơn. Mở Món đã gọi để xem và thanh toán.")}</p>}
       {!feedbackInCart && feedback}
     </header>
-    {menuError && <div className="error" role="alert">{menuError} <button type="button" className="plain" onClick={() => setReload(count => count + 1)}>Thử lại</button></div>}
-    {!menu && menuPending && <div className="skeleton" role="status" aria-label="Đang tải thực đơn"/>}
-    {menu && <div className="columns guest-columns"><section aria-label="Danh sách món">
-      {buffet && <div className="guest-categories" role="group" aria-label="Thực đơn buffet">
-        <button className="plain" type="button" aria-pressed={section === 'included'} onClick={() => { setSection('included'); setPage(1); setCategoryId(''); setSelectedId(undefined); }}>Món trong gói</button>
-        <button className="plain" type="button" aria-pressed={section === 'extra'} onClick={() => { setSection('extra'); setPage(1); setCategoryId(''); setSelectedId(undefined); }}>Món gọi thêm có tính phí</button>
+    {menuError && <div className="error" role="alert">{menuError} <button type="button" className="plain" onClick={() => setReload(count => count + 1)}>{t("Thử lại")}</button></div>}
+    {!menu && menuPending && <div className="skeleton" role="status" aria-label={t("Đang tải thực đơn")}/>}
+    {menu && <div className="columns guest-columns"><section aria-label={t("Danh sách món")}>
+      {buffet && <div className="guest-categories" role="group" aria-label={t("Thực đơn buffet")}>
+        <button className="plain" type="button" aria-pressed={section === 'included'} onClick={() => { setSection('included'); setPage(1); setCategoryId(''); setSelectedId(undefined); }}>{t("Món trong gói")}</button>
+        <button className="plain" type="button" aria-pressed={section === 'extra'} onClick={() => { setSection('extra'); setPage(1); setCategoryId(''); setSelectedId(undefined); }}>{t("Món gọi thêm có tính phí")}</button>
       </div>}
-      <label className="guest-search"><Search size={18} aria-hidden="true"/><input aria-label="Tìm món" placeholder="Tìm món" value={search} maxLength={100}
+      <label className="guest-search"><Search size={18} aria-hidden="true"/><input aria-label={t("Tìm món")} placeholder={t("Tìm món")} value={search} maxLength={100}
         onChange={event => { setSearch(event.target.value); setPage(1); }}/></label>
-      <div className="guest-categories" aria-label="Danh mục món">
+      <div className="guest-categories" aria-label={t("Danh mục món")}>
         {[{ id: '', name: 'Tất cả' }, ...menu.categories].map(item => <button type="button" className="plain" key={item.id}
           aria-pressed={item.id === categoryId} onClick={() => { setCategoryId(item.id); setPage(1); }}>{item.name}</button>)}
       </div>
-      {menuPending || menu.section !== section ? <div className="skeleton" role="status" aria-label="Đang tải món"/> : !menuError && <>
-        {!menu.products.length && <p className="muted">Không tìm thấy món phù hợp.</p>}
+      {menuPending || menu.section !== section ? <div className="skeleton" role="status" aria-label={t("Đang tải món")}/> : !menuError && <>
+        {!menu.products.length && <p className="muted">{t("Không tìm thấy món phù hợp.")}</p>}
         <div className="guest-menu">{menu.products.map(product => {
           const availableVariants = product.variants.filter(item => !item.paused);
           const pricedVariants = availableVariants.length ? availableVariants : product.variants;
           return <article className="card guest-item" key={product.id}>
           <DishImage product={product}/><div className="guest-item-body"><h2>{product.name}</h2>
             {product.description && <p className="muted">{product.description}</p>}
-            <div className="guest-item-price"><strong>{included ? 'Trong gói buffet' : pricedVariants.length ? currency.format(Math.min(...pricedVariants.map(item => salePrice(item)))) : 'Chưa có giá'}</strong>
-              {product.variants.length > 0 && !availableVariants.length ? <span className="badge warning">Hết món</span> :
-                <button type="button" className="button" aria-label={`Chọn ${product.name}`} disabled={busy || !canOrder || !product.variants.length || cart.length >= 50} onClick={() => setSelectedId(product.id)}><Plus size={18}/></button>}</div>
+            <div className="guest-item-price"><strong>{included ? t("Trong gói buffet") : pricedVariants.length ? currency.format(Math.min(...pricedVariants.map(item => salePrice(item)))) : t("Chưa có giá")}</strong>
+              {product.variants.length > 0 && !availableVariants.length ? <span className="badge warning">{t("Hết món")}</span> :
+                <button type="button" className="button" aria-label={t("Chọn {0}", product.name)} disabled={busy || !canOrder || !product.variants.length || cart.length >= 50} onClick={() => setSelectedId(product.id)}><Plus size={18}/></button>}</div>
           </div></article>})}</div>
         {(page > 1 || menu.products.length === 50) && <Pager page={page} full={menu.products.length === 50} onChange={setPage}/>}
       </>}
-    </section><aside className="guest-sidebar" aria-label="Giỏ hàng">
+    </section><aside className="guest-sidebar" aria-label={t("Giỏ hàng")}>
       <section id="guest-cart" className="card business-panel guest-cart">
-        <h2><ShoppingBag size={19} aria-hidden="true"/> Món đang chọn {portions > 0 && <span className="badge">{portions}</span>}</h2>
-        {!cart.length && <p className="muted">Bạn chưa chọn món.</p>}
+        <h2><ShoppingBag size={19} aria-hidden="true"/> {t("Món đang chọn")} {portions > 0 && <span className="badge">{portions}</span>}</h2>
+        {!cart.length && <p className="muted">{t("Bạn chưa chọn món.")}</p>}
         <div className="guest-cart-list">{cart.map((item, index) => <div className="guest-cart-row" key={index}>
           <div><strong>{item.name}</strong>{item.options && <small>{item.options}</small>}{item.note && <small>{item.note}</small>}</div>
-          <strong>{item.included && !item.unitPrice ? 'Trong gói buffet' : currency.format(item.quantity * item.unitPrice)}</strong>
+          <strong>{item.included && !item.unitPrice ? t("Trong gói buffet") : currency.format(item.quantity * item.unitPrice)}</strong>
           <Quantity quantity={item.quantity} disabled={busy} change={quantity => setCart(lines => lines.map((line, position) => position === index ? { ...line, quantity } : line))}/>
-          <button className="plain" type="button" disabled={busy} onClick={() => setCart(lines => lines.filter((_, position) => index !== position))}>Bỏ</button>
+          <button className="plain" type="button" disabled={busy} onClick={() => setCart(lines => lines.filter((_, position) => index !== position))}>{t("Bỏ")}</button>
         </div>)}</div>
-        {cart.length > 0 && (!buffet || total > 0) && <div className="list-row guest-total">{buffet ? 'Tạm tính phụ thu' : 'Tổng tiền'} <strong>{currency.format(total)}</strong></div>}
+        {cart.length > 0 && (!buffet || total > 0) && <div className="list-row guest-total">{buffet ? t("Tạm tính phụ thu") : t("Tổng tiền")} <strong>{currency.format(total)}</strong></div>}
         <button className="button guest-send" type="button" disabled={busy || !canOrder || !cart.length} onClick={() => void send()}>
-          {busy ? 'Đang xử lý…' : 'Gửi món vào bàn'}</button>
-        {canOrder && !verified && <small className="muted">Thiết bị sẽ hỏi quyền vị trí để gửi món.</small>}
+          {busy ? t("Đang xử lý…") : t("Gửi món vào bàn")}</button>
+        {canOrder && !verified && <small className="muted">{t("Thiết bị sẽ hỏi quyền vị trí để gửi món.")}</small>}
         {feedbackInCart && feedback}
       </section>
     </aside></div>}
     {ordersOpen && <dialog ref={ordersDialog} className="guest-dish-dialog guest-orders-dialog card" aria-labelledby="guest-orders-title"
       onCancel={event => { event.preventDefault(); setOrdersOpen(false); }}>
-      <div className="guest-section-head"><h2 id="guest-orders-title">Món đã gọi của bàn</h2>
-        <button className="icon" type="button" aria-label="Đóng món đã gọi" onClick={() => setOrdersOpen(false)}><X size={21}/></button></div>
-      {!orders.length && <p className="muted">Bàn chưa gọi món.</p>}
+      <div className="guest-section-head"><h2 id="guest-orders-title">{t("Món đã gọi của bàn")}</h2>
+        <button className="icon" type="button" aria-label={t("Đóng món đã gọi")} onClick={() => setOrdersOpen(false)}><X size={21}/></button></div>
+      {!orders.length && <p className="muted">{t("Bàn chưa gọi món.")}</p>}
       {orders.map(order => <div className="guest-order" key={order.id}>
         <div className="list-row"><div><strong>{statusLabels[order.status]}</strong><small>{date(order.createdAt)}</small></div>
           {(!buffet || order.totalAmount > 0) && <strong>{currency.format(order.totalAmount)}</strong>}</div>
         {order.items.map(item => {
           const preparation = order.kitchen.find(kitchen => kitchen.orderItemId === item.id);
           const status = item.cancelReason ? 'CANCELED' : preparation?.status ?? order.status;
-          const timing = itemTiming(order.createdAt, status, preparation?.servedAt, now);
-          return <div className="list-row" key={item.id}><div>{item.name} × {item.quantity}{item.buffetIncluded && <small>Trong gói buffet</small>}</div>
+          const timing = itemTiming(order.createdAt, status, preparation?.servedAt, now, language);
+          return <div className="list-row" key={item.id}><div>{item.name} × {item.quantity}{item.buffetIncluded && <small>{t("Trong gói buffet")}</small>}</div>
             <div><small>{statusLabels[status]}</small>{item.cancelReason && <small>{item.cancelReason}</small>}
               {timing && timing !== statusLabels[status] && <small>{timing}</small>}</div></div>;
         })}
       </div>)}
         {tablePayment && (orders.length > 0 || tablePayment.buffet) && <div className="guest-payment">
           {tablePayment.buffet && <BuffetCharge buffet={tablePayment.buffet}/>}
-          <div className="list-row">Còn phải thu <strong>{currency.format(tablePayment.due)}</strong></div>
-          {tablePayment.status === 'PAID' && <p className="success" role="status">Bàn đã thanh toán.</p>}
-          {tablePayment.status === 'VOID' && <p className="notice">Hóa đơn đã hủy.</p>}
+          <div className="list-row">{t("Còn phải thu")} <strong>{currency.format(tablePayment.due)}</strong></div>
+          {tablePayment.status === 'PAID' && <p className="success" role="status">{t("Bàn đã thanh toán.")}</p>}
+          {tablePayment.status === 'VOID' && <p className="notice">{t("Hóa đơn đã hủy.")}</p>}
           {!tablePayment.status && !tablePayment.requested && (tablePayment.buffet || orders.some(order => ['PLACED', 'ACCEPTED'].includes(order.status))) &&
-            <button type="button" className="button" disabled={busy || !!cart.length} onClick={() => void pay(true)}>Yêu cầu tính tiền</button>}
-          {!tablePayment.status && tablePayment.requested && <p className="notice">Đã yêu cầu tính tiền. Nhân viên sẽ kiểm món và chốt hóa đơn của bàn.</p>}
-          {tablePayment.status === 'OPEN' && !tablePayment.qrAvailable && <p className="muted">Nhân viên sẽ thu tiền tại bàn.</p>}
-          {tablePayment.qrAvailable && <button type="button" className="button" disabled={busy} onClick={() => void pay(false)}>Thanh toán QR cho bàn</button>}
+            <button type="button" className="button" disabled={busy || !!cart.length} onClick={() => void pay(true)}>{t("Yêu cầu tính tiền")}</button>}
+          {!tablePayment.status && tablePayment.requested && <p className="notice">{t("Đã yêu cầu tính tiền. Nhân viên sẽ kiểm món và chốt hóa đơn của bàn.")}</p>}
+          {tablePayment.status === 'OPEN' && !tablePayment.qrAvailable && <p className="muted">{t("Nhân viên sẽ thu tiền tại bàn.")}</p>}
+          {tablePayment.qrAvailable && <button type="button" className="button" disabled={busy} onClick={() => void pay(false)}>{t("Thanh toán QR cho bàn")}</button>}
           {tablePayment.qrAvailable && qr && !qr.paid && qr.billId === tablePayment.billId && (tablePayment.due !== qr.amount ?
-            <p className="muted">Số tiền còn lại đã thay đổi. Bấm Thanh toán QR để lấy mã mới.</p> :
+            <p className="muted">{t("Số tiền còn lại đã thay đổi. Bấm Thanh toán QR để lấy mã mới.")}</p> :
             Date.parse(qr.expiresAt) > now ? <>
-            <img src={qr.qrUrl} alt="Mã VietQR thanh toán" width={220} height={220} referrerPolicy="no-referrer"/>
-            <a className="plain" href={qr.qrUrl} target="_blank" rel="noreferrer">Mở ảnh QR để lưu</a>
-            <dl><dt>Số tiền</dt><dd>{currency.format(qr.amount)}</dd>{qr.bankAccount.holder && <><dt>Chủ tài khoản</dt><dd>{qr.bankAccount.holder}</dd></>}
-              <dt>Mã ngân hàng</dt><dd>{qr.bankAccount.bank}</dd><dt>Số tài khoản</dt><dd>{qr.bankAccount.account}</dd><dt>Nội dung</dt><dd>{qr.reference}</dd></dl>
-            <small>Chờ nhà hàng xác nhận. QR hết hạn lúc {date(qr.expiresAt)}.</small>
-          </> : <p className="muted">Mã QR đã hết hạn. Nếu đã chuyển khoản, hãy báo nhân viên kiểm tra.</p>)}
+            <img src={qr.qrUrl} alt={t("Mã VietQR thanh toán")} width={220} height={220} referrerPolicy="no-referrer"/>
+            <a className="plain" href={qr.qrUrl} target="_blank" rel="noreferrer">{t("Mở ảnh QR để lưu")}</a>
+            <dl><dt>{t("Số tiền")}</dt><dd>{currency.format(qr.amount)}</dd>{qr.bankAccount.holder && <><dt>{t("Chủ tài khoản")}</dt><dd>{qr.bankAccount.holder}</dd></>}
+              <dt>{t("Mã ngân hàng")}</dt><dd>{qr.bankAccount.bank}</dd><dt>{t("Số tài khoản")}</dt><dd>{qr.bankAccount.account}</dd><dt>{t("Nội dung")}</dt><dd>{qr.reference}</dd></dl>
+            <small>{t("Chờ nhà hàng xác nhận. QR hết hạn lúc")} {date(qr.expiresAt)}.</small>
+          </> : <p className="muted">{t("Mã QR đã hết hạn. Nếu đã chuyển khoản, hãy báo nhân viên kiểm tra.")}</p>)}
           {payment?.error && <p className="error" role="alert">{payment.error}</p>}
         </div>}
     </dialog>}
-    {!!portions && <a className="button guest-cart-bar" href="#guest-cart"><ShoppingBag size={19}/> <span>Giỏ hàng · {portions} phần</span>{(!buffet || total > 0) && <strong>{currency.format(total)}</strong>}</a>}
+    {!!portions && <a className="button guest-cart-bar" href="#guest-cart"><ShoppingBag size={19}/> <span>{t("Giỏ hàng ·")} {portions} {t("phần")}</span>{(!buffet || total > 0) && <strong>{currency.format(total)}</strong>}</a>}
     {selected && <DishDetails key={selected.id} product={selected} close={() => setSelectedId(undefined)} disabled={busy || !canOrder || cart.length >= 50} included={included}
       add={line => setCart(items => items.length < 50 ? [...items, line] : items)}/>}
   </div></main>;

@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
@@ -12,6 +13,7 @@ type CurrentAccount = { id: string; name: string; email: string; hasPassword: bo
 const formatTime = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
 
 export function AccountSecurity() {
+  const { t } = useLanguage();
   const client = useQueryClient();
   const pathname = usePathname();
   const [busy, setBusy] = useState(false);
@@ -63,29 +65,29 @@ export function AccountSecurity() {
   }
 
   return <section className="columns section-title" id="security">
-    <div className="card"><h2><Shield size={20}/> {initialPassword ? 'Đặt mật khẩu' : 'Đổi mật khẩu'}</h2>
-      {account.isLoading && <div className="skeleton" aria-label="Đang tải tài khoản đăng nhập"/>}
+    <div className="card"><h2><Shield size={20}/> {initialPassword ? t("Đặt mật khẩu") : t("Đổi mật khẩu")}</h2>
+      {account.isLoading && <div className="skeleton" aria-label={t("Đang tải tài khoản đăng nhập")}/>}
       {account.error && <p className="error" role="alert">{account.error.message}</p>}
-      {account.data && <div className="list-row"><div><small>Tài khoản đang đăng nhập</small><strong>{account.data.name}</strong>
+      {account.data && <div className="list-row"><div><small>{t("Tài khoản đang đăng nhập")}</small><strong>{account.data.name}</strong>
         <small>{account.data.email}</small></div></div>}
-      {error && <p className="error" role="alert">{error}</p>}
+      {error && <p className="error" role="alert">{t(error)}</p>}
       {account.data && <form onSubmit={changePassword}>
-        {initialPassword ? <p className="muted">Bạn có thể đặt mật khẩu trong vòng 5 phút sau khi <Link href={'/login?' + new URLSearchParams({ next: pathname })}>đăng nhập bằng Google</Link>.</p> :
-          <label>Mật khẩu hiện tại<input name="currentPassword" type="password" autoComplete="current-password" minLength={12} maxLength={128} required/></label>}
-        <label>Mật khẩu mới<input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required/></label>
-        <label>Nhập lại mật khẩu<input name="confirm" type="password" autoComplete="new-password" minLength={12} maxLength={128} required/></label>
-        <p className="muted">Lưu mật khẩu sẽ đăng xuất tất cả phiên của bạn.</p>
-        <button className="button" disabled={busy}>{initialPassword ? 'Đặt mật khẩu' : 'Đổi mật khẩu'}</button>
+        {initialPassword ? <p className="muted">{t("Bạn có thể đặt mật khẩu trong vòng 5 phút sau khi")} <Link href={'/login?' + new URLSearchParams({ next: pathname })}>{t("đăng nhập bằng Google")}</Link>.</p> :
+          <label>{t("Mật khẩu hiện tại")}<input name="currentPassword" type="password" autoComplete="current-password" minLength={12} maxLength={128} required/></label>}
+        <label>{t("Mật khẩu mới")}<input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required/></label>
+        <label>{t("Nhập lại mật khẩu")}<input name="confirm" type="password" autoComplete="new-password" minLength={12} maxLength={128} required/></label>
+        <p className="muted">{t("Lưu mật khẩu sẽ đăng xuất tất cả phiên của bạn.")}</p>
+        <button className="button" disabled={busy}>{initialPassword ? t("Đặt mật khẩu") : t("Đổi mật khẩu")}</button>
       </form>}
     </div>
-    <div className="card"><h2>Phiên đăng nhập</h2>
-      {sessions.isLoading && <div className="skeleton" aria-label="Đang tải"/>}
+    <div className="card"><h2>{t("Phiên đăng nhập")}</h2>
+      {sessions.isLoading && <div className="skeleton" aria-label={t("Đang tải")}/>}
       {sessions.error && <p className="error" role="alert">{sessions.error.message}</p>}
       {sessions.data?.map(session => <div className="list-row" key={session.id}>
-        <div><strong>{session.current ? 'Phiên hiện tại' : 'Phiên khác'}</strong>
-          {session.createdAt && <small>Đăng nhập {formatTime.format(new Date(session.createdAt))}</small>}
-          <small>Hết hạn {formatTime.format(new Date(session.expiresAt))}</small>
-        </div><button className="plain" disabled={busy} onClick={() => void revoke(session)}>{session.current ? 'Đăng xuất' : 'Thu hồi'}</button>
+        <div><strong>{session.current ? t("Phiên hiện tại") : t("Phiên khác")}</strong>
+          {session.createdAt && <small>{t("Đăng nhập")} {formatTime.format(new Date(session.createdAt))}</small>}
+          <small>{t("Hết hạn")} {formatTime.format(new Date(session.expiresAt))}</small>
+        </div><button className="plain" disabled={busy} onClick={() => void revoke(session)}>{session.current ? t("Đăng xuất") : t("Thu hồi")}</button>
       </div>)}
     </div>
   </section>;

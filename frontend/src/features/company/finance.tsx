@@ -1,5 +1,6 @@
 'use client';
 
+import { useLanguage } from '@/i18n/language';
 import { useState } from 'react';
 import { Download, Plus, X } from 'lucide-react';
 import { BusinessDialog } from '@/components/business-dialog';
@@ -35,31 +36,34 @@ const journalLabels: Record<string, string> = {
 const expenseLabels = { STAFF: 'Tiền nhân viên', RENT: 'Tiền mặt bằng', UTILITIES: 'Điện nước', OTHER: 'Chi phí khác' };
 
 function TaxField({ initial = 0, label = 'Thuế (%)' }: { initial?: number; label?: string }) {
-  return <label>{label}<input name="tax" type="number" min={0} max={100} step={0.01} defaultValue={initial / 100} required/></label>;
+  const { t } = useLanguage();
+  return <label>{t(label)}<input name="tax" type="number" min={0} max={100} step={0.01} defaultValue={initial / 100} required/></label>;
 }
 
 function PurchaseLine({ trackExpiry, ingredient, remove }: { trackExpiry: boolean; ingredient: boolean; remove?: () => void }) {
+  const { t } = useLanguage();
   const [cost, setCost] = useState('');
   const [itemId, setItemId] = useState('');
   return <fieldset>
-    <legend>{ingredient ? 'Nguyên liệu nhập' : 'Mặt hàng nhập'}</legend>
+    <legend>{ingredient ? t("Nguyên liệu nhập") : t("Mặt hàng nhập")}</legend>
     <WarehousePicker ingredient={ingredient} onSelect={item => { setItemId(item.id); setCost(item.unitCost === undefined ? '' : String(item.unitCost)); }}/>
     <div className="form-grid form-grid-business">
-      <label>Số lượng<input name="quantity" type="number" min="0.001" max="999999999.999" step="0.001" defaultValue="1" required/></label>
-      <label>Giá nhập trước thuế (đ/đơn vị)<input name="unitCost" type="number" min="0" max="1000000000000"
+      <label>{t("Số lượng")}<input name="quantity" type="number" min="0.001" max="999999999.999" step="0.001" defaultValue="1" required/></label>
+      <label>{t("Giá nhập trước thuế (đ/đơn vị)")}<input name="unitCost" type="number" min="0" max="1000000000000"
         step="1" required value={cost} onChange={event => setCost(event.target.value)}/></label>
       <TaxField/>
-      {trackExpiry && <label>Hạn sử dụng<input key={itemId} name="expiresOn" type="date" max="9999-12-31"/></label>}
+      {trackExpiry && <label>{t("Hạn sử dụng")}<input key={itemId} name="expiresOn" type="date" max="9999-12-31"/></label>}
     </div>
-    {remove && <button className="plain" type="button" onClick={remove}><X size={15}/> Bỏ dòng</button>}
+    {remove && <button className="plain" type="button" onClick={remove}><X size={15}/> {t("Bỏ dòng")}</button>}
   </fieldset>;
 }
 
 function PurchaseForm({ close, trackExpiry, ingredient }: { close: () => void; trackExpiry: boolean; ingredient: boolean }) {
+  const { t } = useLanguage();
   const [lines, setLines] = useState([0]);
   const [number, setNumber] = useState(1);
   const action = useAction();
-  return <BusinessDialog title="Lập phiếu nhập hàng" close={close} pending={action.pending}>
+  return <BusinessDialog title={t("Lập phiếu nhập hàng")} close={close} pending={action.pending}>
     <form onSubmit={event => submit(event, form => {
       const quantities = form.getAll('quantity');
       const costs = form.getAll('unitCost');
@@ -71,31 +75,32 @@ function PurchaseForm({ close, trackExpiry, ingredient }: { close: () => void; t
           unitCost: Number(costs[index]), taxBps: Math.round(Number(rates[index]) * 100), expiresOn: expiryDates[index] || undefined })),
       }, { idempotent: true }).then(result => { if (result) close(); });
     })}>
-      <div className="columns"><label>Nhà cung cấp<input name="supplier" maxLength={120} required/></label>
-        <label>Số chứng từ<input name="reference" maxLength={120}/></label></div>
+      <div className="columns"><label>{t("Nhà cung cấp")}<input name="supplier" maxLength={120} required/></label>
+        <label>{t("Số chứng từ")}<input name="reference" maxLength={120}/></label></div>
       <ServicePaymentField neutral/>
       {lines.map(line => <PurchaseLine key={line} trackExpiry={trackExpiry} ingredient={ingredient}
         remove={lines.length > 1 ? () => setLines(lines.filter(id => id !== line)) : undefined}/>)}
       <div className="actions business-filters">
         <button type="button" className="plain" disabled={lines.length >= 30} onClick={() => {
           setLines([...lines, number]); setNumber(number + 1);
-        }}><Plus size={16}/> {ingredient ? 'Thêm dòng nguyên liệu' : 'Thêm mặt hàng'}</button>
-        <button className="button" disabled={action.pending}>Ghi nhận nhập hàng và chi tiền</button>
+        }}><Plus size={16}/> {ingredient ? t("Thêm dòng nguyên liệu") : t("Thêm mặt hàng")}</button>
+        <button className="button" disabled={action.pending}>{t("Ghi nhận nhập hàng và chi tiền")}</button>
       </div>
     </form>{action.feedback}
   </BusinessDialog>;
 }
 
 function PurchaseReceiptLines({ receipt }: { receipt: Receipt }) {
+  const { t } = useLanguage();
   return <>
-    <p className="muted">{date(receipt.createdAt)} · {paymentMethodLabels[receipt.method]}{receipt.reference && ` · ${receipt.reference}`}</p>
+    <p className="muted">{date(receipt.createdAt)} · {t(paymentMethodLabels[receipt.method])}{receipt.reference && ` · ${receipt.reference}`}</p>
     {receipt.lines.map(line => <div className="list-row" key={`${line.itemId}:${line.expiresOn ?? ''}`}><div>{line.name}<small>{line.quantity / 1000} {line.unit}</small>
       {line.expiresOn && <small>HSD {line.expiresOn.split('-').reverse().join('/')}</small>}</div>
       <div><strong>{currency.format(line.subtotal + line.taxAmount)}</strong><small>{currency.format(line.unitCost)}/{line.unit}</small>
-        <small>Thuế {currency.format(line.taxAmount)}</small></div></div>)}
-    <div className="list-row">Trước thuế <strong>{currency.format(receipt.subtotal)}</strong></div>
-    <div className="list-row">Thuế nhập <strong>{currency.format(receipt.taxAmount)}</strong></div>
-    <div className="list-row">Tổng chi <strong>{currency.format(receipt.totalAmount)}</strong></div>
+        <small>{t("Thuế")} {currency.format(line.taxAmount)}</small></div></div>)}
+    <div className="list-row">{t("Trước thuế")} <strong>{currency.format(receipt.subtotal)}</strong></div>
+    <div className="list-row">{t("Thuế nhập")} <strong>{currency.format(receipt.taxAmount)}</strong></div>
+    <div className="list-row">{t("Tổng chi")} <strong>{currency.format(receipt.totalAmount)}</strong></div>
   </>;
 }
 
@@ -105,6 +110,7 @@ function PurchaseExpenseDetail({ id }: { id: string }) {
 }
 
 export function Purchases() {
+  const { t } = useLanguage();
   const { branch } = useBusiness();
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
@@ -113,13 +119,13 @@ export function Purchases() {
   const ingredient = usesTables(branch.mode) && branch.mode !== 'HYBRID';
   const query = useData<Receipt[]>(`/purchases?page=${page}`, undefined, !catalog);
   if (catalog) return <>
-    <button type="button" className="plain" onClick={() => setCatalog(false)}>Về phiếu nhập hàng</button>
+    <button type="button" className="plain" onClick={() => setCatalog(false)}>{t("Về phiếu nhập hàng")}</button>
     <WarehouseCatalog/>
   </>;
-  return <Panel title="Phiếu nhập hàng" action={<div className="actions business-filters">
-    {inventory && <button type="button" className="plain" onClick={() => setCatalog(true)}>{ingredient ? 'Danh mục nguyên liệu' : 'Danh mục hàng kho'}</button>}
-    <CsvExport path="/purchases/export" filename="juee-nhap-hang" label="Xuất nhập hàng CSV"/>
-    <button type="button" className="button" onClick={() => setCreating(true)}><Plus size={17}/> Lập phiếu nhập</button>
+  return <Panel title={t("Phiếu nhập hàng")} action={<div className="actions business-filters">
+    {inventory && <button type="button" className="plain" onClick={() => setCatalog(true)}>{ingredient ? t("Danh mục nguyên liệu") : t("Danh mục hàng kho")}</button>}
+    <CsvExport path="/purchases/export" filename="juee-nhap-hang" label={t("Xuất nhập hàng CSV")}/>
+    <button type="button" className="button" onClick={() => setCreating(true)}><Plus size={17}/> {t("Lập phiếu nhập")}</button>
   </div>}>
     <State query={query} empty={query.data?.length === 0}/>
     {query.data?.map(item => <details className="business-details" key={item.id}><summary>
@@ -133,6 +139,7 @@ export function Purchases() {
 }
 
 export function Promotions() {
+  const { t } = useLanguage();
   const [page, setPage] = useState(1);
   const [kind, setKind] = useState('PERCENT');
   const [targeted, setTargeted] = useState(false);
@@ -152,19 +159,19 @@ export function Promotions() {
     });
   }
 
-  return <div className="service-split"><Panel title="Khuyến mãi bán lẻ">
+  return <div className="service-split"><Panel title={t("Khuyến mãi bán lẻ")}>
     <State query={query} empty={query.data?.length === 0}/>
     {query.data?.map(item => <div className="list-row service-list-row" key={item.id}>
       <div><strong>{item.name}</strong>
-        <small>{item.kind === 'PERCENT' ? `Giảm ${item.value}%` : `Giảm ${currency.format(item.value)}`} · Đơn từ {currency.format(item.minimum)}</small>
-        <small>{item.productIds ? `Áp dụng cho ${item.productIds.length} sản phẩm` : 'Áp dụng toàn đơn'}</small>
+        <small>{item.kind === 'PERCENT' ? t("Giảm {0}%", item.value) : t("Giảm {0}", currency.format(item.value))} {t("· Đơn từ")} {currency.format(item.minimum)}</small>
+        <small>{item.productIds ? t("Áp dụng cho {0} sản phẩm", item.productIds.length) : t("Áp dụng toàn đơn")}</small>
         <small>{date(item.startsAt)} → {date(item.endsAt)}</small>
       </div>
       <button type="button" className="plain" disabled={action.pending} onClick={() => void action.send(`/retail-promotions/${item.id}`,
-        { enabled: !item.enabled }, { method: 'PATCH' })}>{item.enabled ? 'Tắt' : 'Bật'}</button>
+        { enabled: !item.enabled }, { method: 'PATCH' })}>{item.enabled ? t("Tắt") : t("Bật")}</button>
     </div>)}
     <Pager page={page} full={query.data?.length === 50} onChange={setPage}/>
-  </Panel><Panel title="Tạo khuyến mãi">
+  </Panel><Panel title={t("Tạo khuyến mãi")}>
     <form onSubmit={event => submit(event, (form, element) => {
       if (targeted && !selected.size) return;
       const startsAt = new Date(`${value(form, 'from')}+07:00`);
@@ -181,20 +188,20 @@ export function Promotions() {
         setProductPage(1);
       });
     })}>
-      <label>Tên chương trình<input name="name" maxLength={120} required/></label>
-      <div className="columns"><label>Loại giảm<select value={kind} onChange={event => setKind(event.target.value)}>
-        <option value="PERCENT">Phần trăm</option><option value="FIXED">Tiền cố định</option>
-      </select></label><label>Mức giảm ({kind === 'PERCENT' ? '%' : 'đ'})<input key={kind} name="value" type="number"
+      <label>{t("Tên chương trình")}<input name="name" maxLength={120} required/></label>
+      <div className="columns"><label>{t("Loại giảm")}<select value={kind} onChange={event => setKind(event.target.value)}>
+        <option value="PERCENT">{t("Phần trăm")}</option><option value="FIXED">{t("Tiền cố định")}</option>
+      </select></label><label>{t("Mức giảm (")}{kind === 'PERCENT' ? '%' : 'đ'})<input key={kind} name="value" type="number"
         min={1} max={kind === 'PERCENT' ? 100 : 1000000000000} step={1} required/></label></div>
-      <label>Phạm vi áp dụng<select value={targeted ? 'PRODUCTS' : 'ORDER'} onChange={event => setTargeted(event.target.value === 'PRODUCTS')}>
-        <option value="ORDER">Toàn đơn</option><option value="PRODUCTS">Sản phẩm được chọn</option>
+      <label>{t("Phạm vi áp dụng")}<select value={targeted ? 'PRODUCTS' : 'ORDER'} onChange={event => setTargeted(event.target.value === 'PRODUCTS')}>
+        <option value="ORDER">{t("Toàn đơn")}</option><option value="PRODUCTS">{t("Sản phẩm được chọn")}</option>
       </select></label>
-      {targeted && <fieldset><legend>Sản phẩm áp dụng · {selected.size} đã chọn</legend>
-        {selected.size > 0 && <details className="business-details"><summary>Xem sản phẩm đã chọn</summary><div className="promotion-product-list">
+      {targeted && <fieldset><legend>{t("Sản phẩm áp dụng ·")} {selected.size} {t("đã chọn")}</legend>
+        {selected.size > 0 && <details className="business-details"><summary>{t("Xem sản phẩm đã chọn")}</summary><div className="promotion-product-list">
           {[...selected].map(([id, name]) => <div className="list-row" key={id}><span>{name}</span>
-            <button type="button" className="plain" onClick={() => selectProduct(id)}>Bỏ</button></div>)}
+            <button type="button" className="plain" onClick={() => selectProduct(id)}>{t("Bỏ")}</button></div>)}
         </div></details>}
-        <label>Tìm sản phẩm<input type="search" value={search} maxLength={100} onChange={event => { setSearch(event.target.value); setProductPage(1); }}/></label>
+        <label>{t("Tìm sản phẩm")}<input type="search" value={search} maxLength={100} onChange={event => { setSearch(event.target.value); setProductPage(1); }}/></label>
         <State query={products} empty={products.data?.length === 0}/>
         <div className="promotion-product-list">{products.data?.map(item => {
           const sku = item.variants[0]?.sku;
@@ -206,15 +213,16 @@ export function Promotions() {
         })}</div>
         {(productPage > 1 || products.data?.length === 50) && <Pager page={productPage} full={products.data?.length === 50} onChange={setProductPage}/>}
       </fieldset>}
-      <label>Đơn tối thiểu (đ)<input name="minimum" type="number" min={0} max={1000000000000} step={1} defaultValue={0} required/></label>
-      <label>Bắt đầu (giờ Việt Nam)<input name="from" type="datetime-local" required/></label>
-      <label>Kết thúc (giờ Việt Nam)<input name="to" type="datetime-local" required/></label>
-      <button className="button" disabled={action.pending || (targeted && !selected.size)}>Tạo khuyến mãi</button>
+      <label>{t("Đơn tối thiểu (đ)")}<input name="minimum" type="number" min={0} max={1000000000000} step={1} defaultValue={0} required/></label>
+      <label>{t("Bắt đầu (giờ Việt Nam)")}<input name="from" type="datetime-local" required/></label>
+      <label>{t("Kết thúc (giờ Việt Nam)")}<input name="to" type="datetime-local" required/></label>
+      <button className="button" disabled={action.pending || (targeted && !selected.size)}>{t("Tạo khuyến mãi")}</button>
     </form>{action.feedback}
   </Panel></div>;
 }
 
 export function Accounting() {
+  const { t } = useLanguage();
   const [period, setPeriod] = useState<ReportPeriod>('month');
   const [on, setOn] = useState('');
   const { branch } = useBusiness();
@@ -253,33 +261,34 @@ export function Accounting() {
         ['Chi phí vận hành', profit.cash.operatingExpenses.total], [profitLabel, profit.profitBeforeTax]] : []),
     ], `juee-ke-toan-${period}${on && period !== 'all' ? `-${on}` : ''}`);
   }
-  return <div className={retail ? 'service-split' : undefined}><Panel title="Tổng hợp chứng từ" action={<div className="actions business-filters">
+  return <div className={retail ? 'service-split' : undefined}><Panel title={t("Tổng hợp chứng từ")} action={<div className="actions business-filters">
     <ReportPeriodFields period={period} on={on} setPeriod={setPeriod} setOn={setOn}/>
-    <button className="plain" type="button" disabled={!report || profitQuery.isLoading} onClick={download}><Download size={16} aria-hidden="true"/> Xuất CSV</button>
+    <button className="plain" type="button" disabled={!report || profitQuery.isLoading} onClick={download}><Download size={16} aria-hidden="true"/> {t("Xuất CSV")}</button>
   </div>}>
     <State query={query}/>
-    {report && <div className="table-wrap"><table><thead><tr><th>Chứng từ</th><th>Số lượng</th><th>Trước thuế</th><th>Thuế</th><th>Tổng</th></tr></thead>
-      <tbody>{rows.map(row => <tr key={row.label}><th scope="row">{row.label}</th><td>{row.count}</td>
+    {report && <div className="table-wrap"><table><thead><tr><th>{t("Chứng từ")}</th><th>{t("Số lượng")}</th><th>{t("Trước thuế")}</th><th>{t("Thuế")}</th><th>{t("Tổng")}</th></tr></thead>
+      <tbody>{rows.map(row => <tr key={row.label}><th scope="row">{t(row.label)}</th><td>{row.count}</td>
         <td>{row.tax === undefined ? '—' : currency.format(row.total - row.tax)}</td>
         <td>{row.tax === undefined ? '—' : currency.format(row.tax)}</td><td>{currency.format(row.total)}</td></tr>)}</tbody></table></div>}
-    {report && <div className="list-row"><strong>Tổng chi phí vận hành</strong><strong>{currency.format(report.operatingExpenses.total)}</strong></div>}
+    {report && <div className="list-row"><strong>{t("Tổng chi phí vận hành")}</strong><strong>{currency.format(report.operatingExpenses.total)}</strong></div>}
     <State query={profitQuery}/>
-    {profit && <div className="list-row"><div><strong>{profitLabel}</strong>
-      <small>{currency.format(profit.adjustedProfit.amount)} lãi sau kiểm kê − {currency.format(profit.cash.operatingExpenses.total)} chi phí vận hành</small>
+    {profit && <div className="list-row"><div><strong>{t(profitLabel)}</strong>
+      <small>{currency.format(profit.adjustedProfit.amount)} {t("lãi sau kiểm kê −")} {currency.format(profit.cash.operatingExpenses.total)} {t("chi phí vận hành")}</small>
     </div><strong>{currency.format(profit.profitBeforeTax)}</strong></div>}
-    <p className="muted">Chi phí vận hành tính theo ngày thực chi và được trừ khi tính lợi nhuận. Cột thuế để trống với các phiếu chưa tách thuế.</p>
-    <p className="muted">Hóa đơn POS tính theo ngày lập và giá trị trước hoàn tiền.</p>
-  </Panel>{retail && <Panel title="Thuế bán lẻ">
+    <p className="muted">{t("Chi phí vận hành tính theo ngày thực chi và được trừ khi tính lợi nhuận. Cột thuế để trống với các phiếu chưa tách thuế.")}</p>
+    <p className="muted">{t("Hóa đơn POS tính theo ngày lập và giá trị trước hoàn tiền.")}</p>
+  </Panel>{retail && <Panel title={t("Thuế bán lẻ")}>
     {report && <form key={report.taxBps} onSubmit={event => submit(event, form => void action.send('/accounting/tax',
       { taxBps: Math.round(amount(form, 'tax') * 100) }, { method: 'PATCH' }))}>
-      <TaxField initial={report.taxBps} label="Thuế cộng sau giảm giá (%)"/>
-      <button className="button" disabled={action.pending}>Lưu mức thuế</button>
+      <TaxField initial={report.taxBps} label={t("Thuế cộng sau giảm giá (%)")}/>
+      <button className="button" disabled={action.pending}>{t("Lưu mức thuế")}</button>
     </form>}{action.feedback}
   </Panel>}
   </div>;
 }
 
 export function Cashbook() {
+  const { t } = useLanguage();
   const { root } = useBusiness();
   const [period, setPeriod] = useState<ReportPeriod>('month');
   const [on, setOn] = useState('');
@@ -306,47 +315,47 @@ export function Cashbook() {
     }
   }
 
-  return <div className="service-split"><Panel title="Sổ quỹ" action={<div className="actions business-filters">
+  return <div className="service-split"><Panel title={t("Sổ quỹ")} action={<div className="actions business-filters">
     <ReportPeriodFields period={period} on={on} setPeriod={value => { setPeriod(value); setPage(1); }} setOn={value => { setOn(value); setPage(1); }}/>
-    <label>Quỹ<select value={method} onChange={event => { setMethod(event.target.value); setPage(1); }}>
-      <option value="">Tất cả</option><option value="CASH">Tiền mặt</option><option value="TRANSFER">Chuyển khoản</option>
+    <label>{t("Quỹ")}<select value={method} onChange={event => { setMethod(event.target.value); setPage(1); }}>
+      <option value="">{t("Tất cả")}</option><option value="CASH">{t("Tiền mặt")}</option><option value="TRANSFER">{t("Chuyển khoản")}</option>
     </select></label>
     <button className="plain" type="button" onClick={() => void download()} disabled={!ledger || exporting}>
-      <Download size={16} aria-hidden="true"/>{exporting ? 'Đang xuất…' : 'Xuất CSV'}</button>
+      <Download size={16} aria-hidden="true"/>{exporting ? t("Đang xuất…") : t("Xuất CSV")}</button>
   </div>}>
     <State query={query} empty={ledger?.items.length === 0}/>
     {exportError && <p className="error" role="alert">{exportError}</p>}
     {ledger && <div className="company-metrics">
-      <div><small>Đầu kỳ</small><strong>{currency.format(ledger.opening)}</strong></div>
-      <div><small>Tổng thu</small><strong>{currency.format(ledger.income)}</strong></div>
-      <div><small>Tổng chi</small><strong>{currency.format(ledger.expenses)}</strong></div>
-      <div><small>Cuối kỳ</small><strong>{currency.format(ledger.closing)}</strong></div>
+      <div><small>{t("Đầu kỳ")}</small><strong>{currency.format(ledger.opening)}</strong></div>
+      <div><small>{t("Tổng thu")}</small><strong>{currency.format(ledger.income)}</strong></div>
+      <div><small>{t("Tổng chi")}</small><strong>{currency.format(ledger.expenses)}</strong></div>
+      <div><small>{t("Cuối kỳ")}</small><strong>{currency.format(ledger.closing)}</strong></div>
     </div>}
     {ledger?.items.map(item => <div className="list-row service-list-row" key={`${item.source}:${item.id}`}>
       <div><strong>{item.note}</strong><small>{item.category ?? journalLabels[item.source]} · {date(item.occurredAt)}</small>
-        <small>{item.method ? paymentMethodLabels[item.method] : 'Không rõ phương thức'}</small></div>
+        <small>{item.method ? t(paymentMethodLabels[item.method]) : t("Không rõ phương thức")}</small></div>
       <div className="actions">
         <strong>{item.direction === 'IN' ? '+' : '−'}{currency.format(item.amount)}</strong>
         {item.billId && <button type="button" className="plain" onClick={() => setSelected(item)}
-          aria-label={`Xem hóa đơn ${item.billId.slice(-8).toUpperCase()}`}>Xem hóa đơn</button>}
-        {item.source === 'MEMBER' && <button type="button" className="plain" onClick={() => setSelected(item)}>Xem phiếu thu</button>}
+          aria-label={t("Xem hóa đơn {0}", item.billId.slice(-8).toUpperCase())}>{t("Xem hóa đơn")}</button>}
+        {item.source === 'MEMBER' && <button type="button" className="plain" onClick={() => setSelected(item)}>{t("Xem phiếu thu")}</button>}
         {item.direction === 'OUT' && !item.billId && <button type="button" className="plain" onClick={() => setSelected(item)}>
-          {item.source === 'PURCHASE' ? 'Xem phiếu nhập' : item.source === 'PAYROLL' ? 'Xem phiếu lương' : 'Xem phiếu chi'}</button>}
+          {item.source === 'PURCHASE' ? t("Xem phiếu nhập") : item.source === 'PAYROLL' ? t("Xem phiếu lương") : t("Xem phiếu chi")}</button>}
       </div>
     </div>)}
     <Pager page={page} full={ledger?.items.length === 50} onChange={setPage}/>
-    {selected && <BusinessDialog title={selected.source === 'MANUAL' ? `Phiếu chi #${selected.id.slice(-8).toUpperCase()}` : journalLabels[selected.source]}
+    {selected && <BusinessDialog title={selected.source === 'MANUAL' ? t("Phiếu chi #{0}", selected.id.slice(-8).toUpperCase()) : t(journalLabels[selected.source])}
       close={() => setSelected(undefined)}>
       <div className="list-row"><div><strong>{selected.note}</strong>{selected.source !== 'PURCHASE' && selected.source !== 'PAYROLL' && <small>{date(selected.occurredAt)}</small>}
         {selected.category && <small>{selected.category}</small>}
-        {selected.source !== 'PURCHASE' && selected.source !== 'PAYROLL' && selected.method && <small>{paymentMethodLabels[selected.method]}</small>}</div>
+        {selected.source !== 'PURCHASE' && selected.source !== 'PAYROLL' && selected.method && <small>{t(paymentMethodLabels[selected.method])}</small>}</div>
         {selected.source !== 'PAYROLL' && <strong>{selected.direction === 'IN' ? '+' : '−'}{currency.format(selected.amount)}</strong>}</div>
       {selected.billId && <BillDetail key={selected.billId} id={selected.billId} cashbook/>}
       {selected.source === 'PURCHASE' && <PurchaseExpenseDetail id={selected.id}/>}
       {selected.payrollMembershipId && selected.payrollPaymentId &&
         <PayrollReceipt path={`/payroll/${selected.payrollMembershipId}/payments/${selected.payrollPaymentId}`}/>}
     </BusinessDialog>}
-  </Panel><Panel title="Ghi phiếu thu hoặc chi">
+  </Panel><Panel title={t("Ghi phiếu thu hoặc chi")}>
     <CashEntryForm saved={occurredAt => {
       if (period !== 'all') setOn(vietnamLocalTime(occurredAt).slice(0, 10));
       setPage(1);
@@ -355,6 +364,7 @@ export function Cashbook() {
 }
 
 function CashEntryForm({ saved }: { saved: (occurredAt: string) => void }) {
+  const { t } = useLanguage();
   const action = useAction();
   const [direction, setDirection] = useState('IN');
   const isExpense = direction === 'OUT';
@@ -369,19 +379,19 @@ function CashEntryForm({ saved }: { saved: (occurredAt: string) => void }) {
         if (result) saved(result.occurredAt ?? result.createdAt);
       });
     })}>
-      <label>Loại phiếu<select value={direction} onChange={event => setDirection(event.target.value)}>
+      <label>{t("Loại phiếu")}<select value={direction} onChange={event => setDirection(event.target.value)}>
         <option value="IN">Thu</option><option value="OUT">Chi</option></select></label>
       <ServicePaymentField neutral/>
-      <label>Số tiền (đ)<input name="amount" type="number" min={1} max={1000000000000} step={1} required/></label>
-      {isExpense ? <label>Nhóm chi phí<select name="expenseKind" defaultValue="OTHER" required>
-        <option value="" disabled>Chọn nhóm chi phí</option>
-        {Object.entries(expenseLabels).map(([kind, label]) => <option value={kind} key={kind}>{label}</option>)}
+      <label>{t("Số tiền (đ)")}<input name="amount" type="number" min={1} max={1000000000000} step={1} required/></label>
+      {isExpense ? <label>{t("Nhóm chi phí")}<select name="expenseKind" defaultValue="OTHER" required>
+        <option value="" disabled>{t("Chọn nhóm chi phí")}</option>
+        {Object.entries(expenseLabels).map(([kind, label]) => <option value={kind} key={kind}>{t(label)}</option>)}
       </select></label> :
-        <label>Nhóm thu<input name="category" placeholder="Ví dụ: Tiền mặt đầu kỳ" maxLength={120} required/></label>}
-      <label>{isExpense ? 'Thời điểm thực chi' : 'Thời điểm thực thu'} (giờ Việt Nam)
-        <input type="datetime-local" name="occurredAt" min="1970-01-01T07:00"/><small>Để trống để ghi nhận theo giờ hiện tại.</small></label>
-      <label>Nội dung<input name="note" maxLength={120} required/></label>
-      <button className="button" disabled={action.pending}>Ghi sổ</button>
+        <label>{t("Nhóm thu")}<input name="category" placeholder={t("Ví dụ: Tiền mặt đầu kỳ")} maxLength={120} required/></label>}
+      <label>{isExpense ? t("Thời điểm thực chi") : t("Thời điểm thực thu")} {t("(giờ Việt Nam)")}
+        <input type="datetime-local" name="occurredAt" min="1970-01-01T07:00"/><small>{t("Để trống để ghi nhận theo giờ hiện tại.")}</small></label>
+      <label>{t("Nội dung")}<input name="note" maxLength={120} required/></label>
+      <button className="button" disabled={action.pending}>{t("Ghi sổ")}</button>
     </form>{action.feedback}
   </>;
 }
