@@ -398,6 +398,7 @@ th { color: var(--muted); white-space: nowrap; font-weight: 650; background: var
 .owner-performance-table .owner-branch-name { padding-inline-start: 25px; }
 .company-split { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: start; gap: 16px; }
 .company-split > .business-panel, .company-dashboard > .business-panel { margin: 0; }
+.company-split > .business-panel:only-child { grid-column: 1 / -1; }
 .company-filters { display: flex; flex-wrap: wrap; gap: 10px; }
 .company-filters label { flex: 1 1 130px; min-width: 0; }
 .company-stock-item { border-bottom: 1px solid var(--line); }

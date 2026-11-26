@@ -133,14 +133,17 @@ function WarehouseWorkspace({ purpose }: { purpose: 'count' | 'catalog' | 'gener
   }
 
   const title = catalogOnly ? (ingredient ? t("Danh mục nguyên liệu") : t("Danh mục hàng kho")) : (ingredient ? t("Kho nguyên liệu") : t("Kho hàng"));
+  const addButton = <button type="button" className={countOnly ? 'plain' : 'button'} aria-haspopup="dialog" onClick={() => setCreating(true)}>
+    <Plus size={17} aria-hidden="true"/> {ingredient ? t("Thêm nguyên liệu") : t("Thêm mặt hàng")}
+  </button>;
   const header = <header className="company-section-head"><div><h2>{title}</h2><p>{branch.name}</p></div>
       {countOnly ? <div className="actions business-filters" role="group" aria-label={title}>
         <button type="button" className={viewingHistory ? 'plain' : 'button'} aria-pressed={!viewingHistory} onClick={() => setViewingHistory(false)}>{t("Kiểm kê")}</button>
         <button type="button" className={viewingHistory ? 'button' : 'plain'} aria-pressed={viewingHistory} onClick={() => {
           setHistoryItem(undefined); setViewingHistory(true);
         }}>{t("Lịch sử")}</button>
-        <button type="button" className="plain" onClick={() => setCreating(true)}><Plus size={17}/> {ingredient ? t("Thêm nguyên liệu") : t("Thêm mặt hàng")}</button>
-      </div> : <button className="button" type="button" onClick={() => setSelected(undefined)}><Plus size={17}/> {ingredient ? t("Thêm nguyên liệu") : t("Thêm mặt hàng")}</button>}
+        {addButton}
+      </div> : addButton}
     </header>;
   const addItem = creating && <WarehouseItemCreate close={() => setCreating(false)}/>;
   if (countOnly && viewingHistory) return <>{header}
@@ -202,7 +205,7 @@ function WarehouseWorkspace({ purpose }: { purpose: 'count' | 'catalog' | 'gener
       {selected ? <WarehouseItemAction key={`${selected.item.id}:${selected.kind}:${selected.operation}`}
         selection={selected} countOnly={countOnly} close={() => setSelected(undefined)}/> : countOnly ?
         <Panel title={t("Kiểm kê")}><p className="muted">{ingredient ? t("Chọn nguyên liệu để đối chiếu lượng dùng chế biến và lượng thực tế.") : t("Chọn mặt hàng để đối chiếu số đã xuất và số lượng thực tế.")}</p></Panel> :
-        <ItemForm close={() => setSelected(undefined)}/>}
+        null}
     </div>
     {purpose === 'general' && <MovementHistory key={historyItem?.id ?? 'all'} item={historyItem} clear={() => setHistoryItem(undefined)}/>}
     {addItem}
