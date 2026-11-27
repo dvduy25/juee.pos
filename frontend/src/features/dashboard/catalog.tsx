@@ -18,7 +18,7 @@ import { foodVariantLabel, retailVariantName, type Category, type Variant, type 
 import { salePrice } from '@/lib/sale-price';
 import { tableMenuHref, tableState, takeawayMenuHref, usesServiceCounter, usesTables, type BuffetSection, type DiningSession, type TableResponse } from '@/types/business';
 import { TableOrders, TableService, TakeawayOrders } from './sales';
-import { eligibleRetailOffers, RetailPromotionSelect, type RetailPricing } from './retail-promotions';
+import { RetailDiscountCode, useRetailDiscount } from './retail-promotions';
 import { AutoPrintSwitch, printPaidReceipt } from './receipt-print';
 
 type Cart = { product: string; productId: string; variant: Variant; quantity: number; buffetExtra?: boolean; modifierPrice: number; modifierIds: string[]; options: string; key: string };
@@ -67,8 +67,6 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
   const [showTakeawayOrders, setShowTakeawayOrders] = useState(openTakeawayOrders);
   const [dish, setDish] = useState<{ product: Product; variant: Variant }>();
   const [dishError, setDishError] = useState('');
-  const [discount, setDiscount] = useState(0);
-  const [promotionId, setPromotionId] = useState('');
   const [customer, setCustomer] = useState('');
   const [selectedTable, setSelectedTable] = useState({ id: productType === 'FOOD' ? initialTable : '', session: productType === 'FOOD' ? expectedSession : '' });
   const [packageId, setPackageId] = useState('');
@@ -80,7 +78,6 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
   const action = useAction();
   const serviceChange = useAction();
   const categories = useData<Category[]>('/categories');
-  const pricing = useData<RetailPricing>('/retail-pricing', 15000, !food);
   const customers = useData<{ id: string; name: string; phone: string }[]>('/customers', undefined, productType !== 'FOOD' && !staffMode);
   const tables = useData<TableResponse>('/tables', 6000, food);
   const takeaways = useData<DiningSession[]>('/takeaway-sessions', 6000, takeaway || (atTable && !!selectedTable.session));
@@ -139,17 +136,14 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
   const isIncluded = (id: string, extra?: boolean) => buffet && (activeService?.buffetProductIds ? activeService.buffetProductIds.includes(id) : !extra);
   const cartUnitPrice = (item: Cart) => salePrice(item.variant, isIncluded(item.productId, item.buffetExtra)) + item.modifierPrice;
   const subtotal = cart.reduce((total, line) => total + line.quantity * cartUnitPrice(line), 0);
-  const offers = eligibleRetailOffers(pricing.data?.offers, cart.map(line => ({ ...line, unitPrice: cartUnitPrice(line) })), subtotal);
-  const promotion = offers.find(offer => offer.id === promotionId);
-  const validAmount = Number.isSafeInteger(subtotal) && Number.isSafeInteger(discount) && discount >= 0 && discount <= subtotal;
-  const promotionError = !!promotionId && !promotion;
-  const reduction = promotion?.reduction ?? discount;
+  const discount = useRetailDiscount(cart.map(line => ({ ...line, unitPrice: cartUnitPrice(line) })), subtotal, !food);
+  const { pricing, promotion, reduction } = discount;
+  const validAmount = Number.isSafeInteger(subtotal);
   const tax = food || !validAmount ? 0 :
     Number((BigInt(subtotal - reduction) * BigInt(pricing.data?.taxBps ?? 0) + 5000n) / 10000n);
   const total = subtotal - reduction + tax;
-  const canDiscount = ['OWNER', 'MANAGER'].includes(role);
   const canCheckout = cart.length > 0 && !sizeChoice && canSelectItems && (!atTable || !!currentSession) &&
-    !scanPending && validAmount && Number.isSafeInteger(total) && (food || (!!pricing.data && !pricing.error && !promotionError));
+    !scanPending && validAmount && Number.isSafeInteger(total) && (food || discount.ready);
 
   async function selectService(id: string) {
     if (unsentItems) return;
@@ -239,14 +233,13 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
     if (!canCheckout || scanning.current) return;
     const payload = { items: cart.map(item => ({ variantId: item.variant.id, quantity: item.quantity, modifierIds: item.modifierIds })), productType,
       tableId: atTable ? tableId : undefined, tableSessionId: currentSession, serviceMode: takeaway ? 'TAKEAWAY' : undefined,
-      discountAmount: discount, customerId: customer || undefined,
-      promotionId: food ? undefined : promotion?.id, expectedTotal: atTable ? undefined : total };
+      customerId: customer || undefined, promotionCode: food ? undefined : promotion?.code, expectedTotal: atTable ? undefined : total };
     const result = cash
       ? await action.send<NonNullable<typeof receipt>>('/checkout', { ...payload, method: 'CASH' }, { idempotent: true, message: 'Đã thu tiền mặt.' })
       : await action.send<{ id: string; tableSessionId?: string }>('/orders', payload, { idempotent: true, message: takeaway ? 'Đã gửi món mang về.' :
         atTable ? `Đã thêm món vào ${table?.name} và chuyển bếp.` : 'Đã tạo đơn chờ thanh toán. Mở Đơn hàng để lập hóa đơn.' });
     if (result) {
-      setCart([]); setDiscount(0); setCustomer(''); setPromotionId('');
+      setCart([]); discount.clear(); setCustomer('');
       if ('bill' in result) {
         setPrintError(false);
         flushSync(() => setReceipt(result));
@@ -320,7 +313,9 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
       {item.images[0] && <img src={item.images[0]} alt="" loading="lazy"/>}<strong>{item.name}</strong>
       {item.variants.map((variant, index) => <button type="button" className="plain" disabled={!canSelectItems || variant.paused} key={variant.id} onClick={() => choose(item, variant)}>
         <span>{productType === 'FOOD' ? foodVariantLabel(variant, index) : [variant.sku, variant.attributes?.size, variant.attributes?.color].filter(Boolean).join(' ')}</span>
-        <strong>{isIncluded(item.id, item.buffetExtra) ? t("Trong gói buffet") : currency.format(salePrice(variant))}</strong>
+        <strong>{isIncluded(item.id, item.buffetExtra) ? t("Trong gói buffet") : currency.format(salePrice(variant))}
+          {!food && variant.retailPrice !== undefined && variant.retailPrice < (variant.branchPrice ?? variant.basePrice) &&
+            <del>{currency.format(variant.branchPrice ?? variant.basePrice)}</del>}</strong>
         {!variant.paused && <Plus size={19} aria-hidden="true"/>}
         {variant.paused && <small>{productType === 'FOOD' ? t("Hết món") : item.stock !== undefined && item.stock < 1000 ? t("Hết hàng") : t("Tạm ngừng bán")}</small>}</button>)}
     </article>)}</div>
@@ -373,13 +368,9 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
     </div>
     {productType !== 'FOOD' && !staffMode && <label>{t("Khách hàng")}<select value={customer} onChange={event => setCustomer(event.target.value)}><option value="">{t("Khách lẻ")}</option>
       {customers.data?.map(item => <option key={item.id} value={item.id}>{item.name} · {item.phone}</option>)}</select></label>}
-    {!food && canDiscount && <label>{t("Giảm giá (đ)")}<input value={discount} onChange={event => setDiscount(Number(event.target.value))}
-      type="number" min="0" max={subtotal} step="1" disabled={action.pending || !!promotionId}/></label>}
     {!food && <>
-      <RetailPromotionSelect offers={offers} selected={promotionId} disabled={action.pending || !pricing.data}
-        onChange={id => { setPromotionId(id); if (id) setDiscount(0); }}/>
+      <RetailDiscountCode discount={discount} disabled={action.pending}/>
       <State query={pricing}/>
-      {promotionError && <p className="error" role="alert">{t("Ưu đãi đã chọn không còn áp dụng cho giỏ hàng. Hãy chọn lại.")}</p>}
       {!!reduction && <div className="list-row"><span>{promotion?.name ?? 'Giảm giá'}</span><strong>−{currency.format(reduction)}</strong></div>}
       {!!tax && <div className="list-row"><span>{t("Thuế")}</span><strong>{currency.format(tax)}</strong></div>}
     </>}

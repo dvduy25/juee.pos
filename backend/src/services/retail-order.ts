@@ -5,7 +5,7 @@ import { logChange, recordEvent, type Scope } from '../middleware/business-acces
 import { Bill, Order, Payment, PaymentIntent } from '../models';
 import { found } from '../utils/db';
 import type { editRetailOrderInput } from '../validators/sales';
-import { retailAmounts, retailPricing } from './retail';
+import { requireDiscountCode, retailAmounts, retailPricing } from './retail';
 import { issueOrderStock, prepareOrderItems, restoreOrderStock } from './sales';
 import { sliceStockLots } from './stock-lots';
 import { warehouseRetailCancelReturn, warehouseRetailEditReturn } from './warehouse';
@@ -65,6 +65,7 @@ export async function cancelRetailOrder(scope: Scope, order: OrderDocument, bill
 
 export async function updateRetailOrder(scope: Scope, order: OrderDocument, bill: BillDocument | null,
   actorId: string, input: EditInput, session: ClientSession, localRetail = false) {
+  requireDiscountCode(input);
   if (order.items.some(item => item.returnedQuantity || item.cancelReason)) {
     throw new ConflictException('Đơn đã có hàng trả lại hoặc dòng bị hủy.');
   }
@@ -97,9 +98,9 @@ export async function updateRetailOrder(scope: Scope, order: OrderDocument, bill
     return { ...original, quantity, stockLots };
   });
   const subtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const { taxBps, promotion } = await retailPricing(scope, { promotionId: input.promotionId }, session);
-  if (input.promotionId && !promotion) throw new ConflictException('Khuyến mãi không còn hiệu lực.');
-  const totals = retailAmounts(subtotal, input.discountAmount, taxBps, promotion, items);
+  const { taxBps, promotion } = await retailPricing(scope, input.promotionCode, session);
+  if (input.promotionCode && !promotion) throw new ConflictException('Mã giảm giá không hợp lệ hoặc đã hết hạn.');
+  const totals = retailAmounts(subtotal, 0, taxBps, promotion, items);
   if (input.expectedTotal !== undefined && totals.totalAmount !== input.expectedTotal) {
     throw new ConflictException('Giá, thuế hoặc khuyến mãi vừa thay đổi. Hãy kiểm tra lại tổng tiền.');
   }

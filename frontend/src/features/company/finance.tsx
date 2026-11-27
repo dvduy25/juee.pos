@@ -23,7 +23,7 @@ type AccountingRow = Pick<Totals, 'count' | 'total'> & { label: string; tax?: nu
 type Receipt = { id: string; supplier: string; reference?: string; createdAt: string; method: PaymentMethod; totalAmount: number;
   subtotal: number; taxAmount: number; lines: { itemId: string; name: string; unit: string; quantity: number; unitCost: number; subtotal: number; taxAmount: number;
     expiresOn?: string | null }[] };
-type Promotion = { id: string; name: string; kind: 'PERCENT' | 'FIXED'; value: number; minimum: number;
+type Promotion = { id: string; name: string; code: string; kind: 'PERCENT' | 'FIXED'; value: number; minimum: number;
   startsAt: string; endsAt: string; enabled: boolean; productIds?: string[] };
 type JournalEntry = { id: string; occurredAt: string; direction: 'IN' | 'OUT'; method?: PaymentMethod; amount: number;
   note: string; source: string; category?: string; billId?: string; payrollPaymentId?: string; payrollMembershipId?: string };
@@ -163,6 +163,7 @@ export function Promotions() {
     <State query={query} empty={query.data?.length === 0}/>
     {query.data?.map(item => <div className="list-row service-list-row" key={item.id}>
       <div><strong>{item.name}</strong>
+        <small>{t("Mã giảm giá cho khách")} <code>{item.code}</code></small>
         <small>{item.kind === 'PERCENT' ? t("Giảm {0}%", item.value) : t("Giảm {0}", currency.format(item.value))} {t("· Đơn từ")} {currency.format(item.minimum)}</small>
         <small>{item.productIds ? t("Áp dụng cho {0} sản phẩm", item.productIds.length) : t("Áp dụng toàn đơn")}</small>
         <small>{date(item.startsAt)} → {date(item.endsAt)}</small>
@@ -177,7 +178,7 @@ export function Promotions() {
       const startsAt = new Date(`${value(form, 'from')}+07:00`);
       const endsAt = new Date(`${value(form, 'to')}+07:00`);
       if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime())) return;
-      void action.send('/retail-promotions', { name: value(form, 'name'), kind,
+      void action.send('/retail-promotions', { name: value(form, 'name'), code: value(form, 'code'), kind,
         value: amount(form, 'value'), minimum: amount(form, 'minimum'), startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), enabled: true,
         ...(targeted ? { productIds: [...selected.keys()] } : {}) }, { reset: element }).then(result => {
         if (!result) return;
@@ -189,6 +190,7 @@ export function Promotions() {
       });
     })}>
       <label>{t("Tên chương trình")}<input name="name" maxLength={120} required/></label>
+      <label>{t("Mã giảm giá cho khách")}<input name="code" maxLength={30} placeholder="KHACHQUEN10" autoCapitalize="characters" autoComplete="off" required/></label>
       <div className="columns"><label>{t("Loại giảm")}<select value={kind} onChange={event => setKind(event.target.value)}>
         <option value="PERCENT">{t("Phần trăm")}</option><option value="FIXED">{t("Tiền cố định")}</option>
       </select></label><label>{t("Mức giảm (")}{kind === 'PERCENT' ? '%' : 'đ'})<input key={kind} name="value" type="number"

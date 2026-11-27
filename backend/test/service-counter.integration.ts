@@ -88,6 +88,7 @@ test('service branches sell warehouse goods from reception and account for them 
       let checkoutItems = [{ variantId, quantity: 2 }];
       let expectedTotal = 24000;
       let expectedNames = ['Nước suối'];
+      let promotionCode: string | undefined;
       const sizes = `${root}/retail-products/${listing.id}/sizes`;
       if (index === 0) {
         const sizeKey = randomUUID();
@@ -103,7 +104,7 @@ test('service branches sell warehouse goods from reception and account for them 
         ]);
         assert.deepEqual(collisions.map(response => response.status).sort(), [201, 409]);
         await expectJson(await request(`${root}/retail-products/${listing.id}`, 'PATCH',
-          { price: 13000, description: 'Cỡ chuẩn' }, owner), 200);
+          { price: 13000, description: 'Cỡ chuẩn', retailDiscountPercent: 10 }, owner), 200);
         const lookedUp = await expectJson(await request(`${root}/products?code=8930123456789&productType=RETAIL`, 'GET', undefined, owner), 200);
         assert.equal(lookedUp.length, 1);
         assert.equal(lookedUp[0].variants[0].id, variantId);
@@ -111,11 +112,17 @@ test('service branches sell warehouse goods from reception and account for them 
         const prices = new Map(lookedUp[0].variants.map((row: { attributes: { size: string }; basePrice: number }) => [row.attributes.size, row.basePrice]));
         assert.equal(prices.get('M'), 13000);
         assert.equal(prices.get('L'), 16000);
+        assert.equal(lookedUp[0].variants.find((row: { id: string }) => row.id === largeVariant.id).retailPrice, 14400);
+        promotionCode = 'QUAY1900';
+        await expectJson(await request(`${root}/retail-promotions`, 'POST', { code: promotionCode, name: 'Voucher tại quầy',
+          kind: 'FIXED', value: 1900, minimum: 20000, productIds: [listing.id], enabled: true,
+          startsAt: new Date(Date.now() - 60000).toISOString(), endsAt: new Date(Date.now() + 600000).toISOString() }, owner));
         checkoutItems = [{ variantId, quantity: 1 }, { variantId: largeVariant.id, quantity: 1 }];
-        expectedTotal = 29000;
+        expectedTotal = 24200;
         expectedNames = ['Nước suối · M', 'Nước suối · L'];
       }
-      const checkout = { method: 'CASH', productType: 'RETAIL', items: checkoutItems, expectedTotal };
+      const checkout = { method: 'CASH', productType: 'RETAIL', items: checkoutItems, expectedTotal, promotionCode };
+      assert.equal((await request(`${root}/checkout`, 'POST', { ...checkout, discountAmount: 1000 }, owner)).status, 409);
       assert.equal((await request(`${root}/checkout`, 'POST',
         { ...checkout, items: [{ variantId: sharedSku.id, quantity: 1 }] }, owner)).status, 404);
 
@@ -128,6 +135,10 @@ test('service branches sell warehouse goods from reception and account for them 
       const paid = await expectJson(await sell());
       assert.equal(paid.bill.status, 'PAID');
       assert.equal(paid.bill.totalAmount, expectedTotal);
+      if (promotionCode) {
+        assert.deepEqual(paid.order.items.map((line: { unitPrice: number }) => line.unitPrice), [11700, 14400]);
+        assert.equal(paid.bill.discountAmount, 1900);
+      }
       assert.equal((await expectJson(await sell())).bill.id, paid.bill.id);
       assert.equal((await WarehouseItem.findById(item.id).lean())?.onHand, 3000);
       const orders = await expectJson(await request(`${root}/orders`, 'GET', undefined, cashier), 200);

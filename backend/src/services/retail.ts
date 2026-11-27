@@ -15,17 +15,19 @@ function activeOffers(scope: Scope, now = new Date()) {
   return { ...scope, enabled: true, startsAt: { $lte: now }, endsAt: { $gt: now } };
 }
 
-export function availableRetailPromotions(scope: Scope) {
-  return RetailPromotion.find(activeOffers(scope)).select(offerFields).sort('name _id').lean();
-}
-
-export async function retailPricing(scope: Scope, selection: { code?: string; promotionId?: string } = {}, session?: ClientSession) {
-  const { code, promotionId } = selection;
-  const filter = promotionId ? { _id: promotionId } : { code };
+export async function retailPricing(scope: Scope, code?: string, session?: ClientSession) {
   const branch = await Branch.findOne({ _id: scope.branchId, tenantId: scope.tenantId }).select('retailTaxBps').session(session ?? null).lean();
-  const promotion = (code || promotionId) && await RetailPromotion.findOne({ ...activeOffers(scope), ...filter })
+  const promotion = code && await RetailPromotion.findOne({ ...activeOffers(scope), code })
     .select(offerFields).session(session ?? null).lean();
   return { taxBps: found(branch).retailTaxBps ?? 0, promotion: promotion || null };
+}
+
+export function retailProductPrice(price: number, discountPercent?: number | null) {
+  return discountPercent ? price - Number(BigInt(price) * BigInt(discountPercent) / 100n) : price;
+}
+
+export function requireDiscountCode(input: { discountAmount?: number; promotionId?: string }) {
+  if (input.discountAmount || input.promotionId) throw new ConflictException('Hãy nhập mã giảm giá hoặc cài mức giảm trong sản phẩm.');
 }
 
 type PromotionTerms = { kind: 'PERCENT' | 'FIXED'; value: number; minimum: number; productIds?: readonly (Types.ObjectId | string)[] | null };

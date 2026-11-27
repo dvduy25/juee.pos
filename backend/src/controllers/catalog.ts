@@ -27,18 +27,20 @@ const variantSchema = z.object({
 const categoryInput = z.object({ name: label }).strict().transform(({ name }) => ({
   name, slug: name.toLowerCase().normalize('NFKC').replace(/\s+/g, '-'),
 }));
+const retailDiscountPercent = z.number().int().min(0).max(100).optional();
 const productSchema = z.object({
   name: label, description: z.string().trim().max(2000).optional(),
   images: z.array(z.string().url().refine(value => /^https?:\/\//i.test(value))).max(8).default([]),
   categoryId: objectId.optional(), productType: z.enum(['RETAIL', 'FOOD', 'BOTH']).default('BOTH'),
   buffetExtra: z.boolean().optional(),
+  retailDiscountPercent,
   modifierGroups: z.array(z.object({
     name: label, minSelect: z.number().int().min(0).max(10), maxSelect: z.number().int().min(1).max(10),
     options: z.array(z.object({ name: label, additionalPrice: vnd }).strict()).min(1).max(30),
   }).strict().refine(group => group.minSelect <= group.maxSelect && group.maxSelect <= group.options.length)).max(10).default([]),
 }).strict();
 type ProductInput = z.output<typeof productSchema>;
-const retailListing = z.object({ description: z.string().trim().max(2000), price: vnd, removeImage: z.literal(true).optional() }).strict();
+const retailListing = z.object({ description: z.string().trim().max(2000), price: vnd, retailDiscountPercent, removeImage: z.literal(true).optional() }).strict();
 
 const retailSize = z.object({ size: label, price: vnd }).strict();
 
@@ -220,6 +222,7 @@ export class CatalogController {
       const { scope, actorId } = await access(req, params.tenantId, params.branchId, 'catalog.branch-write', session);
       const product = found(await Product.findOne({ tenantId: scope.tenantId, retailBranchId: scope.branchId, _id: id }).session(session));
       product.description = input.description;
+      if (input.retailDiscountPercent !== undefined) product.retailDiscountPercent = input.retailDiscountPercent;
       if (image || input.removeImage) {
         product.images = image ? [productImagePath(id, image.version)] : [];
         product.imageFile = image;

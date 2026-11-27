@@ -1,4 +1,4 @@
-import { Body, ConflictException, Controller, ForbiddenException, Get, Header, Headers, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, ConflictException, Controller, Get, Header, Headers, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Request } from 'express';
 import { z } from 'zod';
@@ -10,7 +10,7 @@ import { transaction } from '../config/db';
 import { collect, idempotent, makeBill, orderKitchen, placeOrder, restoreOrderIngredients, restoreOrderStock, sendToKitchen, stockReturnPlan, transferQr } from '../services/sales';
 import { amount, discountCode, editRetailOrderInput, lines, orderRevision, pageSchema } from '../validators/sales';
 import { AuditLog, Bill, DiningTable, IncomingTransfer, KitchenTicket, Order, Payment, PaymentIntent, Refund, TableSession, User, serviceCounterModes } from '../models';
-import { availableRetailPromotions, retailPricing } from '../services/retail';
+import { retailPricing } from '../services/retail';
 import { cancelRetailOrder, checkOrderRevision, editableRetailBill, isRetailOrder, retailOrderOpen, unpaidRetailBill, updateRetailOrder } from '../services/retail-order';
 import { csvDate, csvFile } from '../services/csv';
 import { reportPeriodQuery, selectedReportRange } from '../validators/reports';
@@ -23,7 +23,6 @@ type Route = { tenantId: string; branchId: string; id: string };
 const posOrderInput = z.object({ items: lines, discountAmount: vnd.default(0), customerId: objectId.optional(),
   productType: z.enum(['RETAIL', 'FOOD']).optional(), tableId: objectId.optional(), tableSessionId: objectId.optional(),
   promotionCode: discountCode.optional(), promotionId: objectId.optional(), expectedTotal: z.number().int().nonnegative().safe().optional() });
-const oneOffer = (input: { promotionCode?: string; promotionId?: string }) => !(input.promotionId && input.promotionCode);
 const canceledOrder = { status: 'CANCELED' as const };
 const canceledItems = { 'items.cancelReason': { $type: 'string' as const } };
 const hasCancellation = { $or: [canceledOrder, canceledItems] };
@@ -65,8 +64,7 @@ export class SalesController {
     const { scope, branch } = await access(req, route.tenantId, route.branchId, 'orders.create');
     if (posProductType(branch.mode) !== 'RETAIL') throw new ConflictException('Chỉ áp dụng tại quầy bán lẻ.');
     const { code } = read(z.object({ code: discountCode.optional() }), query);
-    const [pricing, offers] = await Promise.all([retailPricing(scope, { code }), availableRetailPromotions(scope)]);
-    return { ...pricing, offers };
+    return retailPricing(scope, code);
   }
 
   @Get('orders')
@@ -102,13 +100,10 @@ export class SalesController {
 
   @Post('orders')
   async order(@Req() req: Request, @Param() route: Route, @Body() body: unknown, @Headers('idempotency-key') key?: string) {
-    const input = read(posOrderInput.extend({ takeaway: z.literal(true).optional(), serviceMode: z.literal('TAKEAWAY').optional() })
-      .strict().refine(oneOffer, 'Chỉ chọn một khuyến mãi.'), body);
-    const { scope, actorId, membership: current } = await access(req, route.tenantId, route.branchId, 'orders.create');
-    if (input.discountAmount && !['OWNER', 'MANAGER'].includes(current.role)) throw new ForbiddenException('Cần quyền quản lý để giảm giá.');
+    const input = read(posOrderInput.extend({ takeaway: z.literal(true).optional(), serviceMode: z.literal('TAKEAWAY').optional() }).strict(), body);
+    const { scope, actorId } = await access(req, route.tenantId, route.branchId, 'orders.create');
     return idempotent(scope, 'POS_ORDER', key, { actorId, input }, async session => {
-      const { membership, branch } = await access(req, route.tenantId, route.branchId, 'orders.create', session);
-      if (input.discountAmount && !['OWNER', 'MANAGER'].includes(membership.role)) throw new ForbiddenException('Cần quyền quản lý để giảm giá.');
+      const { branch } = await access(req, route.tenantId, route.branchId, 'orders.create', session);
       const productType = posProductType(branch.mode, input.productType);
       const takeaway = input.serviceMode === 'TAKEAWAY' || input.takeaway;
       if (takeaway && (productType !== 'FOOD' || input.tableId || (input.takeaway && input.tableSessionId))) {
@@ -133,13 +128,10 @@ export class SalesController {
 
   @Post('checkout')
   async checkout(@Req() req: Request, @Param() route: Route, @Body() body: unknown, @Headers('idempotency-key') key?: string) {
-    const input = read(posOrderInput.extend({ registerId: objectId.optional(), method: z.literal('CASH') }).strict()
-      .refine(oneOffer, 'Chỉ chọn một khuyến mãi.'), body);
-    const { scope, actorId, membership: current } = await access(req, route.tenantId, route.branchId, 'payments.collect');
-    if (input.discountAmount && !['OWNER', 'MANAGER'].includes(current.role)) throw new ForbiddenException('Cần quyền quản lý để giảm giá.');
+    const input = read(posOrderInput.extend({ registerId: objectId.optional(), method: z.literal('CASH') }).strict(), body);
+    const { scope, actorId } = await access(req, route.tenantId, route.branchId, 'payments.collect');
     return idempotent(scope, 'POS_CHECKOUT', key, { actorId, input }, async session => {
       const { membership, branch } = await access(req, route.tenantId, route.branchId, 'payments.collect', session);
-      if (input.discountAmount && !['OWNER', 'MANAGER'].includes(membership.role)) throw new ForbiddenException('Cần quyền quản lý để giảm giá.');
       const productType = posProductType(branch.mode, input.productType);
       if (productType === 'FOOD') throw new ConflictException('Hãy thêm món vào bàn rồi mở bàn đó để tính tiền.');
       await counterTable(scope, productType, input.tableId, input.tableSessionId, session);

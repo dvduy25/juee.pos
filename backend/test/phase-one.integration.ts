@@ -809,14 +809,18 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     assert.match(await pastCsv.text(), /Tiền mặt bằng/);
 
     const promotionResult = await request(`${branchRoot}/retail-promotions`, 'POST', {
-      name: 'Ưu đãi chọn tại quầy', kind: 'PERCENT', value: 10, minimum: 20000, productIds: [product.id], enabled: true,
+      name: 'Ưu đãi chọn tại quầy', code: 'KHACHQUEN10', kind: 'PERCENT', value: 10, minimum: 20000, productIds: [product.id], enabled: true,
       startsAt: new Date(Date.now() - 60000).toISOString(), endsAt: new Date(Date.now() + 60000).toISOString(),
     }, owner);
     assert.equal(promotionResult.status, 201);
     const promotion = await promotionResult.json();
     const retailPricing = await (await request(`${branchRoot}/retail-pricing`, 'GET', undefined, owner)).json();
-    assert.ok(retailPricing.offers.some((offer: { id: string }) => offer.id === promotion.id));
-    const pendingOrder = await request(`${branchRoot}/orders`, 'POST', { items: checkout.items, promotionId: promotion.id }, owner, { 'Idempotency-Key': randomUUID() });
+    assert.equal(retailPricing.promotion, null);
+    const coupon = await (await request(`${branchRoot}/retail-pricing?code=khachquen10`, 'GET', undefined, owner)).json();
+    assert.equal(coupon.promotion.id, promotion.id);
+    assert.equal((await request(`${branchRoot}/orders`, 'POST', { items: checkout.items, promotionId: promotion.id }, owner,
+      { 'Idempotency-Key': randomUUID() })).status, 409);
+    const pendingOrder = await request(`${branchRoot}/orders`, 'POST', { items: checkout.items, promotionCode: promotion.code }, owner, { 'Idempotency-Key': randomUUID() });
     assert.equal(pendingOrder.status, 201);
     const pendingRetail = await pendingOrder.json();
     assert.equal(pendingRetail.promotionName, promotion.name);
@@ -826,7 +830,8 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     const pendingBill = await invoice.json();
     const orderPath = `${branchRoot}/orders/${pendingRetail.id}`;
     const retailRevision = (await Order.findById(pendingRetail.id).orFail()).updatedAt.toISOString();
-    const editInput = { revision: retailRevision, promotionId: promotion.id, items: [{ lineId: pendingRetail.items[0].id, quantity: 2 }], expectedTotal: 45000 };
+    const editInput = { revision: retailRevision, promotionCode: promotion.code, items: [{ lineId: pendingRetail.items[0].id, quantity: 2 }], expectedTotal: 45000 };
+    assert.equal((await request(orderPath, 'PATCH', { ...editInput, discountAmount: 1000 }, owner)).status, 409);
     const edited = await request(orderPath, 'PATCH', editInput, owner);
     assert.equal(edited.status, 200);
     assert.equal((await edited.json()).totalAmount, 45000);

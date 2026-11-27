@@ -93,3 +93,24 @@ Trong **Quản lý doanh nghiệp → Kê khai thuế**, chủ doanh nghiệp c�
 API tự nén ảnh sản phẩm tải lên khi bản WebP nhẹ hơn. Ảnh lớn được thu về tối đa 1.200 px mỗi cạnh trong bản nén. Ảnh nhỏ và ảnh động được giữ nguyên khi phù hợp. Quy trình đọc ảnh hóa đơn và lưu tài liệu nghiệp vụ vẫn dùng dữ liệu gốc.
 
 Từ thư mục gốc, chạy `npm run images:optimize -w @juee/api` để đo dung lượng có thể giảm trên MongoDB được cấu hình. Xem kết quả `savedBytes`. Sau khi sao lưu và kiểm tra trên bản sao, dùng `npm run images:optimize -w @juee/api -- --apply` để cập nhật ảnh cũ. Có thể dùng `node backend/dist/jobs/optimize-product-images.js` trong container đã dựng. Công cụ giữ nguyên liên kết ảnh và bỏ qua sản phẩm nếu ảnh được thay trong lúc đang xử lý. Số byte tiết kiệm là dung lượng dữ liệu ảnh. MongoDB có thể giữ các khối đĩa đã cấp phát để tái sử dụng.
+
+## Sao lưu và khôi phục MongoDB
+
+`npm run db:backup` tạo bản sao nén và mã hóa AES-256-GCM. Dữ liệu của các bộ sưu tập được đọc tại cùng một thời điểm. Bản sao có cả chỉ mục và ảnh lưu trong MongoDB. Chạy sao lưu khi cấu hình bộ sưu tập và chỉ mục ổn định. MongoDB cần hỗ trợ đọc snapshot. [Tài liệu MongoDB về snapshot](https://www.mongodb.com/docs/manual/reference/read-concern-snapshot/)
+
+| Biến môi trường | Giá trị |
+| --- | --- |
+| `BACKUP_MONGODB_URI` | Kết nối MongoDB. Ưu tiên tài khoản chỉ đọc. Nếu bỏ trống, dùng kết nối trong `backend/.env`. |
+| `BACKUP_MONGODB_DB` | Tên database ứng dụng nếu kết nối chưa chỉ rõ tên |
+| `BACKUP_DIR` | Thư mục lưu bản sao. Mặc định dùng `.database-backups`. |
+| `BACKUP_ENCRYPTION_KEY` | Khóa 32 byte dạng Base64. Giữ khóa ở nơi có thể lấy khi khôi phục. |
+
+Tạo khóa một lần bằng `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`. Giữ khóa cũ để đọc các bản sao đã tạo bằng khóa đó. Sao lưu riêng các bí mật cấu hình ứng dụng, nhất là `AI_KEY_ENCRYPTION_SECRET` nếu doanh nghiệp đang lưu khóa AI.
+
+Có thể giữ khóa và cấu hình sao lưu riêng trong tệp cục bộ `.env.database-backup`. Trên máy có quyền kết nối MongoDB, chạy `npm run db:backup`. Giữ tệp `.juee-backup` và khóa ở các nơi riêng có thể truy cập khi máy chủ gặp sự cố.
+
+### Khôi phục thử
+
+1. Tải tệp từ kho riêng. Đặt `BACKUP_ENCRYPTION_KEY` bằng khóa đã tạo tệp, `BACKUP_RESTORE_URI` bằng kết nối của môi trường kiểm tra và `BACKUP_RESTORE_DB` bằng tên database trống khác tên nguồn.
+2. Chạy `npm run db:restore -- /duong-dan/ban-sao.juee-backup`. Công cụ xác thực tệp trước khi ghi. Nếu thao tác bị gián đoạn giữa chừng, dùng một database trống khác để thử lại.
+3. Đối chiếu số bản ghi, chứng từ và ảnh trong bản khôi phục. Chỉ chuyển kết nối của API trên Render sang bản khôi phục đã kiểm tra khi thực sự cần phục hồi. Dùng bí mật ứng dụng thích hợp và kiểm soát việc gửi email, thanh toán trong lúc thử.

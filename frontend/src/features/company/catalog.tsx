@@ -166,6 +166,7 @@ export function RetailCatalog() {
         <div className="catalog-product-label">{item.images[0] && <img src={item.images[0]} alt="" loading="lazy"/>}
           <div><strong>{item.name}</strong>
             <small>{item.warehouseItemId ? t("{0} · Tồn {1} {2}", item.variants[0]?.sku ?? '', (item.stock ?? 0) / 1000, item.unit ?? '') : t("Sản phẩm cũ · Chưa liên kết kho")}</small>
+            {!!item.retailDiscountPercent && <small>{t("Giảm giá sản phẩm {0}%", item.retailDiscountPercent)}</small>}
             {item.variants.map(variant => <small key={variant.id}>{item.variants.length > 1 || variant.attributes?.size
               ? `${variant.attributes?.size || t("Mặc định")} · ` : ''}{currency.format(salePrice(variant))}</small>)}
           </div>
@@ -213,7 +214,7 @@ function RetailSizes({ product, close }: { product: Product; close: () => void }
       <div className="columns">
         <label>{t("Kích cỡ")}<input name="size" placeholder="S, M, L" maxLength={120} defaultValue={editing?.attributes?.size} required/></label>
         <label>{t("Giá bán trước thuế (đ)")}<input name="price" type="number" min="0" max="1000000000000" step="1"
-          defaultValue={editing && salePrice(editing)} required/></label>
+          defaultValue={editing && (editing.branchPrice ?? editing.basePrice)} required/></label>
       </div>
       <div className="actions">
         <button type="submit" className="button" disabled={action.pending}>{editing ? t("Lưu size") : t("Thêm size")}</button>
@@ -245,7 +246,7 @@ function RetailListingForm({ product, close }: { product?: Product; close: () =>
     <form onSubmit={event => submit(event, form => {
       const body = withProductImage(form, {
         ...(product ? {} : { warehouseItemId: value(form, 'warehouseItemId'), size: value(form, 'size') || undefined }),
-        description: value(form, 'description'), price: amount(form, 'price'),
+        description: value(form, 'description'), price: amount(form, 'price'), retailDiscountPercent: amount(form, 'retailDiscountPercent'),
         ...(form.has('removeImage') ? { removeImage: true } : {}),
       });
       void action.send(product ? `/retail-products/${product.id}` : '/retail-products', body,
@@ -258,10 +259,19 @@ function RetailListingForm({ product, close }: { product?: Product; close: () =>
       <label>{product && product.variants.length > 1 ? t("Giá bán trước thuế · {0} (đ)", product.variants[0]?.attributes?.size || t("Mặc định"))
         : t("Giá bán trước thuế (đ)")}<input name="price" type="number" min="0" max="1000000000000" step="1" required
           defaultValue={product?.variants[0]?.basePrice}/></label>
+      <RetailDiscountField product={product}/>
       <ProductImageField current={product?.images[0]}/>
       <button className="button" disabled={action.pending}>{product ? t("Lưu thông tin bán") : t("Đăng bán")}</button>
     </form>{action.feedback}
   </BusinessDialog>;
+}
+
+function RetailDiscountField({ product }: { product?: Product }) {
+  const { t } = useLanguage();
+  return <label>{t("Giảm giá sản phẩm (%)")}
+    <input name="retailDiscountPercent" type="number" min={0} max={100} step={1} defaultValue={product?.retailDiscountPercent ?? 0} required/>
+    <small>{t("Tự áp dụng khi bán lẻ cho mọi size. Nhập 0 để tắt.")}</small>
+  </label>;
 }
 
 function BranchPrice({ product, item }: { product: Product; item: Variant }) {
@@ -283,11 +293,13 @@ function EditProduct({ product, categories, food }: { product: Product; categori
     <form onSubmit={event => submit(event, form => {
       const patch = productInput(form);
       const body = withProductImage(form, { ...patch, categoryId: patch.categoryId ?? null,
+        ...(food ? {} : { retailDiscountPercent: amount(form, 'retailDiscountPercent') }),
         status: value(form, 'status'), removeImage: form.has('removeImage') ? true : undefined });
       void action.send(`/products/${product.id}`, body, { method: 'PATCH' }).then(result => {
         if (result) setImageFieldVersion(version => version + 1);
       });
     })}><ProductFields product={product} categories={categories} type={food ? 'FOOD' : undefined} imageFieldVersion={imageFieldVersion}/>
+      {!food && <RetailDiscountField product={product}/>}
       <label>{t("Trạng thái")}<select name="status" defaultValue={product.status}><option value="ACTIVE">{t("Đang bán")}</option><option value="ARCHIVED">{t("Ngừng bán")}</option></select></label>
       <button className="button" disabled={action.pending}>{food ? t("Lưu món") : t("Lưu sản phẩm")}</button></form>
     {product.variants.map((item, index) => <details className="business-details" key={item.id}><summary>{food ? foodVariantLabel(item, index) : t("Biến thể {0}", item.sku)}</summary>

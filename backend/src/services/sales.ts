@@ -11,7 +11,7 @@ import { isBuffetIncluded } from './buffet';
 import { addIngredientUsage } from './dish-recipes';
 import { lines, readIdempotencyKey } from '../validators/sales';
 import { Bill, BranchProductPrice, Customer, DiningTable, DishRecipe, IdempotencyRecord, KitchenTicket, Order, Payment, PaymentIntent, Product, ProductVariant, Register, Shift, TableSession, UnavailableProduct, WarehouseItem } from '../models';
-import { retailAmounts, retailPricing } from './retail';
+import { requireDiscountCode, retailAmounts, retailPricing, retailProductPrice } from './retail';
 import { ingredientLineCost } from './revenue';
 import { recordWarehouseMovement, warehouseRecipeNote, warehouseSaleNote } from './warehouse';
 import { applyStockLotChanges, availableStock, issueStockLots, sliceStockLots, stockLots, type StockLot } from './stock-lots';
@@ -120,10 +120,12 @@ export async function prepareOrderItems(scope: Scope, input: Pick<OrderInput, 'i
     const unitCost = stock?.unitCost ?? (productType === 'RETAIL' && variant.costPrice > 0 ? variant.costPrice : undefined);
     const name = stock?.name ?? product.name;
     const size = productType === 'RETAIL' ? variant.attributes?.size ?? stock?.size : undefined;
+    const basePrice = settings?.price ?? variant.basePrice;
+    const unitPrice = productType === 'RETAIL' ? retailProductPrice(basePrice, product.retailDiscountPercent) : basePrice;
     return { _id: new Types.ObjectId(), productId: product._id, variantId: variant._id, sku: stock?.code ?? variant.sku,
       name: size ? `${name} · ${size}` : name, warehouseItemId: stock?._id, unitCost, ingredients,
       stockLots: lineLots.length ? lineLots : undefined, buffetIncluded, ...ingredientCosts,
-      unitPrice: (buffetIncluded ? 0 : settings?.price ?? variant.basePrice) + modifiers.reduce((sum, item) => sum + item.additionalPrice, 0), quantity: line.quantity,
+      unitPrice: (buffetIncluded ? 0 : unitPrice) + modifiers.reduce((sum, item) => sum + item.additionalPrice, 0), quantity: line.quantity,
       modifiers, note: line.note };
   });
   return { items, warehouse, allocations, retail: productType === 'RETAIL' };
@@ -138,15 +140,15 @@ export async function issueOrderStock(scope: Scope, prepared: Awaited<ReturnType
 }
 
 export async function placeOrder(scope: Scope, input: OrderInput, session: ClientSession) {
+  requireDiscountCode(input);
   const prepared = await prepareOrderItems(scope, input, session);
   const { items, retail } = prepared;
   const subtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const manualDiscount = input.discountAmount ?? 0;
-  if (!Number.isSafeInteger(subtotal) || manualDiscount > subtotal) throw new BadRequestException('Tổng tiền hoặc giảm giá không hợp lệ.');
-  const pricing = retail ? await retailPricing(scope, { code: input.promotionCode, promotionId: input.promotionId }, session) : undefined;
-  if ((input.promotionCode || input.promotionId) && !pricing?.promotion) throw new ConflictException('Khuyến mãi không còn hiệu lực.');
-  const totals = pricing ? retailAmounts(subtotal, manualDiscount, pricing.taxBps, pricing.promotion, items) :
-    { taxAmount: 0, discountAmount: manualDiscount, totalAmount: subtotal - manualDiscount };
+  if (!Number.isSafeInteger(subtotal)) throw new BadRequestException('Tổng tiền hoặc giảm giá không hợp lệ.');
+  const pricing = retail ? await retailPricing(scope, input.promotionCode, session) : undefined;
+  if (input.promotionCode && !pricing?.promotion) throw new ConflictException('Mã giảm giá không hợp lệ hoặc đã hết hạn.');
+  const totals = pricing ? retailAmounts(subtotal, 0, pricing.taxBps, pricing.promotion, items) :
+    { taxAmount: 0, discountAmount: 0, totalAmount: subtotal };
   if (input.expectedTotal !== undefined && totals.totalAmount !== input.expectedTotal) {
     throw new ConflictException('Giá hoặc khuyến mãi vừa thay đổi. Kiểm tra lại tổng tiền.');
   }

@@ -17,6 +17,8 @@
     "test": "npm test -w @juee/api",
     "test:integration": "npm run test:integration -w @juee/api",
     "db:indexes": "npm run indexes -w @juee/api",
+    "db:backup": "node --env-file-if-exists=backend/.env --env-file-if-exists=.env.database-backup backend/scripts/database-backup.mjs backup",
+    "db:restore": "node --env-file-if-exists=.env.database-backup backend/scripts/database-backup.mjs restore",
     "db:local": "node --env-file=backend/.env scripts/mongo-local.cjs",
     "admin:setup": "bash scripts/setup-admin.sh",
     "build:api": "npm run build -w @juee/api",

@@ -7,6 +7,7 @@ import { buffetMenuFilter } from './buffet';
 import { availableStock } from './stock-lots';
 import { facilityToday } from './membership-plans';
 import { productImagePath, type readProductImage } from './product-image';
+import { retailProductPrice } from './retail';
 
 export function productTypeFilter(type: 'RETAIL' | 'FOOD') {
   // Older catalogs have no productType and are available in both modes.
@@ -77,7 +78,10 @@ export async function catalog(scope: Scope, opts: {
   return products.map(item => {
     const stock = stockById.get(String(item.warehouseItemId));
     const available = availableById.get(String(item.warehouseItemId)) ?? 0;
-    const variants = byProduct.get(String(item._id)) ?? [];
+    const originalVariants = byProduct.get(String(item._id)) ?? [];
+    const variants = opts.productType === 'RETAIL' && item.retailDiscountPercent ? originalVariants.map(variant => ({ ...variant,
+      retailPrice: retailProductPrice(variant.branchPrice ?? variant.basePrice, item.retailDiscountPercent),
+    })) : originalVariants;
     const defaultVariant = item.warehouseItemId && variants.find(variant => variant.sku === `WH-${item.warehouseItemId}`);
     const retailVariants = defaultVariant ? [defaultVariant, ...variants.filter(variant => variant !== defaultVariant)] : variants;
     const recipe = recipeByProduct.get(String(item._id));
@@ -97,14 +101,14 @@ export async function catalog(scope: Scope, opts: {
 }
 
 export async function listWarehouseProduct(scope: Scope, actorId: string,
-  input: { warehouseItemId: string; price: number; description: string; size?: string }, session: ClientSession,
+  input: { warehouseItemId: string; price: number; description: string; size?: string; retailDiscountPercent?: number }, session: ClientSession,
   image?: NonNullable<ReturnType<typeof readProductImage>>) {
   const item = found(await WarehouseItem.findOne({ ...scope, _id: input.warehouseItemId }).session(session).lean(), 'Mặt hàng không thuộc kho chi nhánh.');
   if (await Product.exists({ warehouseItemId: item._id }).session(session)) {
     throw new ConflictException('Mặt hàng đã có trong danh sách sản phẩm. Kiểm tra cả hàng ngừng bán.');
   }
   const product = new Product({ tenantId: scope.tenantId, retailBranchId: scope.branchId, warehouseItemId: item._id,
-    productType: 'RETAIL', name: item.name, description: input.description, categoryId: item.categoryId });
+    productType: 'RETAIL', name: item.name, description: input.description, categoryId: item.categoryId, retailDiscountPercent: input.retailDiscountPercent });
   if (image) {
     product.images = [productImagePath(product.id, image.version)];
     product.imageFile = image;

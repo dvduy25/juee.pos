@@ -9,6 +9,9 @@ dist/
 .DS_Store
 
 .mongo-data/
+/.database-backups/
+*.juee-backup
+*.juee-backup.partial
 
 /frontend/public/gioi-thieu/
 /frontend/public/juee-site/

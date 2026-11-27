@@ -5,13 +5,13 @@
 :root {
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   font-size: 14px; line-height: 1.5; color: var(--ink); background: var(--surface);
-  --ink: #19243a; --muted: #56637a; --line: #e1e6f0; --field-line: #c9d2e2;
-  --panel: #fff; --surface: #f4f6fb; --on-accent: #fff;
-  --page-gutter: clamp(15px, 2.1vw, 34px); --header-height: 62px;
-  --radius: 14px; --floating-shadow: 0 18px 48px #14213429;
+  --ink: #192920; --muted: #53655b; --line: #dde5dc; --field-line: #c8d5cb;
+  --panel: #fff; --surface: #f2f5ef; --on-accent: #fff;
+  --page-gutter: clamp(15px, 2.4vw, 38px); --header-height: 64px;
+  --radius: 12px; --floating-shadow: 0 20px 48px #172e2326;
 }
 :root, [data-theme] {
-  --accent: var(--store-accent, #6240c3);
+  --accent: var(--store-accent, #245b46);
   --tint: color-mix(in srgb, var(--accent) 9%, var(--panel));
 }
 [data-theme="RETAIL"] { --store-accent: #16704e; --store-accent-dark: #7addb9; }
@@ -21,7 +21,7 @@
 [data-theme="POOL"] { --store-accent: #08768a; --store-accent-dark: #8edff0; }
 [data-theme="HOTEL"] { --store-accent: #4956a5; --store-accent-dark: #bac3ff; }
 [data-theme="TICKETS"] { --store-accent: #753bad; --store-accent-dark: #d9afff; }
-[data-theme="company"] { --store-accent: #643fc4; --store-accent-dark: #c9b7ff; }
+[data-theme="company"] { --store-accent: #245b46; --store-accent-dark: #a8e6c5; }
 * { box-sizing: border-box; }
 a { color: inherit; text-decoration: none; }
 button, input, select, textarea { font: inherit; }
@@ -193,11 +193,11 @@ th { color: var(--muted); white-space: nowrap; font-weight: 650; background: var
 .dialog pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; margin-bottom: 14px; }
 .form-grid { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .dark {
-  color-scheme: dark; --ink: #eef1f9; --muted: #b5bfd3; --line: #2d394e; --field-line: #475772;
-  --panel: #192235; --surface: #111a2a; --on-accent: #152036; --floating-shadow: 0 16px 42px #0007;
+  color-scheme: dark; --ink: #edf4ee; --muted: #b3c2b8; --line: #33453c; --field-line: #4e6357;
+  --panel: #1c2b25; --surface: #14221d; --on-accent: #14241d; --floating-shadow: 0 16px 42px #0007;
 }
 .dark, .dark [data-theme] {
-  --accent: var(--store-accent-dark, #c9b7ff);
+  --accent: var(--store-accent-dark, #a8e6c5);
   --tint: color-mix(in srgb, var(--accent) 14%, var(--panel));
 }
 @media(max-width: 1180px) { .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -646,6 +646,7 @@ th { color: var(--muted); white-space: nowrap; font-weight: 650; background: var
 .pos-catalog .product-tile button { display: grid; gap: 3px; justify-content: stretch; justify-items: start; text-align: left; background: var(--surface); }
 .pos-catalog .product-tile button:hover:not(:disabled) { background: var(--tint); }
 .pos-catalog .product-tile button span { font-size: 12px; color: var(--muted); }
+.pos-catalog .product-tile del { margin-inline-start: 7px; color: var(--muted); font-size: 12px; font-weight: 500; }
 .counter-workspace .pos-catalog { gap: 10px; padding: 8px 12px 12px; }
 .counter-workspace .pos-catalog > .desk-section-header { position: sticky; top: var(--header-height); z-index: 2; gap: 4px 10px; margin: 0;
   padding-block: 4px; background: var(--panel); }
@@ -676,8 +677,11 @@ th { color: var(--muted); white-space: nowrap; font-weight: 650; background: var
 .pos-cart-items { max-height: clamp(100px, calc(100dvh - 405px), 430px); overflow-y: auto; overflow-wrap: anywhere; }
 .pos-total { padding: 10px 12px; border: 0; border-radius: 8px; background: var(--tint); }
 .pos-total strong:last-child { font-size: 19px; }
-.pos-cart form > .actions { align-items: stretch; }
-.pos-cart form > .actions > button:first-child { flex: 1; }
+.pos-cart form > .actions { display: grid; gap: 6px; }
+.pos-cart form > .actions > .button { min-height: 44px; }
+.retail-discount-code { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: end; }
+.retail-discount-code [role="status"], .retail-discount-code .error { grid-column: 1 / -1; }
+.retail-discount-code .plain { padding-inline: 7px; }
 .service-workspace .table-directory { padding: clamp(10px, 1.4vw, 18px); gap: 10px; }
 .table-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .table-directory .table-filter-bar select { min-height: 34px; padding: 3px 8px; font-size: 13px; }

@@ -9,12 +9,12 @@ import { useAction, useData } from '@/hooks/use-business';
 import { currency } from '@/lib/format';
 import { salePrice } from '@/lib/sale-price';
 import { retailVariantName, type Product, type Variant } from '@/types/catalog';
-import { eligibleRetailOffers, RetailPromotionSelect, type RetailPricing } from './retail-promotions';
+import { RetailDiscountCode, useRetailDiscount } from './retail-promotions';
 
 type Line = { name: string; sku?: string; productId: string; variantId: string; unitPrice: number; quantity: number };
 export type RetailOrderForEdit = {
   id: string; createdAt: string; updatedAt?: string; billId?: string; totalAmount: number;
-  discountAmount?: number; promotionId?: string; promotionCode?: string;
+  promotionCode?: string;
   items: (Line & { id: string })[];
 };
 type DraftLine = Line & { lineId?: string };
@@ -27,22 +27,17 @@ export function RetailOrderEditor({ order, onClose, onSaved }: { order: RetailOr
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [promotionSelection, setPromotionSelection] = useState(order.promotionId ?? order.promotionCode ?? '');
-  const [discount, setDiscount] = useState(promotionSelection ? 0 : order.discountAmount ?? 0);
-  const pricing = useData<RetailPricing>('/retail-pricing', 15000);
   const products = useData<Product[]>(`/products?productType=RETAIL&page=${page}&q=${encodeURIComponent(search)}`, undefined, adding);
   const action = useAction();
 
   const subtotal = draft.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const quantitiesValid = draft.length > 0 && draft.every(item => Number.isSafeInteger(item.quantity) && item.quantity > 0 && item.quantity <= maxQuantity);
-  const offers = quantitiesValid ? eligibleRetailOffers(pricing.data?.offers, draft, subtotal) : [];
-  const offer = offers.find(item => item.id === promotionSelection || item.code === promotionSelection);
-  const reduction = offer?.reduction ?? discount;
-  const valid = quantitiesValid && Number.isSafeInteger(subtotal) && Number.isSafeInteger(reduction) && reduction >= 0 &&
-    reduction <= Math.min(subtotal, offer ? Number.MAX_SAFE_INTEGER : 1_000_000_000_000);
+  const discount = useRetailDiscount(draft, subtotal, true, order.promotionCode);
+  const { pricing, promotion, reduction } = discount;
+  const valid = quantitiesValid && Number.isSafeInteger(subtotal);
   const tax = valid ? Number((BigInt(subtotal - reduction) * BigInt(pricing.data?.taxBps ?? 0) + 5000n) / 10000n) : 0;
   const total = subtotal - reduction + tax;
-  const canSave = valid && Number.isSafeInteger(total) && !!pricing.data && !pricing.error && (!promotionSelection || !!offer);
+  const canSave = valid && Number.isSafeInteger(total) && discount.ready;
 
   function add(product: Product, variant: Variant) {
     setDraft(items => {
@@ -59,7 +54,7 @@ export function RetailOrderEditor({ order, onClose, onSaved }: { order: RetailOr
       event.preventDefault();
       if (!canSave) return;
       void action.send<{ totalAmount: number }>(`/orders/${order.id}`, {
-        revision: order.updatedAt ?? order.createdAt, expectedTotal: total, promotionId: offer?.id, discountAmount: discount,
+        revision: order.updatedAt ?? order.createdAt, expectedTotal: total, promotionCode: promotion?.code,
         items: draft.map(item => ({ ...(item.lineId ? { lineId: item.lineId } : { variantId: item.variantId }), quantity: item.quantity })),
       }, { method: 'PATCH' }).then(result => {
         if (result) onSaved(result.totalAmount);
@@ -92,15 +87,8 @@ export function RetailOrderEditor({ order, onClose, onSaved }: { order: RetailOr
         </div>))}</div>
         <Pager page={page} full={products.data?.length === 50} onChange={setPage}/>
       </section>}
-      <div className="columns">
-        <RetailPromotionSelect offers={offers} selected={promotionSelection} disabled={action.pending || !pricing.data}
-          onChange={id => { setPromotionSelection(id); if (id) setDiscount(0); }}/>
-        <label>{t("Giảm giá thủ công (đ)")}<input type="number" min={0} max={Math.min(subtotal, 1_000_000_000_000)} step={1} value={discount}
-          onChange={event => setDiscount(Number(event.target.value))} disabled={action.pending || !!promotionSelection}/></label>
-      </div>
+      <RetailDiscountCode discount={discount} disabled={action.pending}/>
       <State query={pricing}/>
-      {quantitiesValid && promotionSelection && !offer && pricing.data &&
-        <p className="error" role="status">{t("Ưu đãi cũ không áp dụng cho đơn này. Hãy chọn lại hoặc bỏ ưu đãi.")}</p>}
       {valid && <dl className="bill-amounts">
         <div><dt>{t("Tạm tính")}</dt><dd>{currency.format(subtotal)}</dd></div><div><dt>{t("Giảm giá")}</dt><dd>{currency.format(reduction)}</dd></div>
         <div><dt>{t("Thuế")}</dt><dd>{currency.format(tax)}</dd></div><div className="bill-due"><dt>{t("Tổng tiền mới")}</dt><dd>{currency.format(total)}</dd></div>
