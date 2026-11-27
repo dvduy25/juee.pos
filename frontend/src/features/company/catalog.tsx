@@ -146,11 +146,13 @@ export function RetailCatalog() {
   const [q, setQ] = useState('');
   const [archived, setArchived] = useState(false);
   const [editing, setEditing] = useState<Product>();
+  const [sizeProductId, setSizeProductId] = useState('');
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Product>();
   const action = useAction();
   const categories = useData<Category[]>('/categories');
   const products = useData<Product[]>(`/products?productType=RETAIL&page=${page}&q=${encodeURIComponent(q)}${archived ? '&archived=yes&status=ARCHIVED' : ''}`);
+  const sizing = products.data?.find(item => item.id === sizeProductId);
   return <Panel title={t("Sản phẩm bán lẻ")} action={<button className="button" onClick={() => setCreating(true)}>{t("Đăng bán từ kho")}</button>}>
     <div className="company-filters">
       <label>{t("Tìm sản phẩm")}<input value={q} maxLength={100} onChange={event => { setQ(event.target.value); setPage(1); }}/></label>
@@ -164,11 +166,14 @@ export function RetailCatalog() {
         <div className="catalog-product-label">{item.images[0] && <img src={item.images[0]} alt="" loading="lazy"/>}
           <div><strong>{item.name}</strong>
             <small>{item.warehouseItemId ? t("{0} · Tồn {1} {2}", item.variants[0]?.sku ?? '', (item.stock ?? 0) / 1000, item.unit ?? '') : t("Sản phẩm cũ · Chưa liên kết kho")}</small>
-            {item.variants.map(variant => <small key={variant.id}>{currency.format(salePrice(variant))}</small>)}
+            {item.variants.map(variant => <small key={variant.id}>{item.variants.length > 1 || variant.attributes?.size
+              ? `${variant.attributes?.size || t("Mặc định")} · ` : ''}{currency.format(salePrice(variant))}</small>)}
           </div>
         </div>
         <div className="actions member-row-actions">
           {item.warehouseItemId && <button className="plain" type="button" onClick={() => setEditing(item)}>{t("Sửa thông tin bán")}</button>}
+          {item.warehouseItemId && item.status === 'ACTIVE' && <button className="plain" type="button" aria-haspopup="dialog"
+            onClick={() => setSizeProductId(item.id)}>{t("Cài size và giá")}</button>}
           {(item.warehouseItemId || canEditShared) && (item.status === 'ACTIVE' ? <button className="plain" type="button" onClick={() => setDeleting(item)}>{t("Ngừng bán")}</button> :
             <button className="plain" type="button" disabled={action.pending} onClick={() => void action.send(`/products/${item.id}`,
               { status: 'ACTIVE' }, { method: 'PATCH', message: 'Đã bán lại.' })}>{t("Bán lại")}</button>)}
@@ -180,11 +185,43 @@ export function RetailCatalog() {
     <Pager page={page} full={products.data?.length === 50} onChange={setPage}/>
     {(creating || editing) && <RetailListingForm key={editing?.id ?? 'new'} product={editing}
       close={() => { setEditing(undefined); setCreating(false); }}/>}
+    {sizing && <RetailSizes product={sizing} close={() => setSizeProductId('')}/>}
     {deleting && <ArchiveProduct product={deleting} food={false} close={() => setDeleting(undefined)} removed={() => {
       if (page > 1 && products.data?.length === 1) setPage(page - 1);
       setDeleting(undefined);
     }}/>}
   </Panel>;
+}
+
+function RetailSizes({ product, close }: { product: Product; close: () => void }) {
+  const { t } = useLanguage();
+  const action = useAction();
+  const [editing, setEditing] = useState<Variant>();
+  const endpoint = `/retail-products/${product.id}/sizes`;
+  return <BusinessDialog title={t("Cài size và giá · {0}", product.name)} close={close} pending={action.pending}>
+    <p className="muted">{t("Mỗi size có giá riêng và dùng chung tồn kho của sản phẩm.")}</p>
+    {product.variants.map(variant => <div className="list-row" key={variant.id}>
+      <div><strong>{variant.attributes?.size || t("Mặc định")}</strong><small>{currency.format(salePrice(variant))}</small></div>
+      <button type="button" className="plain" disabled={action.pending}
+        aria-label={t("Sửa size {0}", variant.attributes?.size || t("Mặc định"))} onClick={() => setEditing(variant)}>{t("Sửa")}</button>
+    </div>)}
+    {(editing || product.variants.length < 30) && <form key={editing?.id ?? 'new'} onSubmit={event => submit(event, (form, element) => {
+      void action.send(editing ? `${endpoint}/${editing.id}` : endpoint, { size: value(form, 'size'), price: amount(form, 'price') },
+        editing ? { method: 'PATCH', message: 'Đã lưu size.' } : { idempotent: true, reset: element, message: 'Đã thêm size.' })
+        .then(result => { if (result) setEditing(undefined); });
+    })}>
+      <div className="columns">
+        <label>{t("Kích cỡ")}<input name="size" placeholder="S, M, L" maxLength={120} defaultValue={editing?.attributes?.size} required/></label>
+        <label>{t("Giá bán trước thuế (đ)")}<input name="price" type="number" min="0" max="1000000000000" step="1"
+          defaultValue={editing && salePrice(editing)} required/></label>
+      </div>
+      <div className="actions">
+        <button type="submit" className="button" disabled={action.pending}>{editing ? t("Lưu size") : t("Thêm size")}</button>
+        {editing && <button type="button" className="plain" onClick={() => setEditing(undefined)} disabled={action.pending}>{t("Hủy")}</button>}
+      </div>
+    </form>}
+    {action.feedback}
+  </BusinessDialog>;
 }
 
 function RetailBranchSettings({ product }: { product: Product }) {
@@ -207,16 +244,20 @@ function RetailListingForm({ product, close }: { product?: Product; close: () =>
   return <BusinessDialog title={product ? t("Sửa thông tin bán · {0}", product.name) : t("Đăng bán từ kho")} close={close} pending={action.pending}>
     <form onSubmit={event => submit(event, form => {
       const body = withProductImage(form, {
-        ...(product ? {} : { warehouseItemId: value(form, 'warehouseItemId') }),
+        ...(product ? {} : { warehouseItemId: value(form, 'warehouseItemId'), size: value(form, 'size') || undefined }),
         description: value(form, 'description'), price: amount(form, 'price'),
         ...(form.has('removeImage') ? { removeImage: true } : {}),
       });
       void action.send(product ? `/retail-products/${product.id}` : '/retail-products', body,
         { method: product ? 'PATCH' : 'POST' }).then(result => { if (result) close(); });
     })}>
-      {!product && <WarehousePicker/>}
+      {!product && <><WarehousePicker/>
+        <label>{t("Kích cỡ (nếu có)")}<input name="size" maxLength={120} placeholder="S, M, L"/></label>
+      </>}
       <label>{t("Mô tả")}<textarea name="description" maxLength={2000} defaultValue={product?.description}/></label>
-      <label>{t("Giá bán trước thuế (đ)")}<input name="price" type="number" min="0" max="1000000000000" step="1" required defaultValue={product?.variants[0]?.basePrice}/></label>
+      <label>{product && product.variants.length > 1 ? t("Giá bán trước thuế · {0} (đ)", product.variants[0]?.attributes?.size || t("Mặc định"))
+        : t("Giá bán trước thuế (đ)")}<input name="price" type="number" min="0" max="1000000000000" step="1" required
+          defaultValue={product?.variants[0]?.basePrice}/></label>
       <ProductImageField current={product?.images[0]}/>
       <button className="button" disabled={action.pending}>{product ? t("Lưu thông tin bán") : t("Đăng bán")}</button>
     </form>{action.feedback}
@@ -254,7 +295,7 @@ function EditProduct({ product, categories, food }: { product: Product; categori
         variantInput(form, item), { method: 'PATCH' }))}>
         <VariantFields variant={item} food={food}/><button className="button" disabled={action.pending}>{t("Lưu phiên bản")}</button>
       </form><BranchPrice product={product} item={item}/></details>)}
-    <details className="business-details"><summary>{t("Thêm biến thể")}</summary><form onSubmit={event => submit(event, (form, element) => {
+    <details className="business-details"><summary>{t("Thêm biến thể hoặc size")}</summary><form onSubmit={event => submit(event, (form, element) => {
       void action.send(`/products/${product.id}/variants`, variantInput(form), { reset: element });
     })}><VariantFields food={food}/><button className="button" disabled={action.pending}>{t("Thêm phiên bản")}</button></form></details>
     {product.productType === 'FOOD' && <details className="business-details"><summary>Topping ({product.modifierGroups.length})</summary>

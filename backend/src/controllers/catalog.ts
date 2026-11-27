@@ -1,9 +1,10 @@
-import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Header, Param, Patch, Post, Query, Req, StreamableFile, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Header, Headers, Param, Patch, Post, Query, Req, StreamableFile, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { randomUUID } from 'node:crypto';
 import type { Request } from 'express';
 import type { ClientSession, Types } from 'mongoose';
 import { z } from 'zod';
+import { verifyOrigin } from '../middleware/auth';
 import { access, logChange, requireSharedCatalog } from '../middleware/business-access';
 import { found, isDuplicate } from '../utils/db';
 import { label, objectId, read, vnd } from '../validators/common';
@@ -11,9 +12,10 @@ import { transaction } from '../config/db';
 import { BranchProductPrice, Category, Product, ProductVariant, TableSession, UnavailableProduct, WarehouseItem, retailBranchModes, serviceCounterModes, tableBranchModes, type BranchMode } from '../models';
 
 import { scopedRoute } from '../routes/branch';
-import { catalog, listWarehouseProduct, productBranchFilter, productTypeFilter } from '../services/catalog';
+import { catalog, listWarehouseProduct, productBranchFilter, productTypeFilter, saveRetailSize } from '../services/catalog';
 import { dishRecipeInput, saveDishRecipe } from '../services/dish-recipes';
 import { buffetMenuFilter } from '../services/buffet';
+import { idempotent } from '../services/sales';
 import { optimizeProductImage, productImageLimits, productImagePath, readProductImage } from '../services/product-image';
 
 const variantSchema = z.object({
@@ -37,6 +39,8 @@ const productSchema = z.object({
 }).strict();
 type ProductInput = z.output<typeof productSchema>;
 const retailListing = z.object({ description: z.string().trim().max(2000), price: vnd, removeImage: z.literal(true).optional() }).strict();
+
+const retailSize = z.object({ size: label, price: vnd }).strict();
 
 function variantSku(sku: string | undefined, mode: BranchMode, type?: string | null) {
   if (sku) return sku;
@@ -193,7 +197,7 @@ export class CatalogController {
   @UseInterceptors(FileInterceptor('image', { limits: productImageLimits }))
   async listWarehouseProduct(@Req() req: Request, @Param() params: { tenantId: string; branchId: string }, @Body() body: unknown,
     @UploadedFile() file?: { buffer: Buffer }) {
-    const input = read(retailListing.extend({ warehouseItemId: objectId }), productBody(req, body));
+    const input = read(retailListing.extend({ warehouseItemId: objectId, size: label.optional() }), productBody(req, body));
     const image = await this.uploadImage(req, params, 'catalog.branch-write', file);
     return transaction(async session => {
       const { scope, branch, actorId } = await access(req, params.tenantId, params.branchId, 'catalog.branch-write', session);
@@ -221,11 +225,39 @@ export class CatalogController {
         product.imageFile = image;
       }
       await product.save({ session });
-      const variant = found(await ProductVariant.findOne({ tenantId: scope.tenantId, productId: product._id }).session(session));
+      const variants = { tenantId: scope.tenantId, productId: product._id };
+      const variant = found(await ProductVariant.findOne({ ...variants, sku: `WH-${product.warehouseItemId}` }).session(session) ??
+        await ProductVariant.findOne(variants).sort('_id').session(session));
       variant.basePrice = input.price;
       await variant.save({ session });
       await logChange(scope, actorId, 'PRODUCT_UPDATE', product._id, session);
       return { _id: product._id };
+    });
+  }
+
+  @Post('retail-products/:id/sizes')
+  async addRetailSize(@Req() req: Request, @Param() params: { tenantId: string; branchId: string; id: string },
+    @Body() body: unknown, @Headers('idempotency-key') key?: string) {
+    verifyOrigin(req);
+    const productId = read(objectId, params.id);
+    const input = read(retailSize, body);
+    const { scope, actorId } = await access(req, params.tenantId, params.branchId, 'catalog.branch-write');
+    return idempotent(scope, 'RETAIL_SIZE_CREATE', key, { actorId, productId, input }, async session => {
+      await access(req, params.tenantId, params.branchId, 'catalog.branch-write', session);
+      return saveRetailSize(scope, actorId, productId, input, session);
+    });
+  }
+
+  @Patch('retail-products/:id/sizes/:variantId')
+  async updateRetailSize(@Req() req: Request, @Param() params: { tenantId: string; branchId: string; id: string; variantId: string },
+    @Body() body: unknown) {
+    verifyOrigin(req);
+    const productId = read(objectId, params.id);
+    const variantId = read(objectId, params.variantId);
+    const input = read(retailSize, body);
+    return transaction(async session => {
+      const { scope, actorId } = await access(req, params.tenantId, params.branchId, 'catalog.branch-write', session);
+      return saveRetailSize(scope, actorId, productId, { ...input, variantId }, session);
     });
   }
 

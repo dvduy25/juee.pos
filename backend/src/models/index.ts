@@ -403,6 +403,7 @@ const productImage = new Schema({
 const product = new Schema({
   tenantId: id, name: text, description: String, images: [String], categoryId: Schema.Types.ObjectId,
   warehouseItemId: Schema.Types.ObjectId, retailBranchId: Schema.Types.ObjectId,
+  retailSizeRevision: { type: Number, select: false },
   imageFile: { type: productImage, select: false },
   status: { ...text, enum: ['ACTIVE', 'ARCHIVED'], default: 'ACTIVE' },
   productType: { ...text, enum: ['RETAIL', 'FOOD', 'BOTH'], default: 'BOTH' },

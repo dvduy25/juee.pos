@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import type { ClientSession } from 'mongoose';
+import { Types, type ClientSession } from 'mongoose';
 import { logChange, type Scope } from '../middleware/business-access';
 import { found, localFilter } from '../utils/db';
 import { BranchProductPrice, DishRecipe, Product, ProductVariant, UnavailableProduct, WarehouseItem } from '../models';
@@ -78,6 +78,8 @@ export async function catalog(scope: Scope, opts: {
     const stock = stockById.get(String(item.warehouseItemId));
     const available = availableById.get(String(item.warehouseItemId)) ?? 0;
     const variants = byProduct.get(String(item._id)) ?? [];
+    const defaultVariant = item.warehouseItemId && variants.find(variant => variant.sku === `WH-${item.warehouseItemId}`);
+    const retailVariants = defaultVariant ? [defaultVariant, ...variants.filter(variant => variant !== defaultVariant)] : variants;
     const recipe = recipeByProduct.get(String(item._id));
     const recipeStatus = opts.productType !== 'FOOD' || opts.ignoreRecipeStock ? undefined : !recipe?.length ? (item.recipeRequired ? 'MISSING' : undefined) :
       recipe.some(line => (availableById.get(String(line.itemId)) ?? 0) < line.quantity) ? 'LOW' : undefined;
@@ -87,15 +89,15 @@ export async function catalog(scope: Scope, opts: {
     }) : undefined;
     return { ...item, recipeStatus, ingredients, ...(stock ? { name: stock.name, stock: available, unit: stock.unit } : {}),
       paused: unavailableIds.has(String(item._id)) || undefined, productType: item.productType ?? 'BOTH', images: item.images ?? [],
-      modifierGroups: item.modifierGroups ?? [], variants: item.warehouseItemId ? variants.map(variant => ({ ...variant,
+      modifierGroups: item.modifierGroups ?? [], variants: item.warehouseItemId ? retailVariants.map(variant => ({ ...variant,
         sku: stock?.code ?? variant.sku, barcode: stock?.barcode ?? undefined,
-        attributes: { size: stock?.size, color: stock?.color }, paused: variant.paused || (!opts.ignoreRecipeStock && available < 1000),
+        attributes: { size: variant.attributes?.size ?? stock?.size, color: variant.attributes?.color ?? stock?.color }, paused: variant.paused || (!opts.ignoreRecipeStock && available < 1000),
       })) : recipeStatus ? variants.map(variant => ({ ...variant, paused: true })) : variants };
   });
 }
 
 export async function listWarehouseProduct(scope: Scope, actorId: string,
-  input: { warehouseItemId: string; price: number; description: string }, session: ClientSession,
+  input: { warehouseItemId: string; price: number; description: string; size?: string }, session: ClientSession,
   image?: NonNullable<ReturnType<typeof readProductImage>>) {
   const item = found(await WarehouseItem.findOne({ ...scope, _id: input.warehouseItemId }).session(session).lean(), 'Mặt hàng không thuộc kho chi nhánh.');
   if (await Product.exists({ warehouseItemId: item._id }).session(session)) {
@@ -109,7 +111,49 @@ export async function listWarehouseProduct(scope: Scope, actorId: string,
   }
   await product.save({ session });
   await ProductVariant.insertOne({ tenantId: scope.tenantId, productId: product._id,
-    sku: `WH-${item._id}`, basePrice: input.price, costPrice: 0 }, { session });
+    sku: `WH-${item._id}`, attributes: input.size ? { size: input.size } : undefined, basePrice: input.price, costPrice: 0 }, { session });
   await logChange(scope, actorId, 'PRODUCT_CREATE', product._id, session, { warehouseItemId: item._id });
   return product._id;
+}
+
+function normalizeSize(size: string | undefined | null) {
+  return size?.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('vi');
+}
+
+export async function saveRetailSize(scope: Scope, actorId: string, productId: string,
+  input: { size: string; price: number; variantId?: string }, session: ClientSession) {
+  // Both additions and edits serialize on the listing so duplicate checks hold under concurrent writes.
+  const product = found(await Product.findOneAndUpdate({
+    _id: productId, tenantId: scope.tenantId, retailBranchId: scope.branchId, warehouseItemId: { $ne: null },
+    productType: 'RETAIL', status: 'ACTIVE',
+  }, { $inc: { retailSizeRevision: 1 } }, { session }).select('warehouseItemId').lean(), 'Không tìm thấy sản phẩm bán lẻ.');
+  const variantFilter = { tenantId: scope.tenantId, productId: product._id };
+  const variants = await ProductVariant.find(variantFilter).select('attributes').session(session).lean();
+  const existing = input.variantId ? found(variants.find(item => String(item._id) === input.variantId), 'Không tìm thấy size sản phẩm.') : undefined;
+  if (!existing && variants.length >= 30) throw new ConflictException('Mỗi sản phẩm có tối đa 30 size.');
+  const stock = found(await WarehouseItem.findOne({ ...scope, _id: product.warehouseItemId })
+    .select('size').session(session).lean(), 'Mặt hàng không thuộc kho chi nhánh.');
+  const normalized = normalizeSize(input.size);
+  if (variants.some(item => String(item._id) !== input.variantId && normalizeSize(item.attributes?.size ?? stock.size) === normalized)) {
+    throw new ConflictException('Size này đã có trong sản phẩm.');
+  }
+
+  if (existing) {
+    await ProductVariant.updateOne({ ...variantFilter, _id: existing._id },
+      { $set: { 'attributes.size': input.size, basePrice: input.price } }, { session, runValidators: true });
+    const priceFilter = { ...scope, variantId: existing._id };
+    await BranchProductPrice.updateOne(priceFilter, { $unset: { price: 1 } }, { session });
+    await BranchProductPrice.deleteOne({ ...priceFilter, paused: { $ne: true } }, { session });
+    await logChange(scope, actorId, 'VARIANT_UPDATE', existing._id, session, { size: input.size });
+    return { id: existing._id };
+  }
+
+  // After a listing has its own sizes, changes to the warehouse label must not rename them.
+  await ProductVariant.updateMany({ ...variantFilter, 'attributes.size': null },
+    { $set: { 'attributes.size': stock.size ?? '' } }, { session });
+  const id = new Types.ObjectId();
+  await new ProductVariant({ ...variantFilter, _id: id, sku: `SIZE-${id.toHexString().toUpperCase()}`,
+    attributes: { size: input.size }, basePrice: input.price, costPrice: 0 }).save({ session });
+  await logChange(scope, actorId, 'VARIANT_CREATE', id, session, { size: input.size });
+  return { id };
 }

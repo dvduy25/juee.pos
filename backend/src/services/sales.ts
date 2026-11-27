@@ -118,8 +118,10 @@ export async function prepareOrderItems(scope: Scope, input: Pick<OrderInput, 'i
     const ingredientCosts = ingredientLineCost(recipe?.map(item => ({ quantity: item.quantity,
       unitCost: warehouse.get(String(item.itemId))?.unitCost })), line.quantity);
     const unitCost = stock?.unitCost ?? (productType === 'RETAIL' && variant.costPrice > 0 ? variant.costPrice : undefined);
+    const name = stock?.name ?? product.name;
+    const size = productType === 'RETAIL' ? variant.attributes?.size ?? stock?.size : undefined;
     return { _id: new Types.ObjectId(), productId: product._id, variantId: variant._id, sku: stock?.code ?? variant.sku,
-      name: stock?.name ?? product.name, warehouseItemId: stock?._id, unitCost, ingredients,
+      name: size ? `${name} · ${size}` : name, warehouseItemId: stock?._id, unitCost, ingredients,
       stockLots: lineLots.length ? lineLots : undefined, buffetIncluded, ...ingredientCosts,
       unitPrice: (buffetIncluded ? 0 : settings?.price ?? variant.basePrice) + modifiers.reduce((sum, item) => sum + item.additionalPrice, 0), quantity: line.quantity,
       modifiers, note: line.note };

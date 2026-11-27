@@ -14,7 +14,7 @@ import { BarcodeCamera } from '@/components/barcode-camera';
 import { BusinessDialog } from '@/components/business-dialog';
 import { useAction, useBusiness, useData } from '@/hooks/use-business';
 
-import { foodVariantLabel, type Category, type Variant, type Product } from '@/types/catalog';
+import { foodVariantLabel, retailVariantName, type Category, type Variant, type Product } from '@/types/catalog';
 import { salePrice } from '@/lib/sale-price';
 import { tableMenuHref, tableState, takeawayMenuHref, usesServiceCounter, usesTables, type BuffetSection, type DiningSession, type TableResponse } from '@/types/business';
 import { TableOrders, TableService, TakeawayOrders } from './sales';
@@ -61,6 +61,9 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
   const more = useRef<HTMLDivElement>(null);
   const [canObserve, setCanObserve] = useState(true);
   const [cart, setCart] = useState<Cart[]>([]);
+  const [sizeChoices, setSizeChoices] = useState<{ key: number; product: Product; variants: Variant[] }[]>([]);
+  const nextSizeChoice = useRef(0);
+  const sizeChoice = sizeChoices[0];
   const [showTakeawayOrders, setShowTakeawayOrders] = useState(openTakeawayOrders);
   const [dish, setDish] = useState<{ product: Product; variant: Variant }>();
   const [dishError, setDishError] = useState('');
@@ -145,7 +148,7 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
     Number((BigInt(subtotal - reduction) * BigInt(pricing.data?.taxBps ?? 0) + 5000n) / 10000n);
   const total = subtotal - reduction + tax;
   const canDiscount = ['OWNER', 'MANAGER'].includes(role);
-  const canCheckout = cart.length > 0 && canSelectItems && (!atTable || !!currentSession) &&
+  const canCheckout = cart.length > 0 && !sizeChoice && canSelectItems && (!atTable || !!currentSession) &&
     !scanPending && validAmount && Number.isSafeInteger(total) && (food || (!!pricing.data && !pricing.error && !promotionError));
 
   async function selectService(id: string) {
@@ -178,16 +181,24 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
     if (takeaway) setShowTakeawayOrders(false);
     const options = (product.modifierGroups ?? []).flatMap(group => group.options.filter(option => modifierIds.includes(option.id)));
     const key = JSON.stringify([variant.id, [...modifierIds].sort()]);
+    const name = food ? product.name : retailVariantName(product.name, variant);
     const modifierPrice = options.reduce((sum, option) => sum + option.additionalPrice, 0);
     setCart(items => items.some(item => item.key === key)
       ? items.map(item => item.key === key ? { ...item, quantity: Math.min(1000, item.quantity + 1) } : item)
-      : [...items, { product: product.name, productId: product.id, variant, quantity: 1, buffetExtra: product.buffetExtra, modifierPrice,
+      : [...items, { product: name, productId: product.id, variant, quantity: 1, buffetExtra: product.buffetExtra, modifierPrice,
         modifierIds, options: options.map(option => option.name).join(', '), key }]);
   }
   function choose(product: Product, variant: Variant) {
     if (productType === 'FOOD' && product.modifierGroups?.length) {
       setDishError(''); setDish({ product, variant });
     } else add(product, variant);
+  }
+  function addScanned(product: Product, variant: Variant) {
+    choose(product, variant);
+    setScanMessage({ text: "Đã thêm {0} · {1}.", values: [retailVariantName(product.name, variant), variant.sku], error: false });
+  }
+  function closeSizeChoice() {
+    setSizeChoices(items => items.slice(1));
   }
   function scan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -206,13 +217,16 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
     scanQueue.current = scanQueue.current.then(async () => {
       try {
         const [product] = await api<Product[]>(`${root}/products?productType=${productType}&code=${encodeURIComponent(code)}`);
-        const variant = product?.variants.find(item => item.barcode === code) ?? product?.variants.find(item => item.sku === code.toUpperCase());
-        if (product && variant && variant.paused) {
+        const barcodes = product?.variants.filter(item => item.barcode === code) ?? [];
+        const matches = barcodes.length ? barcodes : product?.variants.filter(item => item.sku === code.toUpperCase()) ?? [];
+        const variant = matches[0];
+        if (product && matches.length > 1 && matches.some(item => !item.paused)) {
+          const key = nextSizeChoice.current++;
+          setSizeChoices(items => [...items, { key, product, variants: matches }]);
+        } else if (product && variant?.paused) {
           setScanMessage({ text: "{0} · {1} đang tạm ngừng bán.", values: [product.name, variant.sku], error: true });
-        } else if (product && variant) {
-          choose(product, variant);
-          setScanMessage({ text: "Đã thêm {0} · {1}.", values: [product.name, variant.sku], error: false });
-        } else setScanMessage({ text: "Không tìm thấy sản phẩm đang bán có mã {0}.", values: [code], error: true });
+        } else if (product && variant) addScanned(product, variant);
+        else setScanMessage({ text: "Không tìm thấy sản phẩm đang bán có mã {0}.", values: [code], error: true });
       } catch (cause) {
         setScanMessage({ text: cause instanceof Error ? cause.message : 'Không thể tra mã vạch.', error: true });
       } finally {
@@ -275,6 +289,16 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
     <State query={food && isFetchNextPageError ? { isLoading: false, error: null } : productQuery} empty={products?.length === 0}/>
     {serviceCounter && productQuery.isSuccess && products?.length === 0 && !q && !category && (role === 'OWNER' || role === 'MANAGER') &&
       <Link className="plain" href="/dashboard/company?tab=products">{t("Đăng bán hàng từ kho")}</Link>}
+    {sizeChoice && <BusinessDialog key={sizeChoice.key} title={t("Chọn size · {0}", sizeChoice.product.name)} close={closeSizeChoice}>
+      {sizeChoice.variants.map(variant => <div className="list-row" key={variant.id}>
+        <div><strong>{variant.attributes?.size || t("Mặc định")}</strong><small>{currency.format(salePrice(variant))}</small></div>
+        <button className="plain" type="button" disabled={!canSelectItems || !!variant.paused}
+          aria-label={variant.paused ? undefined : t("Chọn size {0}", variant.attributes?.size || t("Mặc định"))}
+          onClick={() => { addScanned(sizeChoice.product, variant); closeSizeChoice(); }}>
+          {variant.paused ? t("Chưa khả dụng") : t("Chọn")}
+        </button>
+      </div>)}
+    </BusinessDialog>}
     {dish && <BusinessDialog key={dish.variant.id} title={`${dish.product.name}${dish.variant.attributes?.size ? ` · ${dish.variant.attributes.size}` : ''}`}
       close={() => setDish(undefined)} closeLabel="Hủy">
     <form onSubmit={event => submit(event, form => {
@@ -341,7 +365,7 @@ function Counter({ productType, initialTable, expectedSession, takeaway, openTak
     {cart.length === 0 && <p className="muted">{productType === 'FOOD' ? t("Chọn món từ thực đơn để bắt đầu.") : t("Chọn sản phẩm để bắt đầu.")}</p>}
       {cart.map(item => <div className="list-row" key={item.key}><div><strong>{item.product}</strong>
         <small>{productType === 'RETAIL' && `${item.variant.sku} · `}{isIncluded(item.productId, item.buffetExtra) && cartUnitPrice(item) === 0 ? t("Trong gói buffet") : currency.format(cartUnitPrice(item))}</small>{item.options && <small>{item.options}</small>}</div><div className="actions">
-        <input className="quantity" type="number" min="1" max="1000" aria-label={t("Số lượng {0}", productType === 'FOOD' ? item.product : item.variant.sku)} value={item.quantity}
+        <input className="quantity" type="number" min="1" max="1000" aria-label={t("Số lượng {0}", food || item.variant.attributes?.size ? item.product : item.variant.sku)} value={item.quantity}
           disabled={action.pending} onChange={event => setCart(items => items.map(line => line === item
             ? { ...line, quantity: Math.max(1, Math.min(1000, Math.floor(Number(event.target.value)))) } : line))}/>
         <button className="plain" disabled={action.pending} onClick={() => setCart(items => items.filter(line => line !== item))}>{t("Bỏ")}</button>

@@ -8,7 +8,7 @@ import { Pager, State } from '@/components/business-ui';
 import { useAction, useData } from '@/hooks/use-business';
 import { currency } from '@/lib/format';
 import { salePrice } from '@/lib/sale-price';
-import type { Product, Variant } from '@/types/catalog';
+import { retailVariantName, type Product, type Variant } from '@/types/catalog';
 import { eligibleRetailOffers, RetailPromotionSelect, type RetailPricing } from './retail-promotions';
 
 type Line = { name: string; sku?: string; productId: string; variantId: string; unitPrice: number; quantity: number };
@@ -50,7 +50,7 @@ export function RetailOrderEditor({ order, onClose, onSaved }: { order: RetailOr
       if (index >= 0) return items.map((item, position) => position === index ?
         { ...item, quantity: Math.min(maxQuantity, item.quantity + 1) } : item);
       if (items.length >= maxLines) return items;
-      return [...items, { name: product.name, sku: variant.sku, productId: product.id, variantId: variant.id, unitPrice: salePrice(variant), quantity: 1 }];
+      return [...items, { name: retailVariantName(product.name, variant), sku: variant.sku, productId: product.id, variantId: variant.id, unitPrice: salePrice(variant), quantity: 1 }];
     });
   }
 
@@ -86,7 +86,7 @@ export function RetailOrderEditor({ order, onClose, onSaved }: { order: RetailOr
           onChange={event => { setSearch(event.target.value); setPage(1); }}/></label>
         <State query={products} empty={products.data?.length === 0}/>
         <div className="retail-edit-results">{products.data?.flatMap(product => product.variants.map(variant => <div className="list-row" key={variant.id}>
-          <div>{product.name}<small>{variant.sku} · {currency.format(salePrice(variant))}</small></div>
+          <div>{retailVariantName(product.name, variant)}<small>{variant.sku} · {currency.format(salePrice(variant))}</small></div>
           <button type="button" className="plain" disabled={action.pending || !!variant.paused || draft.length >= maxLines}
             onClick={() => add(product, variant)}>{variant.paused ? t("Chưa khả dụng") : t("Thêm")}</button>
         </div>))}</div>

@@ -9,3 +9,7 @@ export type Product = { id: string; name: string; description?: string; images: 
 export function foodVariantLabel(variant: Variant, index: number) {
   return variant.attributes?.size || (index === 0 ? 'Phần tiêu chuẩn' : `Phiên bản ${index + 1}`);
 }
+
+export function retailVariantName(name: string, variant: Variant) {
+  return variant.attributes?.size ? `${name} · ${variant.attributes.size}` : name;
+}
