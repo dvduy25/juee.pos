@@ -28,6 +28,12 @@ export function applyStockLotChanges(before: readonly StockLot[], changes: reado
   }).sort(byExpiry);
 }
 
+export function keepDepletedLots(before: readonly StockLot[], after: readonly StockLot[]) {
+  const dates = new Set(after.map(lot => lot.expiresOn));
+  return [...after, ...before.flatMap(lot => lot.expiresOn && !dates.has(lot.expiresOn)
+    ? [{ expiresOn: lot.expiresOn, quantity: 0 }] : [])].sort(byExpiry);
+}
+
 // Keep the original allocation order so successive partial returns restore different portions of the same sale.
 export function sliceStockLots<T extends StockLot>(lots: readonly T[], offset: number, quantity: number): T[] {
   const result: T[] = [];
@@ -43,9 +49,11 @@ export function sliceStockLots<T extends StockLot>(lots: readonly T[], offset: n
   return result;
 }
 
-export function issueStockLots(lots: readonly StockLot[], quantity: number, today?: string) {
-  const available = lots.filter(lot => !today || !lot.expiresOn || lot.expiresOn >= today)
+export function issueStockLots(lots: readonly StockLot[], quantity: number, today = facilityToday(), priorityExpiry?: string | null) {
+  const available = lots.filter(lot => lot.quantity > 0 && (!lot.expiresOn || lot.expiresOn >= today))
     .map(({ expiresOn, quantity }) => ({ expiresOn: expiresOn ?? null, quantity }))
     .sort(byExpiry);
+  const preferred = priorityExpiry ? available.findIndex(lot => lot.expiresOn === priorityExpiry) : -1;
+  if (preferred > 0) available.unshift(...available.splice(preferred, 1));
   return sliceStockLots(available, 0, quantity);
 }

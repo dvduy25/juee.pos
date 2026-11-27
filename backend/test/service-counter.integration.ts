@@ -8,6 +8,7 @@ import mongoose from 'mongoose';
 import { connectDatabase } from '../src/config/db';
 import { AuditLog, Bill, Branch, IdempotencyRecord, Membership, Order, OutboxEvent, Payment, Product,
   ProductVariant, PurchaseReceipt, Refund, Subscription, Tenant, User, UserSession, WarehouseItem, WarehouseMovement } from '../src/models';
+import { facilityToday, shiftDays } from '../src/services/membership-plans';
 
 test('service branches sell warehouse goods from reception and account for them separately', { timeout: 45000 }, async () => {
   const rawUri = process.env.TEST_DATABASE_URL;
@@ -44,6 +45,8 @@ test('service branches sell warehouse goods from reception and account for them 
       if (!healthy) await setTimeout(200);
     }
     assert.ok(healthy);
+    const today = facilityToday();
+    const [expired, nearest, preferred, latest] = [-2, 3, 10, 20].map(days => shiftDays(today, days));
     for (const [index, mode] of ['GYM', 'POOL', 'HOTEL', 'TICKETS'].entries()) {
       const credentials = { email: `counter-${randomUUID()}@example.com`, password: 'counter-test-password-1' };
       const user = await expectJson(await request('/auth/register', 'POST', { ...credentials, name: 'Quản lý quầy', phone: `090123452${index}` }));
@@ -57,8 +60,22 @@ test('service branches sell warehouse goods from reception and account for them 
       const scope = { tenantId: new mongoose.Types.ObjectId(site.id), branchId: new mongoose.Types.ObjectId(branchId) };
       const item = await expectJson(await request(`${root}/warehouse/items`, 'POST',
         { name: 'Nước suối', code: 'NUOC', barcode: '8930123456789', unit: 'chai', minimum: '2', ...(index === 0 && { size: 'M' }) }, owner));
+      const itemPath = `${root}/warehouse/items/${item.id}`;
+      const readItem = async (token = owner) => expectJson(await request(itemPath, 'GET', undefined, token), 200);
+      const updateLot = async (action: string, expiresOn: string | null, revision: number, key?: string, token = owner) =>
+        request(`${itemPath}/lots`, 'PATCH', { action, expiresOn, revision }, token, key);
+      const lots = index === 0 ? [[expired, '1'], [nearest, '1'], [preferred, '1'], [latest, '2']] : [[undefined, '5']];
       await expectJson(await request(`${root}/purchases`, 'POST', { supplier: 'Kho đồ uống', method: 'CASH',
-        lines: [{ itemId: item.id, quantity: '5', unitCost: 4000, taxBps: 0 }] }, owner));
+        lines: lots.map(([expiresOn, quantity]) => ({ itemId: item.id, expiresOn, quantity, unitCost: 4000, taxBps: 0 })) }, owner));
+      if (index === 0) {
+        const stocked = await readItem();
+        assert.deepEqual(stocked.lots.map((lot: { quantity: number }) => lot.quantity), [1000, 1000, 1000, 2000]);
+        assert.equal((await updateLot('PRIORITIZE', expired, stocked.revision)).status, 409);
+        assert.equal((await updateLot('CONFIRM_EMPTY', nearest, stocked.revision)).status, 409);
+        await expectJson(await updateLot('PRIORITIZE', preferred, stocked.revision), 200);
+        assert.equal((await readItem()).priorityExpiry, preferred);
+        assert.equal((await updateLot('PRIORITIZE', null, stocked.revision)).status, 409);
+      }
       const listing = await expectJson(await request(`${root}/retail-products`, 'POST',
         { warehouseItemId: item.id, price: 12000, description: '' }, owner));
 
@@ -115,17 +132,44 @@ test('service branches sell warehouse goods from reception and account for them 
       assert.equal((await WarehouseItem.findById(item.id).lean())?.onHand, 3000);
       const orders = await expectJson(await request(`${root}/orders`, 'GET', undefined, cashier), 200);
       assert.deepEqual(orders[0].items.map((line: { name: string }) => line.name), expectedNames);
+      assert.equal((await updateLot('PRIORITIZE', null, 0, undefined, cashier)).status, 403);
       assert.equal((await request(`${root}/payments/${paid.payment.id}/refunds`, 'POST',
         { amount: expectedTotal, reason: 'Khách trả hàng' }, cashier)).status, 403);
 
       const { accessToken: manager } = await expectJson(await request('/auth/work-mode', 'POST',
         { mode: 'MANAGEMENT', password: credentials.password }, cashier), 200);
+      if (index === 0) {
+        const order = await Order.findById(orders[0].id).lean();
+        assert.deepEqual(order?.items.map(line => line.stockLots?.[0]?.expiresOn), [preferred, nearest]);
+        const remaining = await readItem(manager);
+        assert.equal(remaining.priorityExpiry, undefined);
+        assert.deepEqual(remaining.lots, [{ expiresOn: expired, quantity: 1000 }, { expiresOn: nearest, quantity: 0 },
+          { expiresOn: preferred, quantity: 0 }, { expiresOn: latest, quantity: 2000 }]);
+        const key = randomUUID();
+        await expectJson(await updateLot('CONFIRM_EMPTY', preferred, remaining.revision, key, manager), 200);
+        await expectJson(await updateLot('CONFIRM_EMPTY', preferred, remaining.revision, key, manager), 200);
+        assert.deepEqual((await readItem(manager)).lots, remaining.lots.filter((lot: { expiresOn: string }) => lot.expiresOn !== preferred));
+      }
       const report = await expectJson(await request(`${root}/accounting?period=all`, 'GET', undefined, manager), 200);
       assert.equal(report.sales.total, expectedTotal);
       assert.equal(report.memberPayments.total + report.hotelPayments.total + report.ticketPayments.total, 0);
       await expectJson(await request(`${root}/payments/${paid.payment.id}/refunds`, 'POST',
         { amount: expectedTotal, reason: 'Khách trả hàng' }, manager));
       assert.equal((await WarehouseItem.findById(item.id).lean())?.onHand, 5000);
+      if (index === 0) {
+        const restored = await readItem(manager);
+        assert.ok(restored.lots.some((lot: { expiresOn: string; quantity: number }) => lot.expiresOn === preferred && lot.quantity === 1000));
+        const move = (body: object) => request(`${root}/warehouse/movements`, 'POST', { itemId: item.id, note: 'Kiểm kho', ...body }, manager);
+        const issued = await expectJson(await move({ operation: 'ISSUE', quantity: '1', revision: restored.revision }));
+        assert.deepEqual(issued.lotAllocation, [{ expiresOn: nearest, quantity: 1000 }]);
+        const recounted = await expectJson(await move({ operation: 'COUNT', quantity: '5', revision: issued.itemRevision,
+          countedLots: [{ expiresOn: expired, quantity: '1' }, { expiresOn: nearest, quantity: '2' },
+            { expiresOn: preferred, quantity: '0' }, { expiresOn: latest, quantity: '2' }] }));
+        assert.deepEqual(recounted.lotsAfter, [{ expiresOn: expired, quantity: 1000 }, { expiresOn: nearest, quantity: 2000 },
+          { expiresOn: preferred, quantity: 0 }, { expiresOn: latest, quantity: 2000 }]);
+        await expectJson(await move({ operation: 'RECEIPT', quantity: '3', revision: recounted.itemRevision, expiresOn: preferred }));
+        assert.ok((await readItem(manager)).lots.some((lot: { expiresOn: string; quantity: number }) => lot.expiresOn === preferred && lot.quantity === 3000));
+      }
     }
   } finally {
     if (server.exitCode === null && server.signalCode === null) server.kill();

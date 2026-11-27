@@ -110,7 +110,7 @@ export async function prepareOrderItems(scope: Scope, input: Pick<OrderInput, 'i
           'Không đủ nguyên liệu cho số phần đã chọn.' : `Không đủ nguyên liệu còn hạn: ${item.name}.`;
         throw new ConflictException(message);
       }
-      const allocation = issueStockLots(lots, quantity, today);
+      const allocation = issueStockLots(lots, quantity, today, item.priorityExpiry);
       availableLots.set(id, applyStockLotChanges(lots, allocation.map(lot => ({ ...lot, quantity: -lot.quantity }))));
       addLotAllocation(allocations, id, allocation);
       return allocation.map(lot => ({ ...lot, itemId: item._id }));

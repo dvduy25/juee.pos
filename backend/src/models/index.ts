@@ -77,7 +77,7 @@ export const warehouseOperations = ['RECEIPT', 'ISSUE', 'COUNT'] as const;
 const stockLot = new Schema({ expiresOn: String, quantity: money }, { _id: false });
 const warehouseItems = new Schema({ tenantId: id, branchId: id, code: text, name: text, unit: text,
   barcode: String, categoryId: Schema.Types.ObjectId, size: String, color: String, unitCost: { ...money, required: false },
-  expiresOn: String, lots: { type: [stockLot], default: undefined },
+  expiresOn: String, lots: { type: [stockLot], default: undefined }, priorityExpiry: String,
   onHand: { ...money, default: 0 }, minimum: { ...money, default: 0 }, revision: { ...money, default: 0 },
 }, { timestamps: true });
 warehouseItems.index({ tenantId: 1, branchId: 1, code: 1 }, { unique: true });

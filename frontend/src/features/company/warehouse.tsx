@@ -14,7 +14,8 @@ import { usesRetail, usesTables } from '@/types/business';
 
 type Lot = { expiresOn?: string | null; quantity: number };
 type Item = { id: string; code: string; name: string; unit: string; onHand: number; minimum: number; revision: number; lots?: Lot[]; available?: number;
-  barcode?: string; categoryId?: string; size?: string; color?: string; unitCost?: number; expiresOn?: string | null; countBasis?: CountBasis };
+  barcode?: string; categoryId?: string; size?: string; color?: string; unitCost?: number; expiresOn?: string | null; priorityExpiry?: string; countBasis?: CountBasis };
+type ItemDetails = Item & { lots: Lot[]; today: string; soonUntil: string };
 type WarehouseList = { items: Item[]; total: number; low: number; empty: number; soon: number; expired: number; today: string; soonUntil: string };
 type CountBasis = { soldQuantity: number; previousCountId?: string; previousCountAt?: string; previousCountQuantity?: number };
 const operations = { RECEIPT: 'Nhập kho', ISSUE: 'Xuất kho', COUNT: 'Kiểm kê' } as const;
@@ -63,7 +64,7 @@ function LotCountFields({ lots, unit, correction = false, onTotal }: {
       <label>{t("Hạn sử dụng")}<input name="lotExpiry" type="date" max="9999-12-31" defaultValue={lot.expiresOn ?? ''}/></label>
       <label>{t("Số đếm (")}{unit}){!correction && lot.quantity > 0 && <small>{t("Tồn hệ thống")} {quantity(lot.quantity)}</small>}
         <input name="lotQuantity" type="number" min="0" max="999999999.999" step="0.001"
-          defaultValue={correction ? lot.quantity / 1000 : undefined} required/></label>
+          defaultValue={correction || (lot.expiresOn && lot.quantity === 0) ? lot.quantity / 1000 : undefined} required/></label>
       {lot.key >= lots.length && <button type="button" className="plain" onClick={() => setRows(current => current.filter(row => row.key !== lot.key))}>{t("Bỏ dòng")}</button>}
     </div>)}
     <button type="button" className="plain" disabled={rows.length >= 500} onClick={() => {
@@ -121,6 +122,7 @@ function WarehouseWorkspace({ purpose }: { purpose: 'count' | 'catalog' | 'gener
   const [scanCode, setScanCode] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Selection>();
+  const [details, setDetails] = useState<Pick<Item, 'id' | 'name'>>();
   const [historyItem, setHistoryItem] = useState<Pick<Item, 'id' | 'name'>>();
   const [viewingHistory, setViewingHistory] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -183,12 +185,9 @@ function WarehouseWorkspace({ purpose }: { purpose: 'count' | 'catalog' | 'gener
               {(!countOnly || stock !== 'AVAILABLE') && <span className={stock === 'AVAILABLE' ? 'badge' : 'badge warning'}>
                 {stock === 'EMPTY' && item.onHand > 0 ? t("Hết hàng còn hạn") : t(stockLabels[stock])}</span>}
             </div>
-            {item.lots?.some(lot => lot.expiresOn) && <ul className="warehouse-lots">{item.lots.map(lot => {
-              const warning = lot.expiresOn && query.data && (lot.expiresOn < query.data.today ? 'Đã hết hạn' : lot.expiresOn <= query.data.soonUntil ? 'Sắp hết hạn' : '');
-              return <li key={lot.expiresOn ?? 'undated'}><span>{lot.expiresOn ? `HSD ${expiry(lot.expiresOn)}` : t("Chưa có HSD")}</span>
-                <strong>{quantity(lot.quantity)} {item.unit}</strong>{warning && <span className="badge warning">{warning}</span>}</li>;
-            })}</ul>}
             <div className="actions business-filters company-stock-actions">
+              {item.lots?.some(lot => lot.expiresOn) && <button className="plain" type="button" aria-haspopup="dialog"
+                onClick={() => setDetails(item)}>{t("Chi tiết HSD")}</button>}
               {purpose === 'general' && <>
                 <button className="plain" type="button" onClick={() => select(item, 'move', 'RECEIPT')}><ArrowDownToLine size={15}/> {t("Nhập")}</button>
                 <button className="plain" type="button" onClick={() => select(item, 'move', 'ISSUE')}><ArrowUpFromLine size={15}/> {t("Xuất")}</button>
@@ -203,13 +202,69 @@ function WarehouseWorkspace({ purpose }: { purpose: 'count' | 'catalog' | 'gener
       </Panel>
 
       {selected ? <WarehouseItemAction key={`${selected.item.id}:${selected.kind}:${selected.operation}`}
-        selection={selected} countOnly={countOnly} close={() => setSelected(undefined)}/> : countOnly ?
+        selection={selected} countOnly={countOnly || selected.operation === 'COUNT'} close={() => setSelected(undefined)}/> : countOnly ?
         <Panel title={t("Kiểm kê")}><p className="muted">{ingredient ? t("Chọn nguyên liệu để đối chiếu lượng dùng chế biến và lượng thực tế.") : t("Chọn mặt hàng để đối chiếu số đã xuất và số lượng thực tế.")}</p></Panel> :
         null}
     </div>
     {purpose === 'general' && <MovementHistory key={historyItem?.id ?? 'all'} item={historyItem} clear={() => setHistoryItem(undefined)}/>}
+    {details && <WarehouseLotDetails key={details.id} selected={details} close={() => setDetails(undefined)} count={item => {
+      setDetails(undefined);
+      select(item, 'move', 'COUNT');
+    }}/>}
     {addItem}
   </>;
+}
+
+function WarehouseLotDetails({ selected, count, close }: {
+  selected: Pick<Item, 'id' | 'name'>; count: (item: Item) => void; close: () => void;
+}) {
+  const { t } = useLanguage();
+  const action = useAction();
+  const path = `/warehouse/items/${selected.id}`;
+  const query = useData<ItemDetails>(path, 15000);
+  const item = query.data;
+  const usable = item?.lots.filter(lot => lot.quantity > 0 && (!lot.expiresOn || lot.expiresOn >= item.today));
+  const preferred = item?.priorityExpiry ? usable?.find(lot => lot.expiresOn === item.priorityExpiry) : undefined;
+  const next = preferred ?? usable?.find(lot => lot.expiresOn) ?? usable?.[0];
+
+  function update(command: 'PRIORITIZE' | 'CONFIRM_EMPTY', expiresOn: string | null) {
+    if (!item) return;
+    void action.send(`${path}/lots`, { action: command, expiresOn, revision: item.revision }, {
+      method: 'PATCH', idempotent: true, message: command === 'CONFIRM_EMPTY' ? 'Đã xác nhận lô hết hàng.' : 'Đã lưu thứ tự xuất kho.',
+    }).then(result => { if (!result) void query.refetch(); });
+  }
+
+  return <BusinessDialog title={t("Chi tiết HSD · {0}", item?.name ?? selected.name)} close={close} pending={action.pending}>
+    <State query={query}/>
+    {item && <>
+      <p className="muted">{t("Mặc định xuất lô còn hạn có HSD gần nhất. Bạn có thể ưu tiên một lô khác.")}</p>
+      {!item.lots.some(lot => lot.expiresOn) && <p>{t("Chưa có lô theo hạn sử dụng.")}</p>}
+      <ul className="warehouse-lots">{item.lots.map(lot => {
+        const day = lot.expiresOn;
+        const expired = !!day && day < item.today;
+        const empty = lot.quantity === 0;
+        const status = empty ? 'Đã hết hàng · Chờ xác nhận' : expired ? 'Đã hết hạn' : day && day <= item.soonUntil ? 'Sắp hết hạn' : '';
+        return <li key={day ?? 'undated'} className="list-row">
+          <div><strong>{day ? t("HSD {0}", expiry(day)) : t("Chưa có HSD")}</strong>
+            <small>{quantity(lot.quantity)} {item.unit}</small></div>
+          <div className="actions warehouse-lot-actions">
+            {status && <span className="badge warning">{t(status)}</span>}
+            {next === lot && <span className="badge">{t("Xuất trước")}</span>}
+            {day && (empty ? <button type="button" className="plain" disabled={action.pending}
+              aria-label={t("Xác nhận đã hết lô HSD {0}", expiry(day))} onClick={() => update('CONFIRM_EMPTY', day)}>{t("Xác nhận đã hết")}</button> :
+              !expired && preferred !== lot && <button type="button" className="plain" disabled={action.pending}
+                aria-label={t("Ưu tiên lô HSD {0}", expiry(day))} onClick={() => update('PRIORITIZE', day)}>{t("Ưu tiên lô này")}</button>)}
+          </div>
+        </li>;
+      })}</ul>
+      <div className="actions business-filters">
+        <button type="button" className="button" disabled={action.pending} onClick={() => count(item)}>{t("Kiểm kê lại")}</button>
+        {item.priorityExpiry && <button type="button" className="plain" disabled={action.pending}
+          onClick={() => update('PRIORITIZE', null)}>{t("Dùng thứ tự mặc định")}</button>}
+      </div>
+    </>}
+    {action.feedback}
+  </BusinessDialog>;
 }
 
 function WarehouseItemAction({ selection, countOnly, close }: { selection: Selection; countOnly: boolean; close: () => void }) {
@@ -311,6 +366,7 @@ function MovementForm({ item, initial, countOnly, stale, save, reload, close }: 
       if (isCount && !counted) return;
       void action.send<Movement>('/warehouse/movements', { itemId: item.id, operation,
         quantity: counted ? (counted.total / 1000).toFixed(3) : value(form, 'quantity'), countedLots: counted?.countedLots,
+        expiresOn: operation === 'RECEIPT' ? value(form, 'expiresOn') || undefined : undefined,
         revision: item.revision, note: value(form, 'note') || (isCount ? 'Kiểm kê' : ''),
       }, { idempotent: true, reset: element, message: countOnly ? 'Đã lưu kiểm kê.' : 'Đã ghi nhận giao dịch kho.' })
         .then(result => { if (result) { setCount(undefined); setSaved(result); save(result); } });
@@ -321,6 +377,7 @@ function MovementForm({ item, initial, countOnly, stale, save, reload, close }: 
       {isCount ? <LotCountFields key={item.revision} lots={lots} unit={item.unit} onTotal={setCount}/> : <label>{t("Số lượng (")}{item.unit})
         <input name="quantity" key={operation} type="number" min="0.001" max="999999999.999" step="0.001" required/>
       </label>}
+      {operation === 'RECEIPT' && <label>{t("Hạn sử dụng")}<input name="expiresOn" type="date" max="9999-12-31"/></label>}
       {countOnly && <div className="warehouse-count-result" aria-live="polite">
         {difference !== undefined && !stale && <CountDifference difference={difference} unit={item.unit}/>}
       </div>}

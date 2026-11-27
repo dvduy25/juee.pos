@@ -2,6 +2,7 @@ import { Body, ConflictException, Controller, Get, Header, Headers, Param, Patch
 import type { Request } from 'express';
 import { z } from 'zod';
 import { transaction } from '../config/db';
+import { verifyOrigin } from '../middleware/auth';
 import { access, logChange } from '../middleware/business-access';
 import { Category, DishRecipe, Product, User, WarehouseItem, WarehouseMovement, warehouseOperations } from '../models';
 import { scopedRoute } from '../routes/branch';
@@ -22,6 +23,11 @@ const fields = z.object({ code, name: label, unit: z.string().trim().min(1).max(
   barcode: z.string().trim().min(1).max(80).nullable().optional(), categoryId: objectId.nullable().optional(),
   size: label.nullable().optional(), color: label.nullable().optional(), unitCost: vnd.optional(), expiresOn: warehouseExpiry }).strict();
 const revision = z.number().int().nonnegative().safe();
+const lotDate = z.string().date('Hạn sử dụng không hợp lệ.');
+const lotUpdate = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('PRIORITIZE'), expiresOn: lotDate.nullable(), revision }).strict(),
+  z.object({ action: z.literal('CONFIRM_EMPTY'), expiresOn: lotDate, revision }).strict(),
+]);
 
 function duplicateItem(error: unknown): never {
   if (isDuplicate(error)) throw new ConflictException('Mã hàng hoặc mã vạch đã được dùng trong kho của chi nhánh này.');
@@ -71,7 +77,40 @@ export class WarehouseController {
       const item = found(await WarehouseItem.findOne(filter).session(session).lean(), 'Không tìm thấy mặt hàng trong kho.');
       return { ...item, lots: stockLots(item), countBasis: await warehouseCountBasis(scope, item._id, session) };
     });
-    return found(await WarehouseItem.findOne(filter).lean(), 'Không tìm thấy mặt hàng trong kho.');
+    const item = found(await WarehouseItem.findOne(filter).lean(), 'Không tìm thấy mặt hàng trong kho.');
+    const now = Date.now();
+    return { ...item, lots: stockLots(item), today: facilityToday(now), soonUntil: facilityToday(now + 7 * 86400000) };
+  }
+
+  @Patch('warehouse/items/:id/lots')
+  async updateLots(@Req() req: Request, @Param() route: Route, @Body() body: unknown, @Headers('idempotency-key') key?: string) {
+    verifyOrigin(req);
+    const itemId = read(objectId, route.id);
+    const input = read(lotUpdate, body);
+    const { scope, actorId } = await access(req, route.tenantId, route.branchId, 'warehouse.write');
+    return idempotent(scope, 'WAREHOUSE_LOT_UPDATE', key, { actorId, itemId, input }, async session => {
+      await access(req, route.tenantId, route.branchId, 'warehouse.write', session);
+      const item = found(await WarehouseItem.findOne({ ...scope, _id: itemId }).session(session), 'Không tìm thấy mặt hàng trong kho.');
+      if (item.revision !== input.revision) throw new ConflictException('Tồn kho vừa thay đổi. Hãy kiểm tra lại trước khi lưu.');
+      const lots = stockLots(item);
+      const lot = input.expiresOn === null ? undefined :
+        found(lots.find(lot => lot.expiresOn === input.expiresOn), 'Không tìm thấy lô theo hạn sử dụng.');
+      if (input.action === 'CONFIRM_EMPTY') {
+        if (!lot || lot.quantity !== 0) throw new ConflictException('Lô vẫn còn tồn. Hãy kiểm kê lại số lượng thực tế.');
+        item.set('lots', lots.filter(lot => lot.expiresOn !== input.expiresOn));
+        if (item.priorityExpiry === input.expiresOn) item.set('priorityExpiry', undefined);
+      } else {
+        if (lot && input.expiresOn && (lot.quantity === 0 || input.expiresOn < facilityToday())) {
+          throw new ConflictException('Chỉ ưu tiên được lô còn hàng và còn hạn.');
+        }
+        item.set('priorityExpiry', input.expiresOn ?? undefined);
+      }
+      item.revision += 1;
+      await item.save({ session });
+      await logChange(scope, actorId, input.action === 'CONFIRM_EMPTY' ? 'WAREHOUSE_LOT_CONFIRM_EMPTY' : 'WAREHOUSE_LOT_PRIORITY', item._id,
+        session, { expiresOn: input.expiresOn });
+      return { ok: true };
+    });
   }
 
   @Get('warehouse/export-stock')
@@ -83,7 +122,7 @@ export class WarehouseController {
       const items = WarehouseItem.find(scope).sort('name _id').lean().cursor();
       try {
         for await (const item of items) {
-          const lots = stockLots(item);
+          const lots = stockLots(item).filter(lot => lot.quantity > 0);
           for (const lot of lots.length ? lots : [{ quantity: 0, expiresOn: null }]) {
             const expired = !!lot.expiresOn && lot.expiresOn < today;
             yield [today, item.code, item.name, item.unit, lot.expiresOn ?? '', lot.quantity / 1000,
@@ -190,7 +229,7 @@ export class WarehouseController {
   async move(@Req() req: Request, @Param() route: Route, @Body() body: unknown, @Headers('idempotency-key') key?: string) {
     const input = read(z.object({ itemId: objectId, operation: z.enum(warehouseOperations), quantity: warehouseQuantity,
       revision, note: label, expiresOn: warehouseExpiry, countedLots: warehouseCountLots }).strict()
-      .refine(input => input.operation === 'COUNT' || (input.expiresOn === undefined && input.countedLots === undefined),
+      .refine(input => input.operation === 'COUNT' || (input.countedLots === undefined && (input.operation === 'RECEIPT' || input.expiresOn === undefined)),
         'Thông tin kiểm kê chỉ được dùng khi lưu kiểm kê.'), body);
     const { scope, actorId } = await access(req, route.tenantId, route.branchId, 'warehouse.write');
     return idempotent(scope, 'WAREHOUSE_MOVEMENT', key, { actorId, ...input }, async session => {

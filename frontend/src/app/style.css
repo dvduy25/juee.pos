@@ -461,7 +461,8 @@ th { color: var(--muted); white-space: nowrap; font-weight: 650; background: var
 .warehouse-alerts button[aria-pressed="true"] { border-color: var(--accent); background: var(--tint); }
 .warehouse-alerts strong { display: block; font-size: 18px; }
 .warehouse-lots { display: grid; gap: 5px; margin: 4px 0 8px; padding: 0; list-style: none; }
-.warehouse-lots li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.warehouse-lots li, .warehouse-lot-actions { flex-wrap: wrap; }
+.warehouse-lot-actions { justify-content: flex-end; }
 .warehouse-lot-count { display: grid; gap: 8px; min-width: 0; }
 .warehouse-lot-count > .plain { justify-self: start; }
 .warehouse-saved-count { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

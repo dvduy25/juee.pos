@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { ClientSession, Types } from 'mongoose';
 import { WarehouseItem, WarehouseMovement, type warehouseOperations } from '../models';
 import type { Scope } from '../middleware/business-access';
-import { applyStockLotChanges, issueStockLots, stockLots, type StockLot } from './stock-lots';
+import { applyStockLotChanges, issueStockLots, keepDepletedLots, stockLots, type StockLot } from './stock-lots';
 
 export const warehouseQuantity = z.string().trim().regex(/^\d{1,9}(?:\.\d{1,3})?$/, 'Số lượng phải có tối đa 3 chữ số thập phân.')
   .transform(value => {
@@ -67,16 +67,19 @@ export async function recordWarehouseMovement(scope: Scope, item: InstanceType<t
   const after = warehouseBalance(input.operation, before, input.quantity);
   const current = stockLots(item);
   const count = input.operation === 'COUNT';
-  if (count && !countedLots && current.length > 1) throw new ConflictException('Hãy nhập số lượng kiểm kê theo từng hạn sử dụng.');
+  const inStock = count && !countedLots ? current.filter(lot => lot.quantity > 0) : [];
+  if (inStock.length > 1) throw new ConflictException('Hãy nhập số lượng kiểm kê theo từng hạn sử dụng.');
   const allocation = count ? undefined : lotAllocation ?? (input.operation === 'RECEIPT' ? [{ expiresOn, quantity: input.quantity }] :
-    issueStockLots(current, input.quantity));
-  const next = count ? applyStockLotChanges([], countedLots ?? [{ expiresOn: expiresOn === undefined ? current[0]?.expiresOn ?? item.expiresOn : expiresOn,
+    issueStockLots(current, input.quantity, undefined, item.priorityExpiry));
+  const next = count ? applyStockLotChanges([], countedLots ?? [{ expiresOn: expiresOn === undefined ? inStock[0]?.expiresOn ?? item.expiresOn : expiresOn,
     quantity: input.quantity }]) : applyStockLotChanges(current, allocation!.map(lot => ({ ...lot,
     quantity: input.operation === 'ISSUE' ? -lot.quantity : lot.quantity })));
   if (next.reduce((sum, lot) => sum + lot.quantity, 0) !== after) throw new ConflictException('Tổng số lượng theo hạn sử dụng không khớp.');
-  if (next.length > 500) throw new ConflictException('Mặt hàng có quá nhiều hạn sử dụng đang tồn kho.');
+  const tracked = keepDepletedLots(current, next);
+  if (tracked.length > 500) throw new ConflictException('Mặt hàng có quá nhiều lô. Hãy xác nhận các lô đã hết trước khi thêm lô mới.');
   item.onHand = after;
-  item.set('lots', next);
+  item.set('lots', tracked);
+  if (item.priorityExpiry && !next.some(lot => lot.expiresOn === item.priorityExpiry)) item.set('priorityExpiry', undefined);
   item.set('expiresOn', undefined);
   item.revision += 1;
   await item.save({ session });
