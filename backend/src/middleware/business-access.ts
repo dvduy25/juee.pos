@@ -33,6 +33,8 @@ const permissions = {
   'orders.cancel': ['OWNER', 'MANAGER'],
   'orders.cancellations': ['OWNER', 'MANAGER'],
   'bills.read': ['OWNER', 'MANAGER', 'CASHIER', 'ACCOUNTANT'],
+  'bookings.manage': ['OWNER', 'MANAGER'],
+  'bookings.configure': ['OWNER'],
   'transfers.review': ['OWNER', 'MANAGER', 'ACCOUNTANT'],
   'payments.collect': ['OWNER', 'MANAGER', 'CASHIER'],
   'refunds.approve': ['OWNER', 'MANAGER'],

@@ -1,50 +1,46 @@
 /* Keep screen effects out of the receipt and ticket print styles. */
 @media screen {
   :is(.desk-frame, .auth, .landing, .member-kiosk-page) {
-    --workspace-wash: color-mix(in srgb, var(--accent) 4%, var(--surface));
+    --workspace-wash: color-mix(in srgb, var(--accent) 5%, var(--surface));
     --workspace-edge: color-mix(in srgb, var(--accent) 27%, var(--line));
     --workspace-ease: cubic-bezier(.22, 1, .36, 1);
-    --card-shadow: 0 1px 3px #18302109;
-    --focus-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 11%, transparent);
-    --backdrop: #13251e72;
+    --card-shadow: 0 1px 2px #17294b07, 0 8px 24px #17294b06;
+    --focus-shadow: 0 7px 22px color-mix(in srgb, var(--accent) 14%, transparent);
+    --button-end: color-mix(in srgb, var(--accent) 88%, #191734);
+    --backdrop: #11192f66;
   }
 
   :is(.desk-frame, .auth).dark {
     --card-shadow: 0 2px 4px #0002, 0 10px 30px #0002;
-    --backdrop: #07130ead;
+    --button-end: color-mix(in srgb, var(--accent) 92%, #fff);
+    --backdrop: #050a15ad;
   }
 
   /* Shell and navigation */
   .desk-workspace {
-    background: var(--surface);
+    background: radial-gradient(ellipse at 88% 0%, var(--workspace-wash), transparent 43rem), var(--surface);
   }
 
   :is(.desk-sidebar, .desk-drawer) {
-    --ink: #f5fbf6;
-    --muted: #b4c7bc;
-    --panel: #172e25;
-    --line: #335044;
-    --accent: #bde6cb;
-    --on-accent: #173b2c;
-    --tint: #274337;
-    --workspace-edge: #3b5b4c;
-    background: var(--panel);
+    background: linear-gradient(166deg, color-mix(in srgb, var(--accent) 5%, var(--panel)), var(--panel) 21rem);
   }
 
   .desk-top {
-    background: var(--panel);
+    background: color-mix(in srgb, var(--panel) 93%, var(--workspace-wash));
+    box-shadow: 0 2px 9px #1d2e5510;
   }
 
   .desk-brand > span {
     border-radius: 8px;
-    background: var(--accent);
+    background: linear-gradient(145deg, var(--accent), var(--button-end));
+    box-shadow: 0 3px 8px color-mix(in srgb, var(--accent) 23%, transparent);
   }
 
   .desk-nav-group p { letter-spacing: .025em; }
   .desk-nav-group a { position: relative; border: 1px solid transparent; border-radius: 8px; min-height: 39px; }
   .desk-nav-group a[aria-current="page"] {
     border-color: var(--workspace-edge);
-    background: var(--tint);
+    background: linear-gradient(120deg, var(--tint), color-mix(in srgb, var(--accent) 4%, var(--panel)));
   }
 
   .desk-nav-group a[aria-current="page"]::before {
@@ -72,9 +68,9 @@
   .desk-content .company-title { padding-block: 8px 14px; border-bottom: 1px solid var(--line); }
   .desk-content .business-heading {
     padding: clamp(16px, 2.6vw, 29px);
-    border: 1px solid var(--line);
+    border: 1px solid var(--workspace-edge);
     border-radius: var(--radius);
-    background: var(--panel);
+    background: linear-gradient(118deg, var(--tint), var(--panel) 82%);
   }
 
   :is(.desk-frame, .auth, .landing, .member-kiosk-page) .card { box-shadow: var(--card-shadow); }
@@ -84,7 +80,7 @@
 
   .company-metrics > div, .desk-stat, .bill-amounts > div {
     border-radius: 11px;
-    background: var(--panel);
+    background: linear-gradient(135deg, var(--panel), var(--workspace-wash));
   }
 
   .company-metrics > div:first-child, .bill-amounts > .bill-due { background: var(--tint); }
@@ -95,6 +91,10 @@
   .list-row.service-list-row:hover { border-color: var(--workspace-edge); }
   :is(.desk-content, .auth, .landing, .member-kiosk-page) :is(input, select, textarea) {
     background-clip: padding-box;
+  }
+
+  :is(.desk-frame, .auth, .landing, .member-kiosk-page) .button {
+    background-image: linear-gradient(160deg, transparent, color-mix(in srgb, var(--button-end) 58%, transparent));
   }
 
   .desk-frame .button:disabled { box-shadow: none; }
@@ -136,9 +136,6 @@
   .desk-content .warehouse-alerts button { border-radius: 9px; background: var(--panel); }
   .desk-content .warehouse-alerts button[aria-pressed="true"] { background: var(--tint); }
   .desk-content .company-stock-item { padding-block: 4px; }
-  .kitchen-header { background: #21352c; border-color: #30483b; }
-  .kitchen-heading p, .kitchen-paper { color: #e0ecda; }
-  .kitchen-heading-icon, .kitchen-paper select { background: #304b3d; color: #f2f8ef; border-color: #789485; }
 
   .auth, .member-kiosk-page {
     background: radial-gradient(ellipse at 24% 15%, var(--workspace-wash), transparent 37rem),
@@ -150,11 +147,11 @@
     box-shadow: var(--floating-shadow);
   }
 
-  .guest-order-page { background: var(--surface); }
+  .guest-order-page { background: linear-gradient(163deg, var(--workspace-wash), var(--surface) 30rem); }
 
   .guest-header {
-    background: var(--panel);
-    border-color: var(--line);
+    background: linear-gradient(117deg, var(--tint), var(--panel) 88%);
+    border-color: var(--workspace-edge);
   }
 
   .guest-order-page :is(.guest-item, .guest-cart) { border-radius: var(--radius); }

@@ -308,7 +308,7 @@ function HotelCharges({ booking, remove }: { booking: Booking; remove?: (id: str
   </div>;
 }
 
-function HotelFolio({ id, close }: { id: string; close: () => void }) {
+export function HotelFolio({ id, close }: { id: string; close: () => void }) {
   const { t } = useLanguage();
   const { branch, role } = useBusiness();
   const path = `/hotel-bookings/${id}`;

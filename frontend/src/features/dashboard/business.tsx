@@ -13,7 +13,8 @@ import { BusinessContext, useBusiness, type CompanySelection } from '@/hooks/use
 import type { Branch, Membership, WorkspaceMode } from '@/types/business';
 import { subscriptionActive, usesMemberships, usesTables } from '@/types/business';
 import { Pos } from './catalog';
-import { Bills, Orders, Tables, Kitchen } from './sales';
+import { Orders, Tables, Kitchen } from './sales';
+import { PaymentDesk } from './payment-desk';
 import { AccountSecurity } from './security';
 import { BranchSettings } from './branch-settings';
 import { MemberCheckIn, MemberDirectory, MemberVisits } from './members';
@@ -27,12 +28,15 @@ import { StoreSetup } from './store-setup';
 import { StoreSubscription } from './store-subscription';
 import { WorkModeControl } from './work-mode';
 import { BranchAccessDialog } from './branch-access';
+import { ChooseBranch } from './choose-branch';
+import { BookingRequests } from './booking-requests';
 
 const views: Partial<Record<Section, ComponentType>> = {
   pos: Pos, orders: Orders, tables: Tables, kitchen: Kitchen,
-  payments: Bills, members: MemberDirectory, 'member-visits': MemberVisits, 'member-classes': MemberClasses,
+  payments: PaymentDesk, members: MemberDirectory, 'member-visits': MemberVisits, 'member-classes': MemberClasses,
   'hotel-rooms': HotelRooms, 'hotel-bookings': HotelBookings, 'hotel-calendar': HotelCalendar,
   'ticket-sales': TicketSales, 'ticket-admissions': TicketAdmissions,
+  'booking-requests': BookingRequests,
 };
 function employeeSections(mode: WorkspaceMode): Section[] {
   if (usesMemberships(mode)) return ['overview', 'members', 'member-classes', 'member-visits', ...counterSections];
@@ -72,11 +76,13 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
     setPreferred(saved === 'RESTAURANT' ? 'RESTAURANT' : 'RETAIL');
   }, []);
   const tenants = useQuery({ queryKey: ['tenants', props.user.staffMode?.branchId ?? 'management'], queryFn: () => api<Membership[]>('/tenants'), refetchInterval: 15000 });
-  const selectable = company ? tenants.data?.filter(item => item.role === 'OWNER' || item.role === 'MANAGER') : tenants.data;
+  const manageable = tenants.data?.filter(item => item.role === 'OWNER' || item.role === 'MANAGER') ?? [];
+  const choosing = !security && !selectedScope && manageable.length > 0;
+  const selectable = company ? manageable : tenants.data;
   const member = selectedScope && !companySecurity ? selectable?.find(item => item.tenant.id === selectedScope.tenantId) :
     selectable?.find(item => item.tenant.id === selectedScope?.tenantId) ?? selectable?.[0];
   const tenantId = member?.tenant.id;
-  const branches = useQuery({ queryKey: ['branches', tenantId, staffMode], enabled: !!tenantId && !personalSecurity, refetchInterval: 15000,
+  const branches = useQuery({ queryKey: ['branches', tenantId, staffMode], enabled: !!tenantId && !personalSecurity && !choosing, refetchInterval: 15000,
     queryFn: () => api<Branch[]>(`/tenants/${tenantId}/branches`) });
   const branch = selectedScope ? branches.data?.find(item => item.id === selectedScope.branchId) : branches.data?.[0];
   const requested = pathname.split('/')[2] || (branch?.mode === 'HOTEL' ? 'hotel-rooms' : branch?.mode === 'TICKETS' ? 'ticket-sales' : 'overview');
@@ -84,10 +90,12 @@ function BusinessLayout(props: WorkspaceLayoutProps) {
   const supported = section ? modesFor(section).filter(item => item === 'RETAIL' || item === 'RESTAURANT') : [];
   const directMode = supported.length === 1 ? supported[0] : undefined;
   const mode = branch?.mode === 'HYBRID' ? directMode ?? preferred : branch?.mode;
-  const error = tenants.error ?? (!security ? branches.error : null);
-  const loading = tenants.isPending || (!security && !!tenantId && branches.isPending) ||
+  const error = tenants.error ?? (!security && !choosing ? branches.error : null);
+  const loading = tenants.isPending || (!security && !choosing && !!tenantId && branches.isPending) ||
     (branch?.mode === 'HYBRID' && !mode);
   if (switching || (loading && !error)) return <PageLoading fullPage dark={props.dark}/>;
+  if (choosing && !error) return <ChooseBranch businesses={manageable} dark={props.dark} error={props.error}
+    onLogout={props.onLogout} onSelected={scope => startSwitch(() => props.onBranchChange(scope))}/>;
 
   const allowedSections = mode ? employeeSections(mode) : [];
   const active = subscriptionActive(member?.subscription);
@@ -277,6 +285,6 @@ export function BusinessDashboard({ section = 'overview', bill }: { section?: st
   const hotelDesk = key === 'hotel-rooms' || key === 'hotel-bookings' || key === 'hotel-calendar';
   return <div className="service-workspace">
     {!hotelDesk && key !== 'kitchen' && <div className="desk-page-title"><h1>{t(sectionTitle(key, mode))}</h1></div>}
-    {key === 'payments' ? <Bills key={bill} initialBill={bill}/> : <View/>}
+    {key === 'payments' ? <PaymentDesk key={`${branch.id}:${bill ?? ''}`} initialBill={bill}/> : <View/>}
   </div>;
 }

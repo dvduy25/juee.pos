@@ -29,6 +29,8 @@ import { InventoryAiController } from './controllers/inventory-ai';
 import { TaxDeclarationsController } from './controllers/tax-declarations';
 import { HotelController } from './controllers/hotel';
 import { TicketsController } from './controllers/tickets';
+import { BookingRequestsController, PublicBookingsController } from './controllers/bookings';
+import { BookingRequest } from './models';
 import { StaffWorkController } from './controllers/staff-work';
 import { StaffDeviceController } from './controllers/staff-devices';
 import { PayrollController } from './controllers/payroll';
@@ -75,7 +77,7 @@ class PublicPlansController {
   published() { return publishedPlans(); }
 }
 
-@Module({ controllers: [HealthController, AuthController, AdminAuthController, TenantsController, PlatformController, PublicPlansController, CatalogController, ProductImagesController, SalesController, RestaurantController, GuestController, OperationsController, StaffWorkController, StaffDeviceController, PayrollController, WarehouseController, FinanceController, InventoryAiController, TaxDeclarationsController, MembersController, MemberKioskController, HotelController, TicketsController, RealtimeController, PaymentWebhookController] })
+@Module({ controllers: [HealthController, AuthController, AdminAuthController, TenantsController, PlatformController, PublicPlansController, CatalogController, ProductImagesController, SalesController, RestaurantController, GuestController, OperationsController, StaffWorkController, StaffDeviceController, PayrollController, WarehouseController, FinanceController, InventoryAiController, TaxDeclarationsController, MembersController, MemberKioskController, HotelController, TicketsController, BookingRequestsController, PublicBookingsController, RealtimeController, PaymentWebhookController] })
 class AppModule {}
 
 async function main() {
@@ -124,6 +126,7 @@ async function main() {
   if (!Number.isInteger(proxyHops) || proxyHops < 0) throw new Error('Invalid TRUST_PROXY_HOPS');
   await connectDatabase();
   await ensureRegistrationPhones();
+  await BookingRequest.createIndexes();
   if (process.env.NODE_ENV === 'production') await verifyProductionIndexes();
   else if (googleConfig()) await verifyProductionIndexes(['User']);
   if (subscriptionPayments) await verifyProductionIndexes(['SaaSCheckout', 'SaaSInvoice', 'IncomingTransfer']);
@@ -166,6 +169,8 @@ async function main() {
   app.use('/api/v1/guest/sessions', apiRateLimit({ windowMs: 900_000, limit: 20,
     postOnly: true, message: 'Bạn đã thử mở phiên gọi món quá nhiều lần.' }));
   app.use('/api/v1/guest/orders', apiRateLimit({ windowMs: 60_000, limit: 90, message: 'Bạn đã gửi quá nhiều yêu cầu gọi món.' }));
+  app.use('/api/v1/bookings', apiRateLimit({ windowMs: 900_000, limit: 30, postOnly: true,
+    message: 'Bạn đã gửi quá nhiều yêu cầu đặt trước.' }));
   if (process.env.NODE_ENV !== 'production') {
     const spec = new DocumentBuilder().setTitle('JUEE POS').setVersion('1.0').addBearerAuth().build();
     SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, spec));

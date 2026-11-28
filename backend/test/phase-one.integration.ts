@@ -446,12 +446,17 @@ test('JUEE POS API against an isolated MongoDB replica set', { timeout: 150000 }
     assert.equal((await request(`${secondRoot}/staff/${managerMembership.id}`, 'PATCH', { branchIds: [added.id, primary.id] }, delegatedManager)).status, 403);
     assert.equal((await request(`${branchRoot}/warehouse/items`, 'GET', undefined, delegatedManager)).status, 403);
     const scope = { tenantId: ownerTenant, branchId: added.id };
+    assert.equal((await request('/auth/branch-access', 'POST', { ...scope, branchId: primary.id }, delegatedManager)).status, 403);
+    assert.equal((await request('/auth/branch-access', 'POST', scope, staff)).status, 403);
+    assert.equal((await request('/auth/branch-access', 'POST', scope, owner)).status, 409);
     assert.equal((await request('/auth/branch-access', 'POST', { ...scope, branchId: primary.id, password }, delegatedManager)).status, 403);
     assert.equal((await request('/auth/branch-access', 'POST', { ...scope, password: `${password}-wrong` }, delegatedManager)).status, 403);
-    const confirmedScope = await request('/auth/branch-access', 'POST', { ...scope, password }, delegatedManager);
+    const confirmedScope = await request('/auth/branch-access', 'POST', scope, delegatedManager);
     assert.equal(confirmedScope.status, 200);
     assert.deepEqual(await confirmedScope.json(), scope);
     assert.deepEqual((await (await request('/auth/me', 'GET', undefined, delegatedManager)).json()).selectedBranch, scope);
+    assert.equal((await request('/auth/branch-access', 'POST', scope, delegatedManager)).status, 409);
+    assert.equal((await request('/auth/branch-access', 'POST', { ...scope, password }, delegatedManager)).status, 200);
 
     const startsNow = Date.now() - 60_000;
     const shiftInput = { membershipId: managerMembership.id, title: 'Ca tiếp đón',

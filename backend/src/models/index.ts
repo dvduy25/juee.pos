@@ -71,7 +71,17 @@ export const Branch = model('Branch', new Schema({
   buffetRates: new Schema({ adultPrice: money, childPrice: money }, { _id: false }),
   bankAccount: { type: new Schema({ bank: String, account: String, holder: String }, { _id: false }) },
   retailTaxBps: { type: Number, min: 0, max: 10000, validate: Number.isInteger },
+  onlineBookingEnabled: { type: Boolean, default: false },
 }, { collection: 'Branch', timestamps: true }));
+
+export const bookingRequestStates = ['PENDING', 'CONFIRMED', 'DECLINED'] as const;
+const bookingRequests = new Schema({
+  tenantId: id, branchId: id, guestName: text, phone: text, startsAt: { type: Date, required: true }, endsAt: Date,
+  partySize: { type: Number, required: true, min: 1, max: 100 }, note: String,
+  status: { ...text, enum: bookingRequestStates, default: 'PENDING' }, reviewedBy: Schema.Types.ObjectId,
+}, { collection: 'BookingRequest', timestamps: true });
+bookingRequests.index({ tenantId: 1, branchId: 1, status: 1, createdAt: -1, _id: -1 });
+export const BookingRequest = model('BookingRequest', bookingRequests);
 
 export const warehouseOperations = ['RECEIPT', 'ISSUE', 'COUNT'] as const;
 const stockLot = new Schema({ expiresOn: String, quantity: money }, { _id: false });

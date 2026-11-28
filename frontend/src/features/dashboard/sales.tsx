@@ -71,7 +71,7 @@ export function Orders({ management = false, onViewBill }: { management?: boolea
             {order.takeaway ? t("Mở đơn mang về") : t("Mở bàn")}</Link>}
         {collect && !order.tableSessionId && order.status === 'ACCEPTED' && !order.billId && <button className="button" disabled={action.pending}
           onClick={() => void action.send('/bills', { orderIds: [order.id] }, { idempotent: true, message: 'Đã lập hóa đơn. Mở Thanh toán để thu tiền.' })}>{t("Lập hóa đơn")}</button>}
-        {collect && order.billId && !order.tableSessionId && <Link className="plain" href="/dashboard/payments">{t("Mở thanh toán")}</Link>}
+        {collect && order.billId && !order.tableSessionId && <Link className="plain" href={`/dashboard/payments?bill=${order.billId}`}>{t("Mở thanh toán")}</Link>}
       </div>}
       {management && <div className="actions business-filters">
         {order.retailEditable && <button className="plain" type="button" disabled={action.pending} onClick={() => { setSaved(''); setEditing(order); }}>

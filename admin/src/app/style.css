@@ -1,13 +1,13 @@
 :root {
   color-scheme: light dark;
   font: 14px/1.5 Inter, system-ui, sans-serif;
-  --ink: light-dark(#192920, #edf4ee);
-  --muted: light-dark(#53655b, #b3c2b8);
-  --surface: light-dark(#f2f5ef, #14221d);
-  --panel: light-dark(#fff, #1c2b25);
-  --line: light-dark(#dde5dc, #33453c);
-  --accent: light-dark(#245b46, #a8e6c5);
-  --on-accent: light-dark(#fff, #14241d);
+  --ink: light-dark(#17233a, #eff4ff);
+  --muted: light-dark(#53637a, #acb9ce);
+  --surface: light-dark(#f3f6fb, #101827);
+  --panel: light-dark(#fff, #162133);
+  --line: light-dark(#dce3ed, #354258);
+  --accent: light-dark(#453ac0, #b5acff);
+  --on-accent: light-dark(#fff, #15143a);
   --tint: color-mix(in srgb, var(--accent) 10%, var(--panel));
   color: var(--ink);
   background: var(--surface);
@@ -80,8 +80,7 @@ label.check { display: flex; align-items: center; }
 .admin-brand { display: inline-flex; gap: 9px; align-items: center; color: var(--accent); font-size: 1.2rem; font-weight: 770; }
 .admin-brand small { font-size: .82rem; }
 .admin-shell { min-height: 100dvh; display: grid; grid-template-columns: 225px minmax(0, 1fr); }
-.admin-sidebar { --ink: #f5fbf6; --muted: #b4c7bc; --accent: #bde6cb; --tint: #274337;
-  padding: 18px 12px; color: var(--ink); background: #172e25; border-right: 1px solid #335044; }
+.admin-sidebar { padding: 18px 12px; background: var(--panel); border-right: 1px solid var(--line); }
 .admin-sidebar .admin-brand { margin: 0 8px 13px; }
 .admin-menu-group { display: grid; gap: 3px; margin-bottom: 12px; }
 .admin-menu-group p { margin: 4px 7px; font-weight: 690; color: var(--muted); font-size: 12px; }

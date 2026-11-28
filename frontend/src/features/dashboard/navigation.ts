@@ -28,6 +28,7 @@ export const navigation = {
   'ticket-admissions': { label: 'Soát vé', icon: ScanLine, roles: ['OWNER', 'MANAGER', 'CASHIER'] },
   'ticket-types': { label: 'Loại vé', icon: Tags, roles: ['OWNER', 'MANAGER'] },
   company: { label: 'Quản lý doanh nghiệp', icon: Building2, roles: ['OWNER', 'MANAGER'] },
+  'booking-requests': { label: 'Đặt trước', icon: CalendarDays, roles: ['OWNER', 'MANAGER'] },
   payments: { label: 'Thanh toán', icon: CreditCard, roles: ['OWNER', 'MANAGER', 'CASHIER', 'ACCOUNTANT'] },
   reports: { label: 'Báo cáo', icon: BarChart3, roles: ['OWNER', 'MANAGER', 'ACCOUNTANT'] },
   subscription: { label: 'Gói dịch vụ', icon: Settings, roles: ['OWNER', 'ACCOUNTANT'] },
@@ -36,13 +37,13 @@ export const navigation = {
 export type Section = keyof typeof navigation;
 type Group = { label: string; sections: Section[] };
 export const counterSections: Section[] = ['pos', 'orders', 'payments'];
-const serviceCounter: Group = { label: 'Bán hàng hóa', sections: counterSections };
-const common: Group = { label: 'Quản lý', sections: ['company'] };
+const serviceCounter: Group = { label: 'Bán hàng hóa', sections: ['pos', 'orders'] };
+const common: Group = { label: 'Quản lý', sections: ['booking-requests', 'company'] };
 const foodMenus: Group[] = [
   { label: 'Phục vụ', sections: ['overview', 'tables', 'pos', 'kitchen', 'payments'] }, common,
 ];
 const facilityMenus: Group[] = [
-  { label: 'Tiếp đón', sections: ['overview', 'members', 'member-classes', 'member-visits'] }, serviceCounter, common,
+  { label: 'Tiếp đón', sections: ['overview', 'members', 'member-classes', 'member-visits', 'payments'] }, serviceCounter, common,
 ];
 export const menus: Record<WorkspaceMode, Group[]> = {
   RETAIL: [
@@ -50,10 +51,10 @@ export const menus: Record<WorkspaceMode, Group[]> = {
   ],
   RESTAURANT: foodMenus, CAFE: foodMenus, GYM: facilityMenus, POOL: facilityMenus,
   HOTEL: [
-    { label: 'Lễ tân', sections: ['hotel-rooms', 'hotel-bookings', 'hotel-calendar'] }, serviceCounter, common,
+    { label: 'Lễ tân', sections: ['hotel-rooms', 'hotel-bookings', 'hotel-calendar', 'payments'] }, serviceCounter, common,
   ],
   TICKETS: [
-    { label: 'Thu vé', sections: ['ticket-sales', 'ticket-admissions'] }, serviceCounter, common,
+    { label: 'Thu vé', sections: ['ticket-sales', 'ticket-admissions', 'payments'] }, serviceCounter, common,
   ],
 };
 
@@ -66,7 +67,6 @@ export function sectionTitle(section: Section, mode: WorkspaceMode) {
   if (usesServiceCounter(mode)) {
     if (section === 'pos') return 'Bán đồ tại quầy';
     if (section === 'orders') return 'Đơn bán hàng';
-    if (section === 'payments') return 'Thanh toán hàng hóa';
   }
   if (mode === 'CAFE' && section === 'kitchen') return 'Pha chế';
   return navigation[section].label;

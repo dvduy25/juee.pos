@@ -15,6 +15,7 @@ import { cancelRetailOrder, checkOrderRevision, editableRetailBill, isRetailOrde
 import { csvDate, csvFile } from '../services/csv';
 import { reportPeriodQuery, selectedReportRange } from '../validators/reports';
 import { refundBeforeTax } from '../services/revenue';
+import { paymentHistory, paymentSources } from '../services/payment-history';
 import type { ClientSession } from 'mongoose';
 import type { Scope } from '../middleware/business-access';
 
@@ -335,6 +336,13 @@ export class SalesController {
     const orders = await Order.find({ ...scope, _id: { $in: legacy }, tableSessionId: { $ne: null } }).select('tableSessionId').lean();
     const tableSessions = new Map(orders.map(order => [String(order._id), order.tableSessionId]));
     return bills.map(bill => ({ ...bill, tableSessionId: bill.tableSessionId ?? tableSessions.get(String(bill.orderIds[0])) }));
+  }
+
+  @Get('payment-history')
+  async paymentHistory(@Req() req: Request, @Param() route: Route, @Query() query: unknown) {
+    const { scope, branch } = await access(req, route.tenantId, route.branchId, 'bills.read');
+    const { page, source } = read(z.object({ page: pageSchema, source: z.enum(paymentSources).optional() }), query);
+    return paymentHistory(scope, branch.mode, page, source);
   }
 
   @Get('transfer-review')

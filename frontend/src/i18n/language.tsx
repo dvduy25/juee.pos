@@ -78,7 +78,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.lang = language;
-    const title = titles[pathname] ?? (pathname.startsWith('/check-in/') ? 'Check-in hội viên' : undefined);
+    const title = titles[pathname] ?? (pathname.startsWith('/check-in/') ? 'Check-in hội viên' : pathname.startsWith('/dat-truoc/') ? 'Đặt trước' : undefined);
     const localizedTitle = title ? t(title) + ' | JUEE POS' : 'JUEE POS';
     const syncTitle = () => {
       if (document.title !== localizedTitle) document.title = localizedTitle;

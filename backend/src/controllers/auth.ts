@@ -300,16 +300,25 @@ export class AuthController {
   @HttpCode(200)
   async branchAccess(@Req() req: Request, @Body() body: unknown) {
     verifyOrigin(req);
-    const { tenantId, branchId, password: entered } = read(z.object({ tenantId: objectId, branchId: objectId, password }).strict(), body);
-    const current = await authenticate(req, { management: true });
-    const user = found(await User.findById(current.userId).select('passwordHash').lean());
-    if (!(await verify(requirePassword(user.passwordHash), entered))) throw new ForbiddenException('Mật khẩu tài khoản đang đăng nhập chưa đúng.');
+    const { tenantId, branchId, password: entered } = read(z.object({ tenantId: objectId, branchId: objectId, password: password.optional() }).strict(), body);
+    if (entered !== undefined) {
+      const current = await authenticate(req, { management: true });
+      const user = found(await User.findById(current.userId).select('passwordHash').lean());
+      if (!(await verify(requirePassword(user.passwordHash), entered))) throw new ForbiddenException('Mật khẩu tài khoản đang đăng nhập chưa đúng.');
+    }
     return transaction(async session => {
       const current = await authenticate(req, { management: true, session });
       const { membership } = await tenantMembership(current.userId, tenantId, session);
       if (!canManageBranches(membership.role, membership.branchIds.map(String), branchId) ||
           !await Branch.exists({ _id: branchId, tenantId }).session(session)) {
         throw new ForbiddenException('Hãy đăng nhập bằng tài khoản chủ doanh nghiệp hoặc quản lý được giao chi nhánh này.');
+      }
+      if (entered === undefined) {
+        if (current.selectedBranch) throw new ConflictException('Phiên này đã có chi nhánh. Tải lại trang để tiếp tục.');
+        const age = Date.now() - (current.createdAt?.getTime() ?? 0);
+        if (age < 0 || age > 10 * 60 * 1000) {
+          throw new ForbiddenException('Hãy đăng nhập lại để xác nhận chi nhánh đầu tiên.');
+        }
       }
       const selectedBranch = { tenantId, branchId };
       await UserSession.updateOne({ _id: current.id }, { $set: { selectedBranch } }, { session });

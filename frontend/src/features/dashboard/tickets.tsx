@@ -114,7 +114,7 @@ function admissionWindow(ticket: Receipt['tickets'][number]) {
   ].filter(Boolean).join(' · ');
 }
 
-function TicketReceipt({ id, close }: { id: string; close: () => void }) {
+export function TicketReceipt({ id, close }: { id: string; close: () => void }) {
   const { t } = useLanguage();
   const { branch, role } = useBusiness();
   const query = useData<Receipt>(`/ticket-sales/${id}`, 5000);

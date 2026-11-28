@@ -6,8 +6,8 @@ import { test } from 'node:test';
 import { setTimeout } from 'node:timers/promises';
 import mongoose from 'mongoose';
 import { connectDatabase } from '../src/config/db';
-import { AuditLog, Bill, Branch, IdempotencyRecord, Membership, Order, OutboxEvent, Payment, Product,
-  ProductVariant, PurchaseReceipt, Refund, Subscription, Tenant, User, UserSession, WarehouseItem, WarehouseMovement } from '../src/models';
+import { AuditLog, Bill, BookingRequest, Branch, HotelBooking, IdempotencyRecord, MemberPayment, Membership, Order, OutboxEvent, Payment, Product,
+  ProductVariant, PurchaseReceipt, Refund, Subscription, Tenant, TicketSale, User, UserSession, WarehouseItem, WarehouseMovement } from '../src/models';
 import { facilityToday, shiftDays } from '../src/services/membership-plans';
 
 test('service branches sell warehouse goods from reception and account for them separately', { timeout: 45000 }, async () => {
@@ -181,14 +181,85 @@ test('service branches sell warehouse goods from reception and account for them 
         await expectJson(await move({ operation: 'RECEIPT', quantity: '3', revision: recounted.itemRevision, expiresOn: preferred }));
         assert.ok((await readItem(manager)).lots.some((lot: { expiresOn: string; quantity: number }) => lot.expiresOn === preferred && lot.quantity === 3000));
       }
+
+      const paidAt = new Date(Date.parse(paid.bill.createdAt) + 1000);
+      const actorId = new mongoose.Types.ObjectId(user.id);
+      let service;
+      if (mode === 'HOTEL') {
+        const publicLink = `/bookings/${site.id}/${branchId}`;
+        const queuePath = `${root}/booking-requests`;
+        const settings = `${queuePath}/settings`;
+        assert.equal((await request(publicLink)).status, 404);
+        assert.equal((await request(queuePath)).status, 401);
+        const delegatedCredentials = { email: `booking-${randomUUID()}@example.com`, password: credentials.password };
+        const delegatedUser = await expectJson(await request('/auth/register', 'POST',
+          { ...delegatedCredentials, name: 'Quản lý đặt trước', phone: '0901234545' }));
+        userIds.push(delegatedUser.id);
+        await Membership.create({ tenantId: scope.tenantId, userId: delegatedUser.id, role: 'MANAGER', branchIds: [scope.branchId] });
+        const { accessToken: delegated } = await expectJson(await request('/auth/login', 'POST', delegatedCredentials));
+        assert.equal((await request(settings, 'PATCH', { enabled: true }, delegated)).status, 403);
+        await expectJson(await request(settings, 'PATCH', { enabled: true }, manager), 200);
+        assert.deepEqual(await expectJson(await request(publicLink), 200), { storeName: site.name, branchName: 'Quầy chính', mode });
+        const submission = { guestName: 'Khách đặt trước', phone: '0901234567', partySize: 2, note: 'Đến sớm',
+          startsAt: new Date(Date.now() + 86_400_000).toISOString(), endsAt: new Date(Date.now() + 90_000_000).toISOString() };
+        assert.equal((await request(publicLink, 'POST', { ...submission, endsAt: submission.startsAt })).status, 400);
+        const key = randomUUID();
+        const booking = await expectJson(await request(publicLink, 'POST', submission, undefined, key));
+        assert.deepEqual(await expectJson(await request(publicLink, 'POST', submission, undefined, key)), booking);
+        assert.deepEqual(Object.keys(booking), ['id']);
+        const pending = await expectJson(await request(queuePath, 'GET', undefined, delegated), 200);
+        assert.deepEqual(pending.items.map((item: { id: string }) => item.id), [booking.id]);
+        assert.equal(pending.items[0].phone, '+84901234567');
+        const reviewPath = `${queuePath}/${booking.id}`;
+        await expectJson(await request(reviewPath, 'PATCH', { status: 'CONFIRMED' }, delegated), 200);
+        assert.equal((await request(reviewPath, 'PATCH', { status: 'DECLINED' }, manager)).status, 409);
+        await expectJson(await request(settings, 'PATCH', { enabled: false }, manager), 200);
+        assert.equal((await request(publicLink)).status, 404);
+        assert.equal((await request(publicLink, 'POST', submission)).status, 404);
+        const confirmed = await expectJson(await request(`${queuePath}?status=CONFIRMED`, 'GET', undefined, manager), 200);
+        assert.equal(confirmed.enabled, false);
+        assert.deepEqual(confirmed.items.map((item: { id: string }) => item.id), [booking.id]);
+
+        const stay = { ...scope, roomId: new mongoose.Types.ObjectId(), roomCode: 'P101', guestName: 'Khách lưu trú', phone: '0900000001',
+          guestCount: 1, startsOn: today, endsOn: shiftDays(today, 1), nightlyRate: 250000, amount: 250000 };
+        await HotelBooking.create({ ...stay, status: 'CHECKED_IN' });
+        const room = await HotelBooking.create({ ...stay, status: 'CHECKED_OUT', paymentMethod: 'TRANSFER', paidAt });
+        service = { id: room.id, source: 'HOTEL', title: 'P101', customer: 'Khách lưu trú', amount: 250000, method: 'TRANSFER', status: 'PAID' };
+      } else if (mode === 'TICKETS') {
+        const ticket = await TicketSale.create({ ...scope, actorId, typeId: new mongoose.Types.ObjectId(), typeName: 'Vé vào cửa',
+          buyerName: 'Khách mua vé', buyerPhone: '0900000002', unitPrice: 50000, quantity: 2, amount: 100000,
+          paymentMethod: 'CASH', paidAt, refundedAt: paidAt });
+        service = { id: ticket.id, source: 'TICKET', title: 'Vé vào cửa', customer: 'Khách mua vé', amount: 100000, method: 'CASH', status: 'REFUNDED', quantity: 2 };
+      } else {
+        const member = await MemberPayment.create({ ...scope, actorId, memberId: new mongoose.Types.ObjectId(), memberName: 'Hội viên mẫu',
+          planId: new mongoose.Types.ObjectId(), planName: 'Gói tháng', amount: 300000, method: 'TRANSFER', paidAt });
+        service = { id: member.id, source: 'MEMBER', title: 'Gói tháng', customer: 'Hội viên mẫu', amount: 300000, method: 'TRANSFER', status: 'PAID' };
+      }
+      const history = async (filter = '') => expectJson(await request(`${root}/payment-history${filter}`, 'GET', undefined, manager), 200);
+      const serviceRow = { ...service, occurredAt: paidAt.toISOString() };
+      const goodsRow = { id: paid.bill.id, occurredAt: paid.bill.createdAt, source: 'GOODS', amount: expectedTotal, status: 'REFUNDED' };
+      assert.deepEqual(await history(), { items: [serviceRow, goodsRow], hasMore: false });
+      assert.deepEqual(await history(`?source=${service.source}`), { items: [serviceRow], hasMore: false });
+      assert.deepEqual(await history('?source=GOODS'), { items: [goodsRow], hasMore: false });
+      assert.deepEqual(await history(`?source=${service.source === 'HOTEL' ? 'TICKET' : 'HOTEL'}`), { items: [], hasMore: false });
+      if (index === 0) {
+        await Bill.insertMany(Array.from({ length: 49 }, () => ({ ...scope, orderIds: [], createdAt: paidAt,
+          status: 'OPEN', totalAmount: 1000, paidAmount: 0 })));
+        const first = await history();
+        const second = await history('?page=2');
+        assert.equal(first.items.length, 50);
+        assert.equal(first.hasMore, true);
+        assert.equal(first.items.some((row: { status: string }) => row.status === 'OPEN'), true);
+        assert.deepEqual(second, { items: [goodsRow], hasMore: false });
+      }
     }
   } finally {
     if (server.exitCode === null && server.signalCode === null) server.kill();
     await exited;
     try {
       const tenantId = { $in: tenantIds.map(id => new mongoose.Types.ObjectId(id)) };
-      await Promise.all([AuditLog, Bill, Branch, IdempotencyRecord, Membership, Order, OutboxEvent, Payment, Product, ProductVariant,
-        PurchaseReceipt, Refund, Subscription, WarehouseItem, WarehouseMovement].map(model => model.collection.deleteMany({ tenantId })));
+      await Promise.all([AuditLog, Bill, BookingRequest, Branch, HotelBooking, IdempotencyRecord, MemberPayment, Membership, Order, OutboxEvent, Payment, Product, ProductVariant,
+        PurchaseReceipt, Refund, Subscription, TicketSale, WarehouseItem, WarehouseMovement].map(model => model.collection.deleteMany({ tenantId })));
       await Tenant.deleteMany({ _id: tenantId });
       await UserSession.deleteMany({ userId: { $in: userIds } });
       await User.deleteMany({ _id: { $in: userIds } });
